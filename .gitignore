@@ -1,0 +1,27 @@
+# Build artifacts
+plm-backend/target/
+*.class
+
+# Dependencies
+plm-frontend/node_modules/
+
+# Runtime data (uploaded files storage)
+files/
+
+# Logs
+*.log
+
+# Frontend build
+plm-frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp
+*.tmp

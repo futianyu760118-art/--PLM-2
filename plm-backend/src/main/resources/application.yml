@@ -1,0 +1,86 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: plm-backend
+  profiles:
+    active: dev
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: org.postgresql.Driver
+    url: "jdbc:postgresql://localhost:5432/plm_v4?stringtype=unspecified&TZ=Asia/Shanghai"
+    username: plm
+    password: plm@123
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.hjgd.plm.*.entity
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+plm:
+  jwt:
+    secret: HjgdPlmV4SecretKeyForJwtTokenSigningMustBeLongEnough2026
+    expire: 86400
+    header: Authorization
+    prefix: 'Bearer '
+  file:
+    upload-dir: D:/PLM-2/files
+    intranet-dir: D:/PLM-2/files/intranet
+    extranet-dir: D:/PLM-2/files/extranet
+  algorithm:
+    base-url: http://localhost:8001
+  integration:
+    erp:
+      base-url: ${ERP_BASE_URL:}
+      enabled: ${ERP_ENABLED:false}
+    mes:
+      base-url: ${MES_BASE_URL:}
+      enabled: ${MES_ENABLED:false}
+  job:
+    # V1.1 定时任务默认开启，时序：DQ夜检(01:00) → 度量日批(01:30) → KPI结算(02:00)
+    dq:
+      enabled: true
+      cron: "0 0 1 * * ?"
+    metric:
+      enabled: true
+      cron: "0 30 1 * * ?"
+    kpi:
+      enabled: true
+      cron: "0 0 2 * * ?"
+    draft-aged-days: 7
+    ecn-cycle-window-days: 30
+  webhook:
+    enabled: ${WEBHOOK_ENABLED:false}
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
