@@ -42,6 +42,18 @@ public class WatermarkConfig {
         return c;
     }
 
+    /**
+     * 作废图纸锁定水印: 旧版文件随 ECN 生效作废时盖章, 使任何流出的副本自证失效。
+     */
+    public static WatermarkConfig forObsolete(String operator) {
+        WatermarkConfig c = new WatermarkConfig();
+        c.setOutsourceCompany("作废-禁止使用");
+        c.setOperatorAccount(operator);
+        c.setIp("INTERNAL");
+        c.setOpacity(0.35f);
+        return c;
+    }
+
     public String visibleText() {
         return companyName + " | " + outsourceCompany + " | " + date
                 + (expireDate != null ? " | 有效期至 " + expireDate : "");

@@ -135,7 +135,7 @@ public class MetricRollupServiceImpl implements MetricRollupService {
     private MetricPoint wipDraft() {
         int aged = Math.max(1, jobProperties.getDraftAgedDays());
         Integer cnt = queryQuietly(
-                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND status IN ('DRAFT','REVIEWING') "
+                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND lifecycle_state IN ('DRAFT','IN_REVIEW') "
                         + "AND created_at < NOW() - INTERVAL '" + aged + " day'",
                 Integer.class);
         double v = cnt == null ? 0 : cnt;
@@ -156,7 +156,7 @@ public class MetricRollupServiceImpl implements MetricRollupService {
     /** 技转一次齐套率：已发布料号中 block_count=0 且 score≥90 的占比。 */
     private MetricPoint docComplete() {
         Integer den = queryQuietly(
-                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND status='RELEASED'",
+                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND lifecycle_state='RELEASED'",
                 Integer.class);
         if (den == null || den == 0) {
             return null;
@@ -165,7 +165,7 @@ public class MetricRollupServiceImpl implements MetricRollupService {
         Integer num = queryQuietly(
                 "SELECT COUNT(1) FROM plm_dq_object_score s JOIN plm_material m "
                         + "ON m.id::text = s.object_id AND s.object_type='PART' "
-                        + "WHERE m.deleted=0 AND m.status='RELEASED' AND s.block_count=0 AND s.score_0_100 >= 90",
+                        + "WHERE m.deleted=0 AND m.lifecycle_state='RELEASED' AND s.block_count=0 AND s.score_0_100 >= 90",
                 Integer.class);
         double rate = num == null ? 0 : num * 100.0 / den;
         return point("M_DOC_COMPLETE", bd(num), bd(den), round2(rate), "已发布且无阻断且评分≥90");
@@ -200,7 +200,7 @@ public class MetricRollupServiceImpl implements MetricRollupService {
     /** EBMS结构同源率：有订单锁版本的成品占比（集成健康代理指标） */
     private MetricPoint cbomSync() {
         Integer released = queryQuietly(
-                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND status IN ('RELEASED','IN_PRODUCTION')",
+                "SELECT COUNT(1) FROM plm_material WHERE deleted=0 AND lifecycle_state IN ('RELEASED','IN_PRODUCTION')",
                 Integer.class);
         if (released == null || released == 0) return point("M_CBOM_SYNC", ZERO, ONE, HUNDRED, "无已发布料号");
         Integer synced = queryQuietly(

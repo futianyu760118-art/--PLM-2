@@ -83,13 +83,13 @@ public class QueryController {
     }
 
     private PageResult<Map<String, Object>> execGenericList(ResourceDef def, Map<String, Object> filter, int page, int size) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM " + def.table + " WHERE deleted=0");
+        StringBuilder sql = new StringBuilder("SELECT " + selectList(def) + " FROM " + def.table() + " WHERE deleted=0");
         List<Object> args = new ArrayList<>();
         if (filter != null) appendFilters(sql, def, filter, args);
 
         long total = 0;
         try {
-            String countSql = sql.toString().replaceFirst("SELECT \\*", "SELECT COUNT(*)");
+            String countSql = sql.toString().replaceFirst("SELECT .*? FROM", "SELECT COUNT(*) FROM");
             total = ((Number) jdbcTemplate.queryForMap(countSql, args.toArray()).values().iterator().next()).longValue();
         } catch (Exception ignored) {}
 
@@ -100,13 +100,27 @@ public class QueryController {
         return PageResult.of(total, page, size, rows);
     }
 
+    /**
+     * v5 §8.3 已把物料双轨字段合并为唯一 lifecycle_state, 但 V1 查询 API 对外字段名
+     * 仍是 status。此处补一列别名, 老调用方读 row.status 不受影响。
+     */
+    private String selectList(ResourceDef def) {
+        return "plm_material".equals(def.table()) ? "*, lifecycle_state AS status" : "*";
+    }
+
+    /** API 字段名 -> 物理列名 (仅物料 status 发生过重命名, 其余同名) */
+    private String physicalColumn(String table, String field) {
+        String col = camelToUnder(field);
+        return "plm_material".equals(table) && "status".equals(col) ? "lifecycle_state" : col;
+    }
+
     @SuppressWarnings("unchecked")
     private void appendFilters(StringBuilder sql, ResourceDef def, Map<String, Object> filter, List<Object> args) {
         Object and = filter.get("and");
         if (and instanceof List<?> list) {
             for (Object o : list) {
                 if (o instanceof Map<?, ?> m) {
-                    String col = camelToUnder(String.valueOf(m.get("field")));
+                    String col = physicalColumn(def.table(), String.valueOf(m.get("field")));
                     String op = String.valueOf(m.get("op"));
                     Object value = m.get("value");
                     sql.append(" AND ").append(col);
@@ -127,7 +141,7 @@ public class QueryController {
         } else {
             for (Map.Entry<String, Object> e : filter.entrySet()) {
                 if (!"and".equals(e.getKey()) && !"or".equals(e.getKey()) && e.getValue() != null) {
-                    sql.append(" AND ").append(camelToUnder(e.getKey())).append("=?");
+                    sql.append(" AND ").append(physicalColumn(def.table(), e.getKey())).append("=?");
                     args.add(e.getValue());
                 }
             }

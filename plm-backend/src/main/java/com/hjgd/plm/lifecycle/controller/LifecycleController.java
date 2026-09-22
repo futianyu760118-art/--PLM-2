@@ -1,9 +1,13 @@
 package com.hjgd.plm.lifecycle.controller;
 
 import com.hjgd.plm.common.Result;
+import com.hjgd.plm.lifecycle.dto.LifecycleTransitionDTO;
+import com.hjgd.plm.lifecycle.service.LifecycleTransitionService;
 import com.hjgd.plm.lifecycle.service.impl.LifecycleServiceImpl;
+import com.hjgd.plm.log.annotation.OperationLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +22,7 @@ import java.util.Map;
 public class LifecycleController {
 
     private final LifecycleServiceImpl lifecycleService;
+    private final LifecycleTransitionService lifecycleTransitionService;
     private final JdbcTemplate jdbcTemplate;
 
     @Operation(summary = "转换矩阵配置")
@@ -50,5 +55,20 @@ public class LifecycleController {
     public Result<Map<String, Object>> reload() {
         lifecycleService.reload();
         return Result.success(Map.of("dbDriven", lifecycleService.isDbDriven()));
+    }
+
+    /**
+     * 通用流转 (v5 §4.1 / api-spec §9): 守卫 + 动作 + 事件, 单事务。
+     * 已实现动作: PART submit_review/release/to_production/obsolete/seal/start_change, BOM release;
+     * 其余动作码明确返回 409 而非静默改状态。非法跳转返回 409, 越权返回 403, 均由 @OperationLog 留痕。
+     */
+    @Operation(summary = "通用生命周期流转(守卫+动作+事件)")
+    @OperationLog(value = "生命周期流转", partNo = "#dto.objectId")
+    @PostMapping("/transition")
+    public Result<LifecycleTransitionService.TransitionResult> transition(
+            @Valid @RequestBody LifecycleTransitionDTO dto) {
+        return Result.success(lifecycleTransitionService.transition(
+                dto.getObjectType(), dto.getObjectId(), dto.getAction(), dto.getComment(),
+                Boolean.TRUE.equals(dto.getForce())));
     }
 }

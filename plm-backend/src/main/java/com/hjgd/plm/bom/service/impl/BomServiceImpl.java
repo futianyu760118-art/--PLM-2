@@ -16,9 +16,11 @@ import com.hjgd.plm.bom.mapper.BomVersionMapper;
 import com.hjgd.plm.bom.entity.BomTemplate;
 import com.hjgd.plm.bom.entity.BomTemplateItem;
 import com.hjgd.plm.bom.service.BomService;
+import com.hjgd.plm.common.ApiErrorCodes;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.ResultCode;
+import com.hjgd.plm.lifecycle.service.LifecycleService;
 import com.hjgd.plm.material.entity.Material;
 import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
@@ -49,6 +51,7 @@ public class BomServiceImpl implements BomService {
     private final MaterialService materialService;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final LifecycleService lifecycleService;
 
     @Override
     public PageResult<Bom> page(Integer pageNum, Integer pageSize, String rootPartNo, String status) {
@@ -74,6 +77,14 @@ public class BomServiceImpl implements BomService {
         return bomMapper.selectOne(
                 new LambdaQueryWrapper<Bom>().eq(Bom::getRootPartNo, rootPartNo)
                         .orderByDesc(Bom::getCreatedAt).last("LIMIT 1"));
+    }
+
+    @Override
+    public Bom getByBomNo(String bomNo) {
+        if (!StringUtils.hasText(bomNo)) {
+            return null;
+        }
+        return bomMapper.selectOne(new LambdaQueryWrapper<Bom>().eq(Bom::getBomNo, bomNo));
     }
 
     @Override
@@ -195,27 +206,43 @@ public class BomServiceImpl implements BomService {
                         .orderByAsc(BomItem::getSortOrder));
     }
 
+    /**
+     * BOM 发布: 守卫(矩阵 + 角色) + 动作(门禁 + 归档版本快照) + 事件。
+     * DRAFT 走 release 动作, ECN 升版后的 CHANGING 走 finish_change 动作;
+     * 其余状态(已发布/作废/封存)在矩阵中无 release 出边, 一律拒绝。
+     * BOM 的 DQ 门禁由 checkReleaseGate 承担(无 BOM 维度 DQ 执行器)。
+     */
     @Override
     @Transactional
     public void release(Long bomId) {
         Bom bom = getById(bomId);
-        if ("DRAFT".equals(bom.getStatus())) {
+        String from = bom.getStatus();
+        String action = "CHANGING".equals(from) ? "finish_change" : "release";
+        lifecycleService.assertTransition("BOM", from, action);
+        if (!lifecycleService.isRoleAllowed("BOM", from, action)) {
+            throw new BusinessException(403, "[" + ApiErrorCodes.LIFECYCLE_DENIED
+                    + "] 当前角色无权发布 BOM, 需要: "
+                    + String.join("/", lifecycleService.allowedRoles("BOM", from, action)));
+        }
+        if ("DRAFT".equals(from)) {
             checkReleaseGate(bomId);
         }
         bom.setStatus("RELEASED");
+        bom.setArchiveVersionNo(saveVersionSnapshot(bom, null, "正式发布"));
         bomMapper.updateById(bom);
-        saveVersionSnapshot(bom, null, "正式发布");
-        log.info("BOM[{}]发布并写版本快照", bom.getBomNo());
+        lifecycleService.recordHistory("BOM", bom.getBomNo(), from, "RELEASED", action,
+                SecurityUtils.getCurrentRealName(), "BOM发布");
+        log.info("BOM[{}]发布并写版本快照, 归档版本={}", bom.getBomNo(), bom.getArchiveVersionNo());
     }
 
     @Override
     @Transactional
     public void archiveVersion(Long bomId, String ecnNo, String reason) {
         Bom bom = getById(bomId);
-        saveVersionSnapshot(bom, ecnNo, reason);
+        bom.setArchiveVersionNo(saveVersionSnapshot(bom, ecnNo, reason));
         bom.setEcnNo(ecnNo);
         bomMapper.updateById(bom);
-        log.info("BOM[{}]版本归档, ECN={}", bom.getBomNo(), ecnNo);
+        log.info("BOM[{}]版本归档, ECN={}, 归档版本={}", bom.getBomNo(), ecnNo, bom.getArchiveVersionNo());
     }
 
     @Override
@@ -286,18 +313,34 @@ public class BomServiceImpl implements BomService {
         return sbom;
     }
 
+    /**
+     * where-used: 该料号被哪些父件/整机使用。
+     * 主查询走 ltree 祖先包含 (child.path &lt;@ parent.path), 直接给出「谁用了我」的层级答案;
+     * path 尚未物化的历史数据用 parent_part_no 反向查询兜底 (两列均由 rebuildPath 维护)。
+     */
     @Override
     public List<Map<String, Object>> whereUsed(String partNo) {
-        List<Map<String, Object>> result = new ArrayList<>();
         try {
-            result = jdbcTemplate.queryForList(
-                    "SELECT DISTINCT bi.bom_id, b.bom_no, b.root_part_no, b.bom_type, b.version_no, b.status " +
-                            "FROM plm_bom_item bi JOIN plm_bom b ON bi.bom_id=b.id " +
-                            "WHERE bi.part_no=? AND b.deleted=0 ORDER BY b.created_at DESC", partNo);
+            return jdbcTemplate.queryForList(
+                    "SELECT DISTINCT child.bom_id, b.bom_no, b.root_part_no, b.bom_type, b.version_no, b.status, "
+                            + "parent.id AS parent_item_id, parent.part_no AS parent_part_no, "
+                            + "parent.part_name AS parent_part_name, child.level_no AS child_level "
+                            + "FROM plm_bom_item child "
+                            + "JOIN plm_bom_item parent ON parent.bom_id = child.bom_id "
+                            + "  AND parent.id <> child.id "
+                            + "  AND child.path IS NOT NULL AND parent.path IS NOT NULL "
+                            + "  AND child.path <@ parent.path "
+                            + "JOIN plm_bom b ON b.id = child.bom_id "
+                            + "WHERE child.part_no = ? AND b.deleted = 0 "
+                            + "ORDER BY child.bom_id", partNo);
         } catch (Exception e) {
-            log.warn("where-used failed: {}", e.getMessage());
+            log.warn("where-used ltree 查询失败, 回退反向料号: {}", e.getMessage());
+            return jdbcTemplate.queryForList(
+                    "SELECT DISTINCT bi.bom_id, b.bom_no, b.root_part_no, b.bom_type, b.version_no, b.status, "
+                            + "bi.parent_item_id, bi.parent_part_no "
+                            + "FROM plm_bom_item bi JOIN plm_bom b ON bi.bom_id=b.id "
+                            + "WHERE bi.part_no=? AND b.deleted=0 ORDER BY bi.bom_id", partNo);
         }
-        return result;
     }
 
     @Override
@@ -379,14 +422,15 @@ public class BomServiceImpl implements BomService {
             return null;
         }
         String oldVersion = bom.getVersionNo();
-        saveVersionSnapshot(bom, ecnNo, "ECN " + ecnNo + " 生效升版");
+        bom.setArchiveVersionNo(saveVersionSnapshot(bom, ecnNo, "ECN " + ecnNo + " 生效升版"));
         bom.setEcnNo(ecnNo);
         if (StringUtils.hasText(newVersionNo)) {
             bom.setVersionNo(newVersionNo);
         }
         bom.setStatus("CHANGING");
         bomMapper.updateById(bom);
-        log.info("BOM[{}]因ECN[{}]升版 {} -> {}, 标记待重新发布", bom.getBomNo(), ecnNo, oldVersion, bom.getVersionNo());
+        log.info("BOM[{}]因ECN[{}]升版 {} -> {}, 归档版本={}, 标记待重新发布",
+                bom.getBomNo(), ecnNo, oldVersion, bom.getVersionNo(), bom.getArchiveVersionNo());
         return oldVersion;
     }
 
@@ -515,7 +559,8 @@ public class BomServiceImpl implements BomService {
         }
     }
 
-    private void saveVersionSnapshot(Bom bom, String ecnNo, String reason) {
+    /** @return 本次归档到 plm_bom_version 的版本号 */
+    private String saveVersionSnapshot(Bom bom, String ecnNo, String reason) {
         try {
             Map<String, Object> snapshot = new HashMap<>();
             snapshot.put("bom", bom);
@@ -537,43 +582,48 @@ public class BomServiceImpl implements BomService {
                         "UPDATE plm_bom_version SET snapshot=?::jsonb, ecn_no=?, change_reason=? WHERE bom_id=? AND version_no=?",
                         json, ecnNo, reason, bom.getId(), bom.getVersionNo());
             }
+            return bv.getVersionNo();
         } catch (Exception e) {
             log.error("BOM版本快照失败 bomId={}", bom.getId(), e);
             throw new BusinessException("BOM版本快照写入失败");
         }
     }
 
+    /**
+     * 重算物化路径: path = 父 path . 本条 id (ltree 标签为纯数字, 合法)。
+     * 同时回写 parent_part_no 支撑 where-used 的反向料号查询。
+     * 父件缺失/成环即抛错 —— path 是 where-used 的唯一索引, 静默留空等于树查询失效。
+     */
     private void rebuildPath(Long bomId) {
-        try {
-            List<BomItem> all = getFlatList(bomId);
-            Map<Long, Long> idMap = new HashMap<>();
-            for (BomItem item : all) {
-                String path;
-                Long parentId = item.getParentItemId() == null ? 0L : item.getParentItemId();
-                if (parentId == 0L) {
-                    path = String.valueOf(item.getId());
-                } else {
-                    String parentPath = findPath(all, parentId);
-                    path = parentPath + "." + item.getId();
-                }
-                jdbcTemplate.update("UPDATE plm_bom_item SET path=?::ltree WHERE id=?", path, item.getId());
-            }
-        } catch (Exception e) {
-            log.warn("rebuildPath failed (ltree may be unavailable): {}", e.getMessage());
+        List<BomItem> all = getFlatList(bomId);
+        Map<Long, BomItem> byId = new HashMap<>();
+        for (BomItem item : all) {
+            byId.put(item.getId(), item);
+        }
+        for (BomItem item : all) {
+            String path = itemPath(byId, item, new HashSet<>());
+            Long parentId = item.getParentItemId() == null ? 0L : item.getParentItemId();
+            BomItem parent = parentId == 0L ? null : byId.get(parentId);
+            jdbcTemplate.update(
+                    "UPDATE plm_bom_item SET path=?::ltree, parent_part_no=? WHERE id=?",
+                    path, parent == null ? null : parent.getPartNo(), item.getId());
         }
     }
 
-    private String findPath(List<BomItem> all, Long targetId) {
-        for (BomItem item : all) {
-            if (targetId.equals(item.getId())) {
-                Long parentId = item.getParentItemId() == null ? 0L : item.getParentItemId();
-                if (parentId == 0L) {
-                    return String.valueOf(item.getId());
-                }
-                return findPath(all, parentId) + "." + item.getId();
-            }
+    private String itemPath(Map<Long, BomItem> byId, BomItem item, Set<Long> seen) {
+        if (!seen.add(item.getId())) {
+            throw new BusinessException(ResultCode.BOM_CYCLE_ERROR);
         }
-        return String.valueOf(targetId);
+        Long parentId = item.getParentItemId() == null ? 0L : item.getParentItemId();
+        if (parentId == 0L) {
+            return String.valueOf(item.getId());
+        }
+        BomItem parent = byId.get(parentId);
+        if (parent == null) {
+            throw new BusinessException(ResultCode.BOM_ITEM_NOT_FOUND,
+                    "BOM明细 " + item.getId() + " 的父件 " + parentId + " 不存在, 无法生成 path");
+        }
+        return itemPath(byId, parent, seen) + "." + item.getId();
     }
 
     private String classifySbom(BomItem item) {

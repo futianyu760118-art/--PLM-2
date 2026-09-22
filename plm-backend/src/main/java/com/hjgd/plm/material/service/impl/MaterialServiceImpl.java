@@ -105,7 +105,6 @@ public class MaterialServiceImpl implements MaterialService {
         BeanUtils.copyProperties(dto, material);
         material.setPartNo(partNo);
         material.setStatus(MaterialStatus.DRAFT);
-        material.setLifecycleStatus(MaterialStatus.DRAFT.name());
         material.setVersionNo("V1.0");
         material.setPhase(StringUtils.hasText(dto.getPhase()) ? dto.getPhase() : "CONCEPT");
         material.setPartCategory(resolveCategory(dto));
@@ -195,7 +194,7 @@ public class MaterialServiceImpl implements MaterialService {
         Map<String, Object> before = toHistorySnapshot(exist);
 
         BeanUtils.copyProperties(dto, exist, "id", "partNo", "status", "versionNo",
-                "lifecycleStatus", "createdBy", "createdAt", "updatedAt", "deleted");
+                "createdBy", "createdAt", "updatedAt", "deleted");
         if (StringUtils.hasText(dto.getPartCategory())) {
             exist.setPartCategory(dto.getPartCategory());
         }
@@ -268,18 +267,7 @@ public class MaterialServiceImpl implements MaterialService {
     @Override
     @Transactional
     public void toProduction(Long id) {
-        Material before = getById(id);
-        transition(id, "to_production", null);
-        Material after = getById(id);
-        after.setPhase("MASS_PRODUCTION");
-        after.setLifecycleStatus(after.getStatus().name());
-        materialMapper.updateById(after);
-        domainEventService.publish("part.state_changed", "PART", after.getPartNo(), Map.of(
-                "partNo", after.getPartNo(),
-                "from", before.getStatus().name(),
-                "to", after.getStatus().name(),
-                "versionNo", after.getVersionNo()
-        ));
+        transition(id, "to_production", null, "MASS_PRODUCTION");
     }
 
     @Override
@@ -307,18 +295,22 @@ public class MaterialServiceImpl implements MaterialService {
         String from = material.getStatus().name();
         String oldVersion = material.getVersionNo();
 
+        String targetVersion = StringUtils.hasText(versionAfter) ? versionAfter : oldVersion;
+        if (!StringUtils.hasText(targetVersion)) {
+            throw new BusinessException("ECN " + ecnNo + " 缺少生效版本号, 拒绝升版");
+        }
+
         if (material.getStatus() != MaterialStatus.CHANGING) {
             lifecycleService.assertTransition("PART", material.getStatus(), "start_change");
             material.setStatus(MaterialStatus.CHANGING);
         }
 
-        material.setVersionNo(versionAfter);
+        material.setVersionNo(targetVersion);
         if (stayInProduction || "MASS_PRODUCTION".equals(material.getPhase())) {
             material.setStatus(lifecycleService.resolveToState("PART", MaterialStatus.CHANGING, "finish_change_mp"));
         } else {
             material.setStatus(lifecycleService.resolveToState("PART", MaterialStatus.CHANGING, "finish_change"));
         }
-        material.setLifecycleStatus(material.getStatus().name());
         materialMapper.updateById(material);
 
         lifecycleService.recordHistory("PART", material.getPartNo(), from, material.getStatus().name(),
@@ -358,17 +350,28 @@ public class MaterialServiceImpl implements MaterialService {
     }
 
     private void transition(Long id, String action, String comment) {
+        transition(id, action, comment, null);
+    }
+
+    /**
+     * 转换 = 守卫 + 动作 + 事件, 单事务。
+     * 守卫: 矩阵合法流转(非法抛 LIFECYCLE_DENIED) + require_dq 时的 DQ 门禁。
+     */
+    private Material transition(Long id, String action, String comment, String phaseAfter) {
         Material exist = getById(id);
         MaterialStatus from = exist.getStatus();
         MaterialStatus to = lifecycleService.resolveToState("PART", from, action);
+        lifecycleService.assertTransition("PART", from, action);
 
-        if ("release".equals(action) || "to_production".equals(action) || "submit_review".equals(action)) {
+        if (lifecycleService.requiresDq("PART", from.name(), action)) {
             DqRunResult dq = dataQualityService.runForPart(exist, "PRE_TRANSITION");
             dataQualityService.assertNoBlock(dq);
         }
 
         exist.setStatus(to);
-        exist.setLifecycleStatus(to.name());
+        if (StringUtils.hasText(phaseAfter)) {
+            exist.setPhase(phaseAfter);
+        }
         materialMapper.updateById(exist);
         lifecycleService.recordHistory("PART", exist.getPartNo(), from.name(), to.name(),
                 action, SecurityUtils.getCurrentRealName(), comment);
@@ -378,6 +381,7 @@ public class MaterialServiceImpl implements MaterialService {
                 "to", to.name(),
                 "versionNo", exist.getVersionNo()
         ));
+        return exist;
     }
 
     private void saveSnapshot(Material material, String reason, String ecnNo) {

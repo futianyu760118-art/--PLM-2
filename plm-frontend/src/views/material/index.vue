@@ -49,9 +49,9 @@
         <el-table-column prop="createdAt" label="创建时间" width="160" />
         <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openDialog(row)" v-if="row.status==='DRAFT'||row.status==='REVIEWING'">编辑</el-button>
+            <el-button link type="primary" size="small" @click="openDialog(row)" v-if="row.status==='DRAFT'||row.status==='IN_REVIEW'">编辑</el-button>
             <el-button link type="success" size="small" v-if="row.status === 'DRAFT'" @click="handleReview(row)">评审</el-button>
-            <el-button link type="warning" size="small" v-if="row.status === 'DRAFT' || row.status === 'REVIEWING'" @click="handleRelease(row)">发布</el-button>
+            <el-button link type="warning" size="small" v-if="row.status === 'DRAFT' || row.status === 'IN_REVIEW'" @click="handleRelease(row)">发布</el-button>
             <el-button link type="primary" size="small" v-if="row.status==='RELEASED'" @click="handleAction(row,'to-production','转量产')">转量产</el-button>
             <el-button link type="danger" size="small" v-if="row.status==='RELEASED'||row.status==='IN_PRODUCTION'" @click="handleAction(row,'obsolete','作废')">作废</el-button>
             <el-button link type="info" size="small" v-if="row.status==='OBSOLETE'" @click="handleAction(row,'seal','封存')">封存</el-button>
@@ -250,8 +250,8 @@ const total = ref(0)
 const formRef = ref()
 
 const typeMap = { FINISHED: '成品', SEMI: '半成品', PLASTIC: '塑胶件', HARDWARE: '五金件', STANDARD: '标准件' }
-const statusMap = { DRAFT: '草稿', REVIEWING: '评审中', RELEASED: '正式发布', IN_PRODUCTION: '量产在用', CHANGING: '变更中', OBSOLETE: '作废', SEALED: '停产封存' }
-const statusTag = (s) => ({ DRAFT: 'info', REVIEWING: 'warning', RELEASED: 'success', IN_PRODUCTION: 'primary', CHANGING: 'warning', OBSOLETE: 'danger', SEALED: 'info' }[s] || 'info')
+const statusMap = { DRAFT: '草稿', IN_REVIEW: '评审中', RELEASED: '正式发布', IN_PRODUCTION: '量产在用', CHANGING: '变更中', OBSOLETE: '作废', SEALED: '停产封存' }
+const statusTag = (s) => ({ DRAFT: 'info', IN_REVIEW: 'warning', RELEASED: 'success', IN_PRODUCTION: 'primary', CHANGING: 'warning', OBSOLETE: 'danger', SEALED: 'info' }[s] || 'info')
 const scoreColor = (s) => s == null ? '' : s >= 90 ? 'success' : s >= 70 ? 'warning' : 'danger'
 
 const query = reactive({ pageNum: 1, pageSize: 10, partNo: '', materialName: '', materialType: '', status: '' })

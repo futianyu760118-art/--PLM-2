@@ -6,6 +6,7 @@ import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.ecn.dto.EcnDTO;
 import com.hjgd.plm.ecn.dto.EcnReviewDTO;
 import com.hjgd.plm.ecn.entity.Ecn;
+import com.hjgd.plm.ecn.entity.EcnFlowLog;
 import com.hjgd.plm.ecn.entity.EcnImpact;
 import com.hjgd.plm.ecn.enums.EcnChangeType;
 import com.hjgd.plm.ecn.enums.EcnStatus;
@@ -23,6 +24,7 @@ import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -49,6 +51,7 @@ class EcnServiceTest {
     @Mock private DomainEventService domainEventService;
     @Mock private EcnImpactService ecnImpactService;
     @Mock private BomService bomService;
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private EcnServiceImpl ecnService;
@@ -83,6 +86,9 @@ class EcnServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(mockUser, null, Collections.emptyList()));
 
+        // effect() 走 TransactionTemplate; 单测不接真实事务管理器, 用 SimpleTransactionStatus 让提交/回滚可观测
+        lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
         lenient().when(fileMapper.selectList(any())).thenReturn(List.of());
         lenient().doNothing().when(domainEventService).publish(any(), any(), any(), any());
         lenient().when(ecnImpactService.listByEcn(anyLong())).thenReturn(List.of());
@@ -225,6 +231,57 @@ class EcnServiceTest {
         imp.setImpactType(type);
         imp.setStatus("PENDING");
         return imp;
+    }
+
+    @Nested
+    @DisplayName("生效原子性: 版本落库/快照/作废在同一事务内")
+    class EffectAtomicity {
+
+        @Test
+        @DisplayName("影响面动作失败 → 整体回滚 + 独立事务置 FAILED, 不发生效事件")
+        void effectFailureRollsBackAndMarksFailed() {
+            EcnImpact partImp = impact("PART", 11L);
+            testEcn.setStatus(EcnStatus.APPROVED);
+            when(ecnMapper.selectById(1L)).thenReturn(testEcn);
+            when(materialService.getById(1L)).thenReturn(testMaterial);
+            when(ecnImpactService.listByEcn(1L)).thenReturn(List.of(partImp));
+            doThrow(new RuntimeException("PART 快照写入失败"))
+                    .when(materialService).applyEcnEffect(eq(1L), any(), any(), anyBoolean());
+
+            RuntimeException ex = assertThrows(RuntimeException.class, () -> ecnService.effect(1L));
+
+            assertEquals("PART 快照写入失败", ex.getMessage());
+            // 生效管线事务回滚 1 次; FAILED 标记走另一个独立事务提交 1 次(故 commit 仍会发生,
+            // 但属于标记事务而非管线事务 —— 这正是它不被回滚吞掉的原因)
+            verify(transactionManager).rollback(any());
+            verify(transactionManager, times(1)).commit(any());
+            verify(transactionManager, times(2)).getTransaction(any());
+            // FAILED 标记由独立事务写入, 不随回滚消失
+            assertEquals(EcnStatus.FAILED, testEcn.getStatus());
+            ArgumentCaptor<EcnFlowLog> cap = ArgumentCaptor.forClass(EcnFlowLog.class);
+            verify(flowLogMapper, atLeastOnce()).insert(cap.capture());
+            assertTrue(cap.getAllValues().stream().anyMatch(f -> "effect_failed".equals(f.getAction())),
+                    "应留一条 effect_failed 流转日志");
+            // 半成品状态(EFFECTIVE)与生效事件都不允许出现
+            verify(domainEventService, never()).publish(eq("ecn.effective"), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("生效成功: 管线提交, EFFECTIVE 落库并发出 ecn.effective")
+        void effectSuccessCommits() {
+            EcnImpact partImp = impact("PART", 11L);
+            testEcn.setStatus(EcnStatus.APPROVED);
+            when(ecnMapper.selectById(1L)).thenReturn(testEcn);
+            when(materialService.getById(1L)).thenReturn(testMaterial);
+            when(ecnImpactService.listByEcn(1L)).thenReturn(List.of(partImp));
+
+            ecnService.effect(1L);
+
+            assertEquals(EcnStatus.EFFECTIVE, testEcn.getStatus());
+            verify(transactionManager).commit(any());
+            verify(transactionManager, never()).rollback(any());
+            verify(domainEventService).publish(eq("ecn.effective"), eq("ECN"), eq("ECN202607040001"), any());
+        }
     }
 
     @Nested

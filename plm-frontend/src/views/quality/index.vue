@@ -88,7 +88,7 @@ const tableData = ref([])
 const total = ref(0)
 const formRef = ref()
 const categoryMap = { DIMENSION:'尺寸检验', APPEARANCE:'外观检验', ASSEMBLY:'装配检验', FUNCTION:'功能检验', WATERPROOF:'防水结构检验', INCOMING:'来料检验' }
-const statusMap = { DRAFT:'草稿', REVIEWING:'评审中', RELEASED:'正式发布', CHANGING:'变更中', OBSOLETE:'作废', SEALED:'封存归档' }
+const statusMap = { DRAFT:'草稿', IN_REVIEW:'评审中', RELEASED:'正式发布', CHANGING:'变更中', OBSOLETE:'作废', SEALED:'封存归档' }
 const statusTag = (s) => ({ DRAFT:'info', RELEASED:'success', CHANGING:'warning', OBSOLETE:'danger', SEALED:'info' }[s]||'info')
 const query = reactive({ pageNum:1, pageSize:10, partNo:'', category:'', status:'' })
 const dialog = reactive({ visible:false, title:'' })

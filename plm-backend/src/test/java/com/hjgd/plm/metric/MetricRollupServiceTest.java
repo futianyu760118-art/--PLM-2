@@ -109,7 +109,7 @@ class MetricRollupServiceTest {
         @Test
         @DisplayName("超龄草稿计数")
         void wipDraftCount() {
-            when(jdbcTemplate.queryForObject(contains("status IN ('DRAFT','REVIEWING')"), eq(Integer.class)))
+            when(jdbcTemplate.queryForObject(contains("lifecycle_state IN ('DRAFT','IN_REVIEW')"), eq(Integer.class)))
                     .thenReturn(12);
             Map<String, Object> done = service.runDaily();
             assertEquals(new BigDecimal("12.00"), done.get("M_WIP_DRAFT"));
@@ -118,7 +118,7 @@ class MetricRollupServiceTest {
         @Test
         @DisplayName("技转齐套率=已发布达标/已发布总数")
         void docCompleteRate() {
-            when(jdbcTemplate.queryForObject(contains("status='RELEASED'"), eq(Integer.class)))
+            when(jdbcTemplate.queryForObject(contains("plm_material WHERE deleted=0 AND lifecycle_state='RELEASED'"), eq(Integer.class)))
                     .thenReturn(20);   // den
             when(jdbcTemplate.queryForObject(contains("block_count=0 AND s.score_0_100 >= 90"), eq(Integer.class)))
                     .thenReturn(18);   // num

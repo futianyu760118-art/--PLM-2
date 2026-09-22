@@ -188,7 +188,7 @@ const total = ref(0)
 const createVisible = ref(false)
 const createForm = reactive({ rootPartNo: '', versionNo: 'V1.0', bomType: 'EBOM', remark: '' })
 
-const statusMap = { DRAFT: '草稿', REVIEWING: '评审中', RELEASED: '正式发布', CHANGING: '变更中', OBSOLETE: '作废', SEALED: '封存' }
+const statusMap = { DRAFT: '草稿', IN_REVIEW: '评审中', RELEASED: '正式发布', CHANGING: '变更中', OBSOLETE: '作废', SEALED: '封存' }
 const statusTag = (s) => ({ DRAFT: 'info', RELEASED: 'success', CHANGING: 'warning', OBSOLETE: 'danger', SEALED: 'info' }[s] || 'info')
 const typeMap = { EBOM: 'EBOM', MBOM: 'MBOM', SBOM: 'SBOM' }
 const typeTag = (t) => ({ EBOM: 'info', MBOM: 'success', SBOM: 'warning' }[t] || 'info')

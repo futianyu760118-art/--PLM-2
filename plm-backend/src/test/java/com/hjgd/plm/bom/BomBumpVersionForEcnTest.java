@@ -50,13 +50,14 @@ class BomBumpVersionForEcnTest {
     @Mock private MaterialService materialService;
     @Mock private ObjectMapper objectMapper;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private com.hjgd.plm.lifecycle.service.LifecycleService lifecycleService;
 
     private BomServiceImpl bomService;
 
     @BeforeEach
     void setUp() {
         bomService = new BomServiceImpl(bomMapper, bomItemMapper, bomVersionMapper, bomTemplateMapper,
-                sequenceService, materialService, objectMapper, jdbcTemplate);
+                sequenceService, materialService, objectMapper, jdbcTemplate, lifecycleService);
         com.hjgd.plm.auth.security.LoginUser mockUser = mock(com.hjgd.plm.auth.security.LoginUser.class);
         lenient().when(mockUser.getRealName()).thenReturn("测试工程师");
         lenient().when(mockUser.getUserId()).thenReturn(1L);

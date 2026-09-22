@@ -15,6 +15,8 @@ public class Bom extends BaseEntity {
     private String status;
     private String bomType;
     private String ecnNo;
+    /** 最近写入 plm_bom_version 快照的版本号, 发布/归档/ECN 升版时更新 */
+    private String archiveVersionNo;
     private Integer source;
     private String remark;
     private String createdBy;

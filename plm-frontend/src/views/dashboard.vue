@@ -125,7 +125,7 @@ const statCards = ref([
 ])
 
 const typeMap = { FINISHED:'成品', SEMI:'半成品', PLASTIC:'塑胶件', HARDWARE:'五金件', STANDARD:'标准件' }
-const statusMap = { DRAFT:'草稿', REVIEWING:'评审中', RELEASED:'正式发布', IN_PRODUCTION:'量产在用', CHANGING:'变更中', OBSOLETE:'作废', SEALED:'停产封存' }
+const statusMap = { DRAFT:'草稿', IN_REVIEW:'评审中', RELEASED:'正式发布', IN_PRODUCTION:'量产在用', CHANGING:'变更中', OBSOLETE:'作废', SEALED:'停产封存' }
 
 const roleLabel = (() => {
   const map = { ADMIN:'系统管理员', ENGINEER:'研发工程师', QUALITY:'品质/生产', SALES:'销售', SUPPLIER:'外协供应商', CUSTOMER:'外部客户' }

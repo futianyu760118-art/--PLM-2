@@ -1,6 +1,7 @@
 package com.hjgd.plm.material.entity;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.hjgd.plm.common.BaseEntity;
 import com.hjgd.plm.material.enums.MaterialStatus;
@@ -29,15 +30,17 @@ public class Material extends BaseEntity {
     private String projectNo;
     private String supplierCode;
     private String supplierName;
-    /** 唯一生命周期状态 */
+    /**
+     * 唯一生命周期状态。列名 lifecycle_state —— 双轨字段 status/lifecycle_status
+     * 已由 database/26_v5_unify_lifecycle_state.sql 合并, 属性名保留 status 以免
+     * 破坏 /query、前端 row.status 等既有调用方。
+     */
     @EnumValue
+    @TableField("lifecycle_state")
     private MaterialStatus status;
     private String versionNo;
     private Integer makeType;
     private String unit;
-    /** @deprecated 与 status 同步，禁止单独作为业务判断 */
-    @Deprecated
-    private String lifecycleStatus;
     private String phase;
     private String ipRating;
     private String powerW;

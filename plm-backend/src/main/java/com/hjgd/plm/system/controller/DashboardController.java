@@ -86,7 +86,7 @@ public class DashboardController {
     @GetMapping("/material-status-distribution")
     public Result<List<Map<String, Object>>> materialStatusDist() {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT status, COUNT(*) AS count FROM plm_material WHERE deleted = 0 GROUP BY status ORDER BY count DESC");
+                "SELECT lifecycle_state AS status, COUNT(*) AS count FROM plm_material WHERE deleted = 0 GROUP BY lifecycle_state ORDER BY count DESC");
         return Result.success(rows);
     }
 }

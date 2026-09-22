@@ -11,6 +11,7 @@ import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.lifecycle.service.LifecycleService;
 import com.hjgd.plm.material.dto.MaterialDTO;
 import com.hjgd.plm.material.entity.Material;
+import com.hjgd.plm.material.entity.MaterialVersion;
 import com.hjgd.plm.material.enums.MaterialStatus;
 import com.hjgd.plm.material.enums.MaterialType;
 import com.hjgd.plm.material.mapper.MaterialMapper;
@@ -20,6 +21,7 @@ import com.hjgd.plm.material.service.MaterialSupplierService;
 import com.hjgd.plm.material.service.impl.MaterialServiceImpl;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -80,13 +82,17 @@ class MaterialServiceTest {
         lenient().doNothing().when(dataQualityService).assertNoBlock(any());
         lenient().doNothing().when(domainEventService).publish(any(), any(), any(), any());
         lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.DRAFT), eq("submit_review")))
-                .thenReturn(MaterialStatus.REVIEWING);
+                .thenReturn(MaterialStatus.IN_REVIEW);
         lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.DRAFT), eq("release")))
                 .thenReturn(MaterialStatus.RELEASED);
-        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.REVIEWING), eq("release")))
+        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.IN_REVIEW), eq("release")))
                 .thenReturn(MaterialStatus.RELEASED);
         lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.RELEASED), eq("submit_review")))
                 .thenThrow(new BusinessException("lifecycle denied"));
+        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.CHANGING), eq("finish_change")))
+                .thenReturn(MaterialStatus.RELEASED);
+        // DQ 门禁按矩阵 require_dq 列判定; release/submit_review 需为 true 才会走 runForPart
+        lenient().when(lifecycleService.requiresDq(eq("PART"), anyString(), anyString())).thenReturn(true);
     }
 
     @AfterEach
@@ -181,7 +187,7 @@ class MaterialServiceTest {
         void shouldTransitionToReviewing() {
             when(materialMapper.selectById(1L)).thenReturn(testMaterial);
             materialService.submitReview(1L);
-            assertEquals(MaterialStatus.REVIEWING, testMaterial.getStatus());
+            assertEquals(MaterialStatus.IN_REVIEW, testMaterial.getStatus());
         }
 
         @Test
@@ -209,5 +215,62 @@ class MaterialServiceTest {
         testMaterial.setStatus(MaterialStatus.RELEASED);
         when(materialMapper.selectById(1L)).thenReturn(testMaterial);
         assertThrows(BusinessException.class, () -> materialService.delete(1L));
+    }
+
+    @Nested
+    @DisplayName("ECN 生效升版 (Phase 0 止血 1/4)")
+    class ApplyEcnEffect {
+
+        @Test
+        @DisplayName("版号落库 + 快照写入 + 流转留痕, 一次调用内完成")
+        void bumpsVersionAndWritesSnapshot() throws Exception {
+            testMaterial.setStatus(MaterialStatus.CHANGING);
+            testMaterial.setVersionNo("V1.0");
+            when(materialMapper.selectById(1L)).thenReturn(testMaterial);
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+            materialService.applyEcnEffect(1L, "V1.1", "ECN202607040001", false);
+
+            // 1) version_no 真正落到实体并 update
+            ArgumentCaptor<Material> mc = ArgumentCaptor.forClass(Material.class);
+            verify(materialMapper).updateById(mc.capture());
+            assertEquals("V1.1", mc.getValue().getVersionNo());
+            assertEquals(MaterialStatus.RELEASED, mc.getValue().getStatus());
+            // 2) 快照落库 (文档称 plm_part_version, 本仓库实体为 plm_material_version)
+            ArgumentCaptor<MaterialVersion> vc = ArgumentCaptor.forClass(MaterialVersion.class);
+            verify(materialVersionMapper).insert(vc.capture());
+            assertEquals("V1.1", vc.getValue().getVersionNo());
+            assertEquals("ECN202607040001", vc.getValue().getEcnNo());
+            assertEquals("{}", vc.getValue().getSnapshot());
+            // 3) 流转留痕
+            verify(lifecycleService).recordHistory(eq("PART"), eq("HJ202607040001"), eq("CHANGING"),
+                    eq("RELEASED"), eq("ecn_effect"), any(), any());
+        }
+
+        @Test
+        @DisplayName("缺少生效版本号 → 拒绝升版, 不写快照")
+        void rejectsMissingVersion() {
+            testMaterial.setStatus(MaterialStatus.CHANGING);
+            testMaterial.setVersionNo(null);
+            when(materialMapper.selectById(1L)).thenReturn(testMaterial);
+
+            assertThrows(BusinessException.class,
+                    () -> materialService.applyEcnEffect(1L, "", "ECN202607040001", false));
+
+            verify(materialMapper, never()).updateById(any(Material.class));
+            verify(materialVersionMapper, never()).insert(any(MaterialVersion.class));
+        }
+
+        @Test
+        @DisplayName("快照写入失败 → 抛出, 由调用方事务整体回滚")
+        void snapshotFailurePropagates() throws Exception {
+            testMaterial.setStatus(MaterialStatus.CHANGING);
+            testMaterial.setVersionNo("V1.0");
+            when(materialMapper.selectById(1L)).thenReturn(testMaterial);
+            when(objectMapper.writeValueAsString(any())).thenThrow(new RuntimeException("io"));
+
+            assertThrows(BusinessException.class,
+                    () -> materialService.applyEcnEffect(1L, "V1.1", "ECN202607040001", false));
+        }
     }
 }

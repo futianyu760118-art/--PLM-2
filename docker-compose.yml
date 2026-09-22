@@ -46,6 +46,7 @@ services:
       - ./database/23_project_initiation.sql:/docker-entrypoint-initdb.d/23_project_initiation.sql:ro
       - ./database/24_project_progress.sql:/docker-entrypoint-initdb.d/24_project_progress.sql:ro
       - ./database/25_node_evidence_text.sql:/docker-entrypoint-initdb.d/25_node_evidence_text.sql:ro
+      - ./database/26_v5_unify_lifecycle_state.sql:/docker-entrypoint-initdb.d/26_v5_unify_lifecycle_state.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

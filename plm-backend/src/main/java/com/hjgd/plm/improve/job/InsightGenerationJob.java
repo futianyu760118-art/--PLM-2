@@ -56,7 +56,7 @@ public class InsightGenerationJob {
     private int checkHighDraftWip() {
         try {
             Long count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM plm_material WHERE status='DRAFT' AND deleted=0 AND created_at < NOW() - INTERVAL '14 days'",
+                    "SELECT COUNT(*) FROM plm_material WHERE lifecycle_state='DRAFT' AND deleted=0 AND created_at < NOW() - INTERVAL '14 days'",
                     Long.class);
             if (count != null && count > 10) {
                 createInsight("MEDIUM", "LEAN",

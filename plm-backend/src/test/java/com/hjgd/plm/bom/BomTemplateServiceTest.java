@@ -203,10 +203,12 @@ class BomTemplateServiceTest {
     @Test
     @DisplayName("拖拽排序: 按 itemIds 顺序写入 sort_order")
     void reorderItemsAssignsSequentialSortOrder() {
+        // 根行必须一并返回: rebuildPath 依据 parentItemId 递归物化 path, 父件缺失即抛错
+        BomItem root = new BomItem(); root.setId(100L); root.setBomId(1L); root.setParentItemId(0L); root.setPartNo("ROOT");
         BomItem i1 = new BomItem(); i1.setId(11L); i1.setBomId(1L); i1.setParentItemId(100L); i1.setPartNo("A");
         BomItem i2 = new BomItem(); i2.setId(22L); i2.setBomId(1L); i2.setParentItemId(100L); i2.setPartNo("B");
         BomItem i3 = new BomItem(); i3.setId(33L); i3.setBomId(1L); i3.setParentItemId(100L); i3.setPartNo("C");
-        when(bomItemMapper.selectList(any())).thenReturn(List.of(i1, i2, i3));
+        when(bomItemMapper.selectList(any())).thenReturn(List.of(root, i1, i2, i3));
 
         bomService.reorderItems(1L, List.of(33L, 11L, 22L)); // C, A, B
 

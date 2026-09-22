@@ -17,6 +17,9 @@ public interface BomService {
 
     Bom getByPartNo(String rootPartNo);
 
+    /** 按 BOM 编号定位 (通用流转入口用, 返回 null 表示不存在) */
+    Bom getByBomNo(String bomNo);
+
     Bom create(BomDTO dto);
 
     BomItem addItem(BomItemDTO dto);

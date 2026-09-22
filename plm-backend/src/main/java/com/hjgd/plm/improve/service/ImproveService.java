@@ -2,6 +2,9 @@ package com.hjgd.plm.improve.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hjgd.plm.auth.security.SecurityUtils;
+import com.hjgd.plm.common.ApiErrorCodes;
+import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.common.ResultCode;
 import com.hjgd.plm.improve.entity.ImproveAction;
 import com.hjgd.plm.improve.entity.ImproveResult;
 import com.hjgd.plm.improve.entity.Insight;
@@ -22,6 +25,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -75,16 +80,34 @@ public class ImproveService {
         return insight;
     }
 
+    /**
+     * 改进问题合法状态流转 (守卫): 非法跳转一律拒绝, 不再任意改状态。
+     * 与 v5 §4.1「转换 = 守卫 + 动作 + 事件」一致; 终态 CLOSED/CANCEL 不可再转。
+     */
+    private static final Map<String, Set<String>> ISSUE_TRANSITIONS = Map.of(
+            "OPEN", Set.of("ANALYZING", "CANCEL"),
+            "ANALYZING", Set.of("ACTION", "CANCEL"),
+            "ACTION", Set.of("VERIFY", "CANCEL"),
+            "VERIFY", Set.of("CLOSED", "ACTION"),
+            "CLOSED", Set.of(),
+            "CANCEL", Set.of());
+
     @Transactional
     public void updateIssueStatus(Long id, String status) {
         Issue issue = issueMapper.selectById(id);
-        if (issue != null) {
-            issue.setStatus(status);
-            if ("CLOSED".equals(status) || "CANCEL".equals(status)) {
-                issue.setClosedAt(LocalDateTime.now());
-            }
-            issueMapper.updateById(issue);
+        if (issue == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        String from = issue.getStatus() == null ? "" : issue.getStatus();
+        if (!ISSUE_TRANSITIONS.getOrDefault(from, Set.of()).contains(status)) {
+            throw new BusinessException(409, "[" + ApiErrorCodes.LIFECYCLE_DENIED + "] 问题状态不允许: "
+                    + from + " --" + status + "--> ?");
+        }
+        issue.setStatus(status);
+        if ("CLOSED".equals(status) || "CANCEL".equals(status)) {
+            issue.setClosedAt(LocalDateTime.now());
+        }
+        issueMapper.updateById(issue);
     }
 
     public List<ImproveAction> listActions(Long issueId) {

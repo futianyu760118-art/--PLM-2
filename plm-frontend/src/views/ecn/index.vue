@@ -168,8 +168,8 @@ const total = ref(0)
 const formRef = ref()
 
 const changeTypeMap = { STRUCTURE: '结构变更', MOLD: '模具变更', PROCESS: '工艺变更', BOM: 'BOM变更', DIMENSION: '尺寸变更' }
-const statusMap = { DRAFT: '草稿', PENDING_L1: '待一审', PENDING_L2: '待二审', APPROVED: '审批通过', REJECTED: '审批驳回', EFFECTIVE: '已生效', VOID: '已作废' }
-const statusTag = (s) => ({ DRAFT: 'info', PENDING_L1: 'warning', PENDING_L2: 'warning', APPROVED: 'primary', REJECTED: 'danger', EFFECTIVE: 'success', VOID: 'info' }[s] || 'info')
+const statusMap = { DRAFT: '草稿', PENDING_L1: '待一审', PENDING_L2: '待二审', APPROVED: '审批通过', EFFECTING: '生效中', REJECTED: '审批驳回', FAILED: '生效失败', EFFECTIVE: '已生效', VOID: '已作废' }
+const statusTag = (s) => ({ DRAFT: 'info', PENDING_L1: 'warning', PENDING_L2: 'warning', APPROVED: 'primary', EFFECTING: 'warning', REJECTED: 'danger', FAILED: 'danger', EFFECTIVE: 'success', VOID: 'info' }[s] || 'info')
 const impactTypeMap = { PART: '物料版本', FILE: '图纸文件', BOM: 'BOM结构', MOLD: '模具', SOP: '工艺SOP', TRADE: '贸易文档' }
 
 const query = reactive({ pageNum: 1, pageSize: 10, ecnNo: '', partNo: '', changeType: '', status: '' })

@@ -8,6 +8,7 @@ import com.hjgd.plm.ecn.dto.EcnReviewDTO;
 import com.hjgd.plm.ecn.entity.Ecn;
 import com.hjgd.plm.ecn.entity.EcnFlowLog;
 import com.hjgd.plm.ecn.service.EcnService;
+import com.hjgd.plm.log.annotation.OperationLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -60,6 +61,7 @@ public class EcnController {
     }
 
     @Operation(summary = "提交审批")
+    @OperationLog(value = "提交审批", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:add')")
     @PutMapping("/{id}/submit")
     public Result<Void> submit(@PathVariable Long id) {
@@ -68,6 +70,7 @@ public class EcnController {
     }
 
     @Operation(summary = "一审通过(研发主管)")
+    @OperationLog(value = "一审通过", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:review1')")
     @PutMapping("/{id}/l1/approve")
     public Result<Void> l1Approve(@PathVariable Long id, @Valid @RequestBody EcnReviewDTO dto) {
@@ -76,6 +79,7 @@ public class EcnController {
     }
 
     @Operation(summary = "一审驳回(研发主管)")
+    @OperationLog(value = "一审驳回", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:review1')")
     @PutMapping("/{id}/l1/reject")
     public Result<Void> l1Reject(@PathVariable Long id, @Valid @RequestBody EcnReviewDTO dto) {
@@ -84,6 +88,7 @@ public class EcnController {
     }
 
     @Operation(summary = "二审通过(供应链总监)")
+    @OperationLog(value = "二审通过", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:review2')")
     @PutMapping("/{id}/l2/approve")
     public Result<Void> l2Approve(@PathVariable Long id, @Valid @RequestBody EcnReviewDTO dto) {
@@ -92,6 +97,7 @@ public class EcnController {
     }
 
     @Operation(summary = "二审驳回(供应链总监)")
+    @OperationLog(value = "二审驳回", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:review2')")
     @PutMapping("/{id}/l2/reject")
     public Result<Void> l2Reject(@PathVariable Long id, @Valid @RequestBody EcnReviewDTO dto) {
@@ -100,6 +106,7 @@ public class EcnController {
     }
 
     @Operation(summary = "ECN生效(版本自动升级)")
+    @OperationLog(value = "ECN生效", partNo = "#id")
     @PreAuthorize("hasAuthority('ecn:effect')")
     @PutMapping("/{id}/effect")
     public Result<Void> effect(@PathVariable Long id) {
@@ -108,6 +115,7 @@ public class EcnController {
     }
 
     @Operation(summary = "作废ECN")
+    @OperationLog(value = "作废ECN", partNo = "#id")
     @PutMapping("/{id}/void")
     public Result<Void> voidEcn(@PathVariable Long id) {
         ecnService.voidEcn(id);

@@ -8,6 +8,8 @@ import com.hjgd.plm.file.entity.PlmFile;
 import com.hjgd.plm.file.enums.FileVisibility;
 import com.hjgd.plm.file.mapper.PlmFileMapper;
 import com.hjgd.plm.file.service.FileService;
+import com.hjgd.plm.file.watermark.WatermarkConfig;
+import com.hjgd.plm.file.watermark.WatermarkEngine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -30,6 +34,7 @@ import java.util.UUID;
 public class FileServiceImpl implements FileService {
 
     private final PlmFileMapper fileMapper;
+    private final WatermarkEngine watermarkEngine;
 
     @Value("${plm.file.intranet-dir}")
     private String intranetDir;
@@ -104,12 +109,56 @@ public class FileServiceImpl implements FileService {
         return new FileSystemResource(disk);
     }
 
+    /**
+     * 作废 + 水印锁定 (v5 §5.2 watermark_lock)。
+     *
+     * 先落库 obsolete=1 / has_watermark=1 —— download() 据此立即拒绝下载;
+     * 再就地盖章(写临时文件成功后原子替换), 使磁盘上残留的副本也带"作废"标识。
+     * 盖章失败不回滚: 拦截靠 DB 标记, 水印是纵深防御, 磁盘/字体缺失不应阻断 ECN 生效。
+     */
     @Override
     public void markObsolete(Long id) {
         PlmFile f = getById(id);
+        boolean alreadyObsolete = f.getObsolete() != null && f.getObsolete() == 1;
         f.setObsolete(1);
+        f.setHasWatermark(1);
         fileMapper.updateById(f);
-        log.info("文件[{}]标记为作废(旧版图纸自动锁定)", f.getFileName());
+        if (!alreadyObsolete) {
+            stampObsoleteWatermark(f);
+        }
+        log.info("文件[{}]标记为作废并加水印(旧版图纸自动锁定)", f.getFileName());
+    }
+
+    private void stampObsoleteWatermark(PlmFile f) {
+        File source = null;
+        File tmp = null;
+        try {
+            source = resolveDiskFile(f.getFilePath());
+            if (!source.isFile()) {
+                log.warn("作废文件[{}]磁盘不存在, 仅落锁未盖章: {}", f.getFileName(), f.getFilePath());
+                return;
+            }
+            WatermarkConfig cfg = WatermarkConfig.forObsolete(SecurityUtils.getCurrentRealName());
+            tmp = new File(source.getParentFile(), source.getName() + ".wm.tmp");
+            watermarkEngine.apply(source, tmp, cfg);
+            Files.move(tmp.toPath(), source.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            log.error("作废文件[{}]加盖水印失败(落锁仍生效): {}", f.getFileName(), e.getMessage());
+        } finally {
+            deleteQuietly(tmp, source);
+        }
+    }
+
+    /** 清理盖章临时文件; 清理失败不影响已完成的作废落锁 */
+    private void deleteQuietly(File tmp, File source) {
+        if (tmp == null || tmp.equals(source)) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(tmp.toPath());
+        } catch (IOException e) {
+            log.warn("水印临时文件清理失败: {}", tmp.getAbsolutePath(), e);
+        }
     }
 
     @Override

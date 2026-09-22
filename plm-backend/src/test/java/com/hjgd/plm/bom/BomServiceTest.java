@@ -52,6 +52,7 @@ class BomServiceTest {
     @Mock private MaterialService materialService;
     @Mock private ObjectMapper objectMapper;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private com.hjgd.plm.lifecycle.service.LifecycleService lifecycleService;
 
     @InjectMocks
     private BomServiceImpl bomService;
@@ -80,6 +81,9 @@ class BomServiceTest {
         childMaterial.setPartNo("HJ002");
         childMaterial.setMaterialName("零件A");
         childMaterial.setUnit("PCS");
+
+        // 发布守卫(矩阵+角色)由 LifecycleServiceImpl 承担; 此处放行以便断言门禁与快照本身
+        lenient().when(lifecycleService.isRoleAllowed(anyString(), anyString(), anyString())).thenReturn(true);
 
         LoginUser mockUser = mock(LoginUser.class);
         lenient().when(mockUser.getRealName()).thenReturn("测试工程师");
@@ -392,8 +396,58 @@ class BomServiceTest {
             bomService.release(1L);
 
             assertEquals("RELEASED", testBom.getStatus());
+            // 归档版本号必须落库(BOM.archive_version_no), 与快照版本一致
+            assertEquals("V1.0", testBom.getArchiveVersionNo());
             verify(bomMapper).updateById(any(Bom.class));
             verify(bomVersionMapper).insert(any());
+            verify(lifecycleService).recordHistory("BOM", "BOM202607040001", "DRAFT", "RELEASED",
+                    "release", "测试工程师", "BOM发布");
+        }
+
+        @Test
+        @DisplayName("CHANGING 再发布走 finish_change 动作")
+        void changingBomReleasesViaFinishChange() throws Exception {
+            testBom.setStatus("CHANGING");
+            when(bomMapper.selectById(1L)).thenReturn(testBom);
+            when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+            when(bomVersionMapper.insert(any())).thenReturn(1);
+
+            bomService.release(1L);
+
+            assertEquals("RELEASED", testBom.getStatus());
+            verify(lifecycleService).recordHistory("BOM", "BOM202607040001", "CHANGING", "RELEASED",
+                    "finish_change", "测试工程师", "BOM发布");
+        }
+
+        @Test
+        @DisplayName("角色无权发布 → 403, 不改状态不写快照")
+        void shouldRejectWhenRoleNotAllowed() {
+            testBom.setStatus("DRAFT");
+            when(bomMapper.selectById(1L)).thenReturn(testBom);
+            when(lifecycleService.isRoleAllowed("BOM", "DRAFT", "release")).thenReturn(false);
+            when(lifecycleService.allowedRoles("BOM", "DRAFT", "release")).thenReturn(java.util.Set.of("RD_LEAD"));
+
+            BusinessException ex = assertThrows(BusinessException.class, () -> bomService.release(1L));
+
+            assertEquals(403, ex.getCode());
+            assertTrue(ex.getMessage().contains("RD_LEAD"));
+            assertNull(testBom.getArchiveVersionNo());
+            verify(bomMapper, never()).updateById(any(Bom.class));
+            verify(bomVersionMapper, never()).insert(any());
+        }
+
+        @Test
+        @DisplayName("矩阵无 release 出边(已发布/作废) → 409, 动作前即被拒")
+        void shouldRejectWhenNoTransitionEdge() {
+            testBom.setStatus("RELEASED");
+            when(bomMapper.selectById(1L)).thenReturn(testBom);
+            doThrow(new BusinessException(409, "no edge"))
+                    .when(lifecycleService).assertTransition("BOM", "RELEASED", "release");
+
+            BusinessException ex = assertThrows(BusinessException.class, () -> bomService.release(1L));
+
+            assertEquals(409, ex.getCode());
+            verify(bomMapper, never()).updateById(any(Bom.class));
         }
     }
 

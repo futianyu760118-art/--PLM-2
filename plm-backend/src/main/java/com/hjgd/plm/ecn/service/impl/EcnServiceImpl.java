@@ -30,7 +30,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -55,6 +58,7 @@ public class EcnServiceImpl implements EcnService {
     private final DomainEventService domainEventService;
     private final com.hjgd.plm.ecn.service.EcnImpactService ecnImpactService;
     private final BomService bomService;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     public PageResult<Ecn> page(EcnQueryDTO query) {
@@ -211,74 +215,77 @@ public class EcnServiceImpl implements EcnService {
     }
 
     /**
-     * ECN 生效：落库升版 + 按 impact 分发 + 发 ecn.effective 事件。
-     * 刻意不加 @Transactional：ECN 状态置 EFFECTIVE 必须独立提交，各 impact 分发
-     * (applyEcnEffect/bumpVersionForEcn/obsoleteFiles 各自带 @Transactional)独立成事务，
-     * 实现"单类失败不回滚已生效状态"。若加 @Transactional，applyEcnEffect 抛异常时
-     * 其代理会把共享事务标记 rollback-only，try/catch 拦不住，整笔回滚违背隔离意图。
+     * ECN 生效入口 (v5 §4.4 生效管线)。
+     *
+     * 整条管线在单事务内完成: 校验 APPROVED → EFFECTING → 逐 impact 升版(version_no 落库 +
+     * 版本快照 + 旧文件 obsolete/水印) → EFFECTIVE。任一 impact 失败即整体回滚,
+     * ECN 不会停留在 EFFECTIVE 而版本没升 —— 这正是 Phase 0 要修的缺陷:
+     * 旧实现先独立提交 EFFECTIVE, 再对每个 impact 单独 try/catch 只打日志,
+     * 失败时 ECN 已生效但 version_no 仍是旧值。
+     *
+     * 失败时用独立事务(REQUIRES_NEW)把 ECN 置 FAILED 并记 flow_log, 该标记不会被回滚。
      */
     @Override
     public void effect(Long id) {
         Ecn exist = getById(id);
         assertStatus(exist, EcnStatus.APPROVED);
-        exist.setStatus(EcnStatus.EFFECTIVE);
-        exist.setEffectiveTime(LocalDateTime.now());
+        try {
+            txTemplate(TransactionDefinition.PROPAGATION_REQUIRED)
+                    .executeWithoutResult(status -> runEffectPipeline(exist));
+        } catch (RuntimeException e) {
+            log.error("ECN[{}] 生效失败, 已回滚并置 FAILED: {}", exist.getEcnNo(), e.getMessage(), e);
+            markEffectFailed(exist.getId(), e);
+            throw e;
+        }
+    }
+
+    /** 生效管线主体; 运行在 effect() 开启的事务内, 异常一律向上抛以触发整体回滚 */
+    private void runEffectPipeline(Ecn exist) {
+        exist.setStatus(EcnStatus.EFFECTING);
         ecnMapper.updateById(exist);
 
         Material material = materialService.getById(exist.getMaterialId());
+        if (material == null) {
+            throw new BusinessException("ECN " + exist.getEcnNo() + " 关联物料不存在, 无法生效");
+        }
         String oldVersion = material.getVersionNo();
         boolean stayMp = "MASS_PRODUCTION".equals(material.getPhase());
 
-        // 影响面：优先读已填写；未填写则按变更类型推断并落库
         Set<String> impactTypes = loadOrInferImpacts(exist);
 
-        // 按 impact 类型分发(每类独立 try，单类失败不回滚已生效状态)
         boolean partBumped = false;
         boolean bomBumped = false;
         int filesObsolete = 0;
 
         if (impactTypes.contains("PART")) {
-            try {
-                materialService.applyEcnEffect(exist.getMaterialId(), exist.getVersionAfter(),
-                        exist.getEcnNo(), stayMp);
-                partBumped = true;
-            } catch (Exception e) {
-                log.error("ECN[{}] PART 升版失败: {}", exist.getEcnNo(), e.getMessage());
-            }
+            materialService.applyEcnEffect(exist.getMaterialId(), exist.getVersionAfter(),
+                    exist.getEcnNo(), stayMp);
+            partBumped = true;
         }
         if (impactTypes.contains("BOM")) {
-            try {
-                String old = bomService.bumpVersionForEcn(material.getPartNo(),
-                        exist.getEcnNo(), exist.getVersionAfter());
-                bomBumped = (old != null);
-            } catch (Exception e) {
-                log.error("ECN[{}] BOM 升版失败: {}", exist.getEcnNo(), e.getMessage());
-            }
+            String old = bomService.bumpVersionForEcn(material.getPartNo(),
+                    exist.getEcnNo(), exist.getVersionAfter());
+            bomBumped = (old != null);
         }
         if (impactTypes.contains("FILE")) {
-            try {
-                filesObsolete = obsoleteOldVersionFiles(material.getPartNo(), oldVersion);
-            } catch (Exception e) {
-                log.error("ECN[{}] 旧图作废失败: {}", exist.getEcnNo(), e.getMessage());
-            }
+            filesObsolete = obsoleteOldVersionFiles(material.getPartNo(), oldVersion);
         }
         // SOP/TRADE/MOLD: 仅记录影响，具体动作由后续模块承接
 
-        // 标记影响清单为已处理
-        try {
-            String result = "{\"partBumped\":" + partBumped
-                    + ",\"bomBumped\":" + bomBumped
-                    + ",\"filesObsolete\":" + filesObsolete + "}";
-            for (EcnImpact imp : ecnImpactService.listByEcn(exist.getId())) {
-                if ("PENDING".equals(imp.getStatus())) {
-                    ecnImpactService.markHandled(imp.getId(), result);
-                }
+        String result = "{\"partBumped\":" + partBumped
+                + ",\"bomBumped\":" + bomBumped
+                + ",\"filesObsolete\":" + filesObsolete + "}";
+        for (EcnImpact imp : ecnImpactService.listByEcn(exist.getId())) {
+            if ("PENDING".equals(imp.getStatus())) {
+                ecnImpactService.markHandled(imp.getId(), result);
             }
-        } catch (Exception e) {
-            log.warn("ECN[{}] impact mark-handled skipped: {}", exist.getEcnNo(), e.getMessage());
         }
 
-        recordFlow(exist.getId(), 3, "effect", EcnStatus.APPROVED, EcnStatus.EFFECTIVE, "ECN生效,版本已落库");
+        exist.setStatus(EcnStatus.EFFECTIVE);
+        exist.setEffectiveTime(LocalDateTime.now());
+        ecnMapper.updateById(exist);
+
+        recordFlow(exist.getId(), 3, "effect", EcnStatus.EFFECTING, EcnStatus.EFFECTIVE, "ECN生效,版本已落库");
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("ecnNo", exist.getEcnNo());
         payload.put("partNo", exist.getPartNo());
@@ -287,6 +294,31 @@ public class EcnServiceImpl implements EcnService {
         payload.put("impacts", impactTypes);
         payload.put("bomChanged", bomBumped);
         domainEventService.publish("ecn.effective", "ECN", exist.getEcnNo(), payload);
+    }
+
+    /** 独立事务标记 FAILED, 不受生效管线回滚影响; 本身失败只告警, 不掩盖原始异常 */
+    private void markEffectFailed(Long ecnId, Throwable cause) {
+        try {
+            txTemplate(TransactionDefinition.PROPAGATION_REQUIRES_NEW).executeWithoutResult(status -> {
+                Ecn current = ecnMapper.selectById(ecnId);
+                if (current == null || current.getStatus() == EcnStatus.EFFECTIVE) {
+                    return;
+                }
+                EcnStatus from = current.getStatus();
+                current.setStatus(EcnStatus.FAILED);
+                ecnMapper.updateById(current);
+                recordFlow(ecnId, 3, "effect_failed", from, EcnStatus.FAILED,
+                        "生效管线失败已回滚: " + cause.getMessage());
+            });
+        } catch (Exception e) {
+            log.error("ECN[{}] FAILED 标记写入失败: {}", ecnId, e.getMessage());
+        }
+    }
+
+    private TransactionTemplate txTemplate(int propagation) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(propagation);
+        return template;
     }
 
     /** 读取已填写影响面；为空则按变更类型推断并落库 */

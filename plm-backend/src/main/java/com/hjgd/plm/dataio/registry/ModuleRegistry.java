@@ -28,9 +28,9 @@ public class ModuleRegistry {
                         col("material_texture", "材质"), col("color", "颜色"), col("specification", "规格"),
                         col("product_series", "产品系列"), col("project_no", "项目号"),
                         col("supplier_code", "供应商编码"), col("supplier_name", "供应商名称"),
-                        en("status", "状态", "DRAFT", "REVIEWING", "RELEASED", "IN_PRODUCTION", "CHANGING", "OBSOLETE", "SEALED"),
+                        en("lifecycle_state", "生命周期状态", "DRAFT", "IN_REVIEW", "RELEASED", "IN_PRODUCTION", "CHANGING", "OBSOLETE", "SEALED"),
                         col("version_no", "版本号"), col("make_type", "制造类型"), col("unit", "单位"),
-                        col("lifecycle_status", "生命周期状态"), col("phase", "阶段"), col("part_category", "物料分类"),
+                        col("phase", "阶段"), col("part_category", "物料分类"),
                         col("name_en", "英文名称"), col("product_type", "产品类型"), col("ip_rating", "防护等级"),
                         num("power_w", "功率(W)"), num("standard_cost", "标准成本"), col("cost_currency", "币种"),
                         col("drawing_no", "图纸号"), col("drawing_revision", "图纸版本"), col("remark", "备注")

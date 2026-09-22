@@ -9,6 +9,7 @@ import com.hjgd.plm.bom.mapper.BomTemplateMapper;
 import com.hjgd.plm.bom.service.BomService;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.Result;
+import com.hjgd.plm.log.annotation.OperationLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -85,6 +86,7 @@ public class BomController {
     }
 
     @Operation(summary = "BOM正式发布(含门禁+快照)")
+    @OperationLog(value = "BOM正式发布", partNo = "#bomId")
     @PreAuthorize("hasAuthority('bom:add')")
     @PutMapping("/{bomId}/release")
     public Result<Void> release(@PathVariable Long bomId) {

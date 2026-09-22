@@ -1,6 +1,7 @@
 package com.hjgd.plm.material.controller;
 
 import com.hjgd.plm.common.PageResult;
+import com.hjgd.plm.log.annotation.OperationLog;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.dq.dto.DqRunResult;
 import com.hjgd.plm.material.dto.MaterialDTO;
@@ -73,6 +74,7 @@ public class MaterialController {
     }
 
     @Operation(summary = "提交评审")
+    @OperationLog(value = "提交评审", partNo = "#id")
     @PutMapping("/{id}/review")
     public Result<Void> submitReviewLegacy(@PathVariable Long id) {
         materialService.submitReview(id);
@@ -80,12 +82,14 @@ public class MaterialController {
     }
 
     @PostMapping("/{id}/actions/submit-review")
+    @OperationLog(value = "提交评审", partNo = "#id")
     public Result<Void> submitReview(@PathVariable Long id) {
         materialService.submitReview(id);
         return Result.success();
     }
 
     @Operation(summary = "正式发布")
+    @OperationLog(value = "正式发布", partNo = "#id")
     @PreAuthorize("hasAuthority('material:release')")
     @PutMapping("/{id}/release")
     public Result<Void> releaseLegacy(@PathVariable Long id) {
@@ -95,12 +99,14 @@ public class MaterialController {
 
     @PreAuthorize("hasAuthority('material:release')")
     @PostMapping("/{id}/actions/release")
+    @OperationLog(value = "正式发布", partNo = "#id")
     public Result<Void> release(@PathVariable Long id) {
         materialService.release(id);
         return Result.success();
     }
 
     @Operation(summary = "转量产")
+    @OperationLog(value = "转量产", partNo = "#id")
     @PreAuthorize("hasAuthority('material:release')")
     @PostMapping("/{id}/actions/to-production")
     public Result<Void> toProduction(@PathVariable Long id) {
@@ -109,6 +115,7 @@ public class MaterialController {
     }
 
     @Operation(summary = "作废")
+    @OperationLog(value = "作废", partNo = "#id")
     @PreAuthorize("hasAuthority('material:release')")
     @PostMapping("/{id}/actions/obsolete")
     public Result<Void> obsolete(@PathVariable Long id) {
@@ -117,6 +124,7 @@ public class MaterialController {
     }
 
     @Operation(summary = "封存")
+    @OperationLog(value = "封存", partNo = "#id")
     @PreAuthorize("hasAuthority('material:release')")
     @PostMapping("/{id}/actions/seal")
     public Result<Void> seal(@PathVariable Long id) {
