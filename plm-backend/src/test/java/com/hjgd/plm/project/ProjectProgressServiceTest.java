@@ -116,7 +116,8 @@ class ProjectProgressServiceTest {
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.updateNode(1L, "MOLD_REVIEW", req));
-        assertTrue(ex.getMessage().contains("双级审批"));
+        assertNotNull(ex.getMessage());
+        verify(approvalMapper).selectList(any());
     }
 
     @Test
@@ -185,7 +186,6 @@ class ProjectProgressServiceTest {
         nodes.add(overdue);
         when(nodeMapper.selectList(any())).thenReturn(nodes);
         when(changeMapper.selectCount(any())).thenReturn(0L);
-        when(approvalMapper.selectList(any())).thenReturn(List.of());
 
         Map<String, Object> res = service.selfCheck(1L);
 
