@@ -380,12 +380,24 @@ public class EcnServiceImpl implements EcnService {
                         .orderByAsc(EcnFlowLog::getCreatedAt));
     }
 
+    /**
+     * 作废该料号的旧版图纸: 命中「版本号 = 升版前版本」, 并兜底命中「版本号为空的同料号文件」。
+     *
+     * 版本号为空的行(历史上传未记录版本、或上传时物料尚未建档)无法按版本精确匹配;
+     * 若不兜底, 这些文件在 ECN 生效后仍可下载, AC1「旧文件自动作废」不成立。
+     * 新上传的文件由 FileServiceImpl.upload 落版本号, 不会再产生空版本行;
+     * 因此兜底只会吃掉真正的历史遗留数据, 不会误作废升版后的新文件。
+     */
     private int obsoleteOldVersionFiles(String partNo, String oldVersion) {
-        List<PlmFile> oldFiles = fileMapper.selectList(
-                new LambdaQueryWrapper<PlmFile>()
-                        .eq(PlmFile::getPartNo, partNo)
-                        .eq(PlmFile::getVersionNo, oldVersion)
-                        .eq(PlmFile::getObsolete, 0));
+        LambdaQueryWrapper<PlmFile> wrapper = new LambdaQueryWrapper<PlmFile>()
+                .eq(PlmFile::getPartNo, partNo)
+                .eq(PlmFile::getObsolete, 0);
+        if (StringUtils.hasText(oldVersion)) {
+            wrapper.and(w -> w.eq(PlmFile::getVersionNo, oldVersion).or().isNull(PlmFile::getVersionNo));
+        } else {
+            wrapper.isNull(PlmFile::getVersionNo);
+        }
+        List<PlmFile> oldFiles = fileMapper.selectList(wrapper);
         for (PlmFile f : oldFiles) {
             fileService.markObsolete(f.getId());
         }

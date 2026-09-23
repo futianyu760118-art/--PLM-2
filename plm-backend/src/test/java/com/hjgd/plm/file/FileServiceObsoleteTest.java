@@ -5,6 +5,8 @@ import com.hjgd.plm.file.entity.PlmFile;
 import com.hjgd.plm.file.mapper.PlmFileMapper;
 import com.hjgd.plm.file.service.impl.FileServiceImpl;
 import com.hjgd.plm.file.watermark.WatermarkEngine;
+import com.hjgd.plm.material.entity.Material;
+import com.hjgd.plm.material.mapper.MaterialMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,6 +15,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +34,7 @@ class FileServiceObsoleteTest {
 
     @Mock private PlmFileMapper fileMapper;
     @Mock private WatermarkEngine watermarkEngine;
+    @Mock private MaterialMapper materialMapper;
 
     @InjectMocks private FileServiceImpl fileService;
 
@@ -46,6 +53,21 @@ class FileServiceObsoleteTest {
         f.setObsolete(obsolete);
         f.setHasWatermark(0);
         return f;
+    }
+
+    /** 上传路径需要登录态(取 uploadedBy 的真实姓名)与可写的存储目录 */
+    private void givenUploadContext() {
+        com.hjgd.plm.auth.security.LoginUser user = mock(com.hjgd.plm.auth.security.LoginUser.class);
+        when(user.getRealName()).thenReturn("测试工程师");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        user, null, List.of()));
+        ReflectionTestUtils.setField(fileService, "intranetDir", tempDir.toString());
+        ReflectionTestUtils.setField(fileService, "extranetDir", tempDir.toString());
+    }
+
+    private MockMultipartFile drawing() {
+        return new MockMultipartFile("file", "HJ001-结构图.pdf", "application/pdf", "pdf-bytes".getBytes());
     }
 
     @Test
@@ -120,5 +142,45 @@ class FileServiceObsoleteTest {
         assertEquals(1, f.getObsolete());
         // 盖章临时文件不得残留
         assertFalse(java.nio.file.Files.exists(src.resolveSibling(src.getFileName() + ".wm.tmp")));
+    }
+
+    @Test
+    @DisplayName("回归 D1: 上传落料号当前版本号(ECN 生效据此定位并作废旧图)")
+    void uploadStampsMaterialVersion() {
+        givenUploadContext();
+        Material m = new Material();
+        m.setPartNo("HJ202607040001");
+        m.setVersionNo("V1.0");
+        when(materialMapper.selectOne(any())).thenReturn(m);
+
+        PlmFile saved = fileService.upload(drawing(), "HJ202607040001", "DRAWING", "INTRANET");
+
+        assertEquals("V1.0", saved.getVersionNo(),
+                "上传必须落版本号, 否则 ECN 生效时 version_no=oldVersion 匹配不到该文件");
+        verify(fileMapper).insert(saved);
+    }
+
+    @Test
+    @DisplayName("回归 D1: 物料不存在时版本号留空, 上传本身不失败")
+    void uploadKeepsNullVersionWhenMaterialMissing() {
+        givenUploadContext();
+        when(materialMapper.selectOne(any())).thenReturn(null);
+
+        PlmFile saved = fileService.upload(drawing(), "HJ-NOT-EXIST", "DRAWING", "INTRANET");
+
+        assertNull(saved.getVersionNo());
+        verify(fileMapper).insert(saved);
+    }
+
+    @Test
+    @DisplayName("无料号的公共附件: 不查物料, 版本号为空")
+    void uploadWithoutPartNoSkipsMaterialLookup() {
+        givenUploadContext();
+
+        PlmFile saved = fileService.upload(drawing(), null, "OTHER", "INTRANET");
+
+        assertNull(saved.getVersionNo());
+        verifyNoInteractions(materialMapper);
+        verify(fileMapper).insert(saved);
     }
 }

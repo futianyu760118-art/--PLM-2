@@ -306,6 +306,71 @@ class EcnServiceTest {
             verify(domainEventService).publish(eq("ecn.effective"), any(), any(), any());
         }
 
+        /**
+         * 回归 D1: 上面那条用例把 selectList 整体 mock 掉了, 过滤条件根本没参与,
+         * 所以 version_no 全空也不会失败 —— 真实的旧图过滤条件在这里断言。
+         * 行为级验证(旧文件 obsolete=1 且拒绝下载)在干净库联调中完成。
+         */
+        @Test
+        @DisplayName("回归 D1: 旧图过滤同时命中「版本号=升版前」与「版本号为空」")
+        void obsoleteQueryCoversNullVersionRows() {
+            org.apache.ibatis.builder.MapperBuilderAssistant assistant =
+                    new org.apache.ibatis.builder.MapperBuilderAssistant(
+                            new com.baomidou.mybatisplus.core.MybatisConfiguration(), "");
+            com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(assistant, PlmFile.class);
+
+            EcnImpact fileImp = impact("FILE", 13L);
+            PlmFile oldFile = new PlmFile();
+            oldFile.setId(77L);
+            testEcn.setStatus(EcnStatus.APPROVED);
+            when(ecnMapper.selectById(1L)).thenReturn(testEcn);
+            when(materialService.getById(1L)).thenReturn(testMaterial); // versionNo = V1.0
+            when(ecnImpactService.listByEcn(1L)).thenReturn(List.of(fileImp));
+            when(fileMapper.selectList(any())).thenReturn(List.of(oldFile));
+
+            ecnService.effect(1L);
+
+            String sql = capturedFileQuerySql();
+            assertTrue(sql.contains("part_no"), "必须按料号限定范围: " + sql);
+            assertTrue(sql.contains("version_no = "), "必须命中升版前版本: " + sql);
+            assertTrue(sql.contains("version_no IS NULL"),
+                    "必须兜底命中版本号为空的同料号文件(历史上传未落版本号), 否则旧图仍可下载: " + sql);
+            verify(fileService).markObsolete(77L);
+        }
+
+        @Test
+        @DisplayName("回归 D1: 升版前版本号为空时, 只按「同料号 + 版本号为空」作废")
+        void obsoleteQueryOnNullOldVersion() {
+            org.apache.ibatis.builder.MapperBuilderAssistant assistant =
+                    new org.apache.ibatis.builder.MapperBuilderAssistant(
+                            new com.baomidou.mybatisplus.core.MybatisConfiguration(), "");
+            com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(assistant, PlmFile.class);
+
+            testMaterial.setVersionNo(null);
+            EcnImpact fileImp = impact("FILE", 13L);
+            testEcn.setStatus(EcnStatus.APPROVED);
+            when(ecnMapper.selectById(1L)).thenReturn(testEcn);
+            when(materialService.getById(1L)).thenReturn(testMaterial);
+            when(ecnImpactService.listByEcn(1L)).thenReturn(List.of(fileImp));
+            when(fileMapper.selectList(any())).thenReturn(List.of());
+
+            ecnService.effect(1L);
+
+            String sql = capturedFileQuerySql();
+            assertTrue(sql.contains("version_no IS NULL"), "应命中版本号为空的同料号文件: " + sql);
+            assertFalse(sql.contains("version_no = "),
+                    "oldVersion 为空时不得拼出 version_no = NULL(永假条件): " + sql);
+        }
+
+        private String capturedFileQuerySql() {
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.Wrapper<PlmFile>> captor =
+                    ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.Wrapper.class);
+            verify(fileMapper, atLeastOnce()).selectList(captor.capture());
+            assertFalse(captor.getAllValues().isEmpty(), "应查询过旧版本文件");
+            return captor.getValue().getTargetSql();
+        }
+
         @Test
         @DisplayName("未填影响面时按变更类型推断：STRUCTURE→PART+BOM+FILE 并落库")
         void effectInfersImpactsWhenEmpty() {

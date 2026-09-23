@@ -10,6 +10,8 @@ import com.hjgd.plm.file.mapper.PlmFileMapper;
 import com.hjgd.plm.file.service.FileService;
 import com.hjgd.plm.file.watermark.WatermarkConfig;
 import com.hjgd.plm.file.watermark.WatermarkEngine;
+import com.hjgd.plm.material.entity.Material;
+import com.hjgd.plm.material.mapper.MaterialMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +37,7 @@ public class FileServiceImpl implements FileService {
 
     private final PlmFileMapper fileMapper;
     private final WatermarkEngine watermarkEngine;
+    private final MaterialMapper materialMapper;
 
     @Value("${plm.file.intranet-dir}")
     private String intranetDir;
@@ -75,6 +78,9 @@ public class FileServiceImpl implements FileService {
         entity.setHasWatermark(0);
         entity.setObsolete(0);
         entity.setPartNo(partNo);
+        // 落版本号: ECN 生效时按「该料号 + 升版前版本号」定位旧图纸并作废,
+        // 版本号缺失的旧行永远匹配不到, 旧图纸会一直可下载(AC1)。
+        entity.setVersionNo(resolveMaterialVersion(partNo));
         entity.setUploadedBy(SecurityUtils.getCurrentRealName());
         entity.setUploadedAt(LocalDateTime.now());
         fileMapper.insert(entity);
@@ -164,6 +170,16 @@ public class FileServiceImpl implements FileService {
     @Override
     public void delete(Long id) {
         fileMapper.deleteById(id);
+    }
+
+    /** 取料号当前版本号; 料号为空或物料不存在(公共附件)时返回 null */
+    private String resolveMaterialVersion(String partNo) {
+        if (!StringUtils.hasText(partNo)) {
+            return null;
+        }
+        Material m = materialMapper.selectOne(
+                new LambdaQueryWrapper<Material>().eq(Material::getPartNo, partNo));
+        return m == null ? null : m.getVersionNo();
     }
 
     private File resolveDiskFile(String path) {

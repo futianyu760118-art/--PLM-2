@@ -84,13 +84,16 @@ CREATE TABLE IF NOT EXISTS plm_domain_event (
 CREATE UNIQUE INDEX IF NOT EXISTS uk_domain_event_id ON plm_domain_event(event_id);
 CREATE INDEX IF NOT EXISTS idx_domain_event_status ON plm_domain_event(status, created_at);
 
+-- 与 10_v1_1_lean_agent_kpi.sql 保持同一口径(10 先执行, 这里是空操作)
 CREATE TABLE IF NOT EXISTS plm_code_issue_log (
     id              BIGSERIAL PRIMARY KEY,
     object_type     VARCHAR(32) NOT NULL,
     object_id       VARCHAR(64),
     generated_code  VARCHAR(128) NOT NULL,
     rule_code       VARCHAR(64),
-    context_json    TEXT,
+    rule_id         BIGINT,
+    rule_version    VARCHAR(16),
+    context_json    JSONB,
     issuer_id       BIGINT,
     source          VARCHAR(16) NOT NULL DEFAULT 'UI',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()

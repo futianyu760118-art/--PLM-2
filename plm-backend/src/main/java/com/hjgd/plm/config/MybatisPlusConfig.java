@@ -40,6 +40,10 @@ public class MybatisPlusConfig {
             public void insertFill(MetaObject metaObject) {
                 this.strictInsertFill(metaObject, "createdAt", LocalDateTime.class, LocalDateTime.now());
                 this.strictInsertFill(metaObject, "updatedAt", LocalDateTime.class, LocalDateTime.now());
+                // 逻辑删除位必须落 0(与 application.yml 的 logic-not-delete-value 一致):
+                // 新行若写成 NULL, @TableLogic 拼出的 WHERE deleted=0 永远匹配不到该行,
+                // selectById/getByPartNo 会静默返回 null。
+                this.strictInsertFill(metaObject, "deleted", Integer.class, 0);
             }
 
             @Override
