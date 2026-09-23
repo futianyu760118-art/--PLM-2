@@ -129,7 +129,12 @@ public class ProjectProgressService {
         if (req.getOwner() != null) node.setOwner(req.getOwner());
         if (req.getDeliveryDesc() != null) node.setDeliveryDesc(req.getDeliveryDesc());
         if (req.getRemark() != null) node.setRemark(req.getRemark());
-        if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
+        if (StringUtils.hasText(req.getStatus())) {
+            if (List.of("READY_FOR_APPROVAL", "RD_APPROVED").contains(req.getStatus())) {
+                throw new BusinessException("审批中间状态只能通过关键节点审批接口变更");
+            }
+            node.setStatus(req.getStatus());
+        }
 
         validateStatus(node);
 
