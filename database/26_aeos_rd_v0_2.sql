@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS plm_project_node_approval (
     approver_id         BIGINT,
     approver_name       VARCHAR(64),
     comment             TEXT,
-    evidence_snapshot   JSONB,
+    evidence_snapshot   TEXT,
     request_id          VARCHAR(64),
     submitted_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     decided_at          TIMESTAMPTZ,
