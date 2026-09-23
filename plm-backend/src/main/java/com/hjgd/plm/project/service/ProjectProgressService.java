@@ -5,12 +5,16 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
+import com.hjgd.plm.evidence.entity.AeosEvidence;
+import com.hjgd.plm.evidence.mapper.AeosEvidenceMapper;
 import com.hjgd.plm.file.entity.PlmFile;
 import com.hjgd.plm.file.service.FileService;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectNode;
 import com.hjgd.plm.project.entity.ProjectNodeEvidence;
+import com.hjgd.plm.project.mapper.ProjectChangeMapper;
 import com.hjgd.plm.project.mapper.ProjectMapper;
+import com.hjgd.plm.project.mapper.ProjectNodeApprovalMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeEvidenceMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,9 @@ public class ProjectProgressService {
     private final ProjectMapper projectMapper;
     private final ProjectNodeMapper nodeMapper;
     private final ProjectNodeEvidenceMapper evidenceMapper;
+    private final ProjectNodeApprovalMapper approvalMapper;
+    private final ProjectChangeMapper changeMapper;
+    private final AeosEvidenceMapper aeosEvidenceMapper;
     private final FileService fileService;
 
     /** 19 节点定义: {编码, 名称, 是否关键} */
@@ -134,7 +141,7 @@ public class ProjectProgressService {
         return node;
     }
 
-    /** 完成硬标准: DONE 必须 实际日期 + 证据>=1。 */
+    /** 完成硬标准: 普通节点=实际日期+证据；关键节点再叠加 RD_LEAD→GM 双级审批。 */
     private void validateStatus(ProjectNode node) {
         if (DONE_LIKE.contains(node.getStatus())) {
             if (node.getActualDate() == null) {
@@ -143,6 +150,9 @@ public class ProjectProgressService {
             int ev = node.getEvidenceCount() == null ? 0 : node.getEvidenceCount();
             if (ev < 1) {
                 throw new BusinessException("完成节点必须上传至少 1 个证据文件（完成证据标准）");
+            }
+            if (isKeyNode(node) && !isApprovalComplete(node.getId())) {
+                throw new BusinessException("关键节点必须完成「研发主管一审 → 总经理二审」后才能置 DONE");
             }
         }
     }
@@ -163,7 +173,9 @@ public class ProjectProgressService {
         ev.setNote(note);
         ev.setUploadedBy(safeUser());
         ev.setUploadedAt(LocalDateTime.now());
+        ev.setAeosEvidenceId(newEvidenceId());
         evidenceMapper.insert(ev);
+        registerAeosEvidence(node, ev);
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
@@ -179,6 +191,7 @@ public class ProjectProgressService {
     public void deleteEvidence(Long evidenceId) {
         ProjectNodeEvidence ev = evidenceMapper.selectById(evidenceId);
         if (ev == null) return;
+        revokeAeosEvidence(ev.getAeosEvidenceId());
         evidenceMapper.deleteById(evidenceId);
         ProjectNode node = nodeMapper.selectById(ev.getNodeId());
         if (node != null) {
@@ -213,7 +226,9 @@ public class ProjectProgressService {
         ev.setVersionNo("V1");
         ev.setUploadedBy(safeUser());
         ev.setUploadedAt(LocalDateTime.now());
+        ev.setAeosEvidenceId(newEvidenceId());
         evidenceMapper.insert(ev);
+        registerAeosEvidence(node, ev);
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
@@ -338,7 +353,7 @@ public class ProjectProgressService {
         return s;
     }
 
-    /** 自检: 健康分 + 问题清单。 */
+    /** 自检: AEOS-RD-HS-V0.2 健康分 + 问题清单。 */
     public Map<String, Object> selfCheck(Long projectId) {
         Project p = projectMapper.selectById(projectId);
         if (p == null) throw new BusinessException("项目不存在");
@@ -349,21 +364,28 @@ public class ProjectProgressService {
         int done = (int) sum.get("done");
         int keyTotal = (int) sum.get("keyTotal");
         int keyDone = (int) sum.get("keyDone");
-        int overdue = (int) sum.get("overdue");
-        int planSet = 0, onTime = 0, doneWithDate = 0;
+
+        int onTime = 0, doneWithPlan = 0;
         for (ProjectNode n : nodes) {
-            if (n.getPlanDate() != null) planSet++;
-            if (DONE_LIKE.contains(n.getStatus())) {
-                if (n.getActualDate() != null) doneWithDate++;
-                if (n.getActualDate() != null && n.getPlanDate() != null && !n.getActualDate().isAfter(n.getPlanDate())) onTime++;
+            if (DONE_LIKE.contains(n.getStatus())
+                    && n.getActualDate() != null
+                    && n.getPlanDate() != null) {
+                doneWithPlan++;
+                if (!n.getActualDate().isAfter(n.getPlanDate())) onTime++;
             }
         }
+
         double ncr = total == 0 ? 0 : (double) done / total;
         double kcr = keyTotal == 0 ? 0 : (double) keyDone / keyTotal;
-        double otr = doneWithDate == 0 ? 1.0 : (double) onTime / doneWithDate;
-        double cr = total == 0 ? 0 : (double) planSet / total;
-        int editSum = (int) sum.get("editSum");
-        double cf = Math.max(0, 1 - (double) editSum / 50.0);
+        double otr = doneWithPlan == 0 ? 1.0 : (double) onTime / doneWithPlan;
+        double cr = projectCompleteness(nodes);
+
+        Long changeCountLong = changeMapper.selectCount(new LambdaQueryWrapper<ProjectChange>()
+                .eq(ProjectChange::getProjectId, projectId)
+                .in(ProjectChange::getStatus, List.of("APPROVED", "EFFECTIVE")));
+        int changeCount = changeCountLong == null ? 0 : changeCountLong.intValue();
+        double cf = Math.max(0, 1 - (double) changeCount / 10.0);
+
         int health = (int) Math.round(100 * (0.35 * ncr + 0.25 * kcr + 0.20 * otr + 0.10 * cr + 0.10 * cf));
 
         List<Map<String, Object>> issues = new ArrayList<>();
@@ -371,12 +393,13 @@ public class ProjectProgressService {
         boolean projectClosed = "CLOSED".equals(p.getStatus()) || "MP".equals(p.getStatus());
         for (ProjectNode n : nodes) {
             boolean isDone = DONE_LIKE.contains(n.getStatus());
-            if (isDone) {
-                if (n.getActualDate() == null || (n.getEvidenceCount() == null || n.getEvidenceCount() < 1)) {
-                    addIssue(issues, "HIGH", n, "完成证据不足(缺实际日期或证据文件)");
-                }
+            if (isDone && (n.getActualDate() == null || (n.getEvidenceCount() == null || n.getEvidenceCount() < 1))) {
+                addIssue(issues, "HIGH", n, "完成证据不足(缺实际日期或证据文件)");
             }
-            if (n.getIsKey() != null && n.getIsKey() == 1 && !isDone && !projectClosed) {
+            if (isKeyNode(n) && isDone && !isApprovalComplete(n.getId())) {
+                addIssue(issues, "HIGH", n, "关键节点DONE但双级审批不完整");
+            }
+            if (isKeyNode(n) && !isDone && !projectClosed) {
                 addIssue(issues, "HIGH", n, "关键节点未闭环");
             }
             if (n.getPlanDate() != null && n.getPlanDate().isBefore(today) && !isDone) {
@@ -385,24 +408,275 @@ public class ProjectProgressService {
             if ("NOT_SET".equals(n.getStatus())) {
                 addIssue(issues, "MEDIUM", n, "节点未设置");
             }
-            if (n.getIsKey() != null && n.getIsKey() == 1 && n.getPlanDate() == null) {
+            if (isKeyNode(n) && n.getPlanDate() == null) {
                 addIssue(issues, "MEDIUM", n, "关键节点缺少计划日期");
             }
         }
         long high = issues.stream().filter(i -> "HIGH".equals(i.get("severity"))).count();
         long medium = issues.stream().filter(i -> "MEDIUM".equals(i.get("severity"))).count();
 
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        metrics.put("ncr", round(ncr));
+        metrics.put("kcr", round(kcr));
+        metrics.put("otr", round(otr));
+        metrics.put("cr", round(cr));
+        metrics.put("cf", round(cf));
+        metrics.put("approvedChangeCount", changeCount);
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("projectId", projectId);
         out.put("projectNo", p.getProjectNo());
         out.put("projectName", p.getProjectName());
+        out.put("formulaVersion", "AEOS-RD-HS-V0.2");
         out.put("totalRows", total);
         out.put("score", Math.max(0, Math.min(100, health)));
         out.put("completeness", round(cr));
-        out.put("metrics", Map.of("ncr", round(ncr), "kcr", round(kcr), "otr", round(otr), "cr", round(cr), "cf", round(cf)));
+        out.put("metrics", metrics);
         out.put("bySeverity", Map.of("HIGH", high, "MEDIUM", medium, "LOW", 0L));
         out.put("issues", issues);
         return out;
+    }
+
+    /** 关键节点提交审批：实际日期+Evidence齐全后进入READY_FOR_APPROVAL。 */
+    @Transactional
+    public Map<String, Object> submitApproval(Long nodeId, Long submitterId, String submitterName,
+                                               String comment, String requestId) {
+        ProjectNode node = nodeMapper.selectById(nodeId);
+        if (node == null) throw new BusinessException("节点不存在");
+        if (!isKeyNode(node)) throw new BusinessException("仅关键节点需要双级审批");
+        if (DONE_LIKE.contains(node.getStatus())) throw new BusinessException("节点已完成，无需重复提交");
+
+        if (StringUtils.hasText(requestId)) {
+            ProjectNodeApproval existing = approvalMapper.selectOne(new LambdaQueryWrapper<ProjectNodeApproval>()
+                    .eq(ProjectNodeApproval::getRequestId, requestId)
+                    .last("LIMIT 1"));
+            if (existing != null) return approvalSummary(nodeId);
+        }
+
+        node.setEvidenceCount(refreshEvidenceCount(nodeId));
+        if (node.getActualDate() == null) throw new BusinessException("提交审批前必须填写实际完成日期");
+        if (node.getEvidenceCount() == null || node.getEvidenceCount() < 1) {
+            throw new BusinessException("提交审批前必须至少有 1 条Evidence");
+        }
+        if ("READY_FOR_APPROVAL".equals(node.getStatus()) || "RD_APPROVED".equals(node.getStatus())) {
+            throw new BusinessException("当前节点已在审批流程中");
+        }
+
+        List<ProjectNodeApproval> old = approvalRecords(nodeId);
+        int round = old.stream().map(ProjectNodeApproval::getApprovalRound)
+                .filter(Objects::nonNull).max(Integer::compareTo).orElse(0) + 1;
+
+        ProjectNodeApproval a = new ProjectNodeApproval();
+        a.setNodeId(nodeId);
+        a.setProjectId(node.getProjectId());
+        a.setNodeCode(node.getNodeCode());
+        a.setApprovalLevel("RD_LEAD");
+        a.setApprovalSeq(1);
+        a.setApprovalRound(round);
+        a.setStatus("PENDING");
+        a.setSubmittedById(submitterId);
+        a.setSubmittedByName(submitterName);
+        a.setComment(comment);
+        a.setRequestId(requestId);
+        a.setEvidenceSnapshot("{\"evidenceCount\":" + node.getEvidenceCount()
+                + ",\"actualDate\":\"" + node.getActualDate() + "\"}");
+        a.setSubmittedAt(LocalDateTime.now());
+        a.setCreatedAt(LocalDateTime.now());
+        a.setUpdatedAt(LocalDateTime.now());
+        approvalMapper.insert(a);
+
+        node.setStatus("READY_FOR_APPROVAL");
+        node.setUpdatedAt(LocalDateTime.now());
+        nodeMapper.updateById(node);
+        return approvalSummary(nodeId);
+    }
+
+    /** RD_LEAD / GM 审批；GM批准后才真正置DONE。 */
+    @Transactional
+    public Map<String, Object> reviewApproval(Long nodeId, String level, String decision, String comment,
+                                               Long approverId, String approverName) {
+        ProjectNode node = nodeMapper.selectById(nodeId);
+        if (node == null) throw new BusinessException("节点不存在");
+        if (!isKeyNode(node)) throw new BusinessException("仅关键节点需要双级审批");
+
+        String normalizedLevel = level == null ? "" : level.trim().toUpperCase(Locale.ROOT);
+        String normalizedDecision = decision == null ? "" : decision.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("RD_LEAD", "GM").contains(normalizedLevel)) {
+            throw new BusinessException("未知审批层级");
+        }
+        if (!List.of("APPROVED", "REJECTED").contains(normalizedDecision)) {
+            throw new BusinessException("审批结论只允许 APPROVED / REJECTED");
+        }
+
+        List<ProjectNodeApproval> records = approvalRecords(nodeId);
+        int round = records.stream().map(ProjectNodeApproval::getApprovalRound)
+                .filter(Objects::nonNull).max(Integer::compareTo).orElse(0);
+        if (round < 1) throw new BusinessException("节点尚未提交审批");
+
+        ProjectNodeApproval pending = records.stream()
+                .filter(a -> Objects.equals(a.getApprovalRound(), round))
+                .filter(a -> normalizedLevel.equals(a.getApprovalLevel()))
+                .filter(a -> "PENDING".equals(a.getStatus()))
+                .max(Comparator.comparing(ProjectNodeApproval::getId))
+                .orElseThrow(() -> new BusinessException("当前审批层级不存在待处理记录"));
+
+        if ("RD_LEAD".equals(normalizedLevel) && !"READY_FOR_APPROVAL".equals(node.getStatus())) {
+            throw new BusinessException("节点当前不处于研发主管审批状态");
+        }
+        if ("GM".equals(normalizedLevel) && !"RD_APPROVED".equals(node.getStatus())) {
+            throw new BusinessException("节点必须先完成研发主管一审");
+        }
+
+        if ("GM".equals(normalizedLevel) && "APPROVED".equals(normalizedDecision)) {
+            ProjectNodeApproval rdApproved = records.stream()
+                    .filter(a -> Objects.equals(a.getApprovalRound(), round))
+                    .filter(a -> "RD_LEAD".equals(a.getApprovalLevel()))
+                    .filter(a -> "APPROVED".equals(a.getStatus()))
+                    .max(Comparator.comparing(ProjectNodeApproval::getId))
+                    .orElseThrow(() -> new BusinessException("缺少研发主管批准记录"));
+            if (rdApproved.getApproverId() != null && Objects.equals(rdApproved.getApproverId(), approverId)) {
+                throw new BusinessException("研发主管与总经理审批必须由不同人员完成");
+            }
+        }
+
+        pending.setStatus(normalizedDecision);
+        pending.setApproverId(approverId);
+        pending.setApproverName(approverName);
+        pending.setComment(comment);
+        pending.setDecidedAt(LocalDateTime.now());
+        pending.setUpdatedAt(LocalDateTime.now());
+        approvalMapper.updateById(pending);
+
+        if ("REJECTED".equals(normalizedDecision)) {
+            node.setStatus("IN_PROGRESS");
+        } else if ("RD_LEAD".equals(normalizedLevel)) {
+            ProjectNodeApproval gm = new ProjectNodeApproval();
+            gm.setNodeId(nodeId);
+            gm.setProjectId(node.getProjectId());
+            gm.setNodeCode(node.getNodeCode());
+            gm.setApprovalLevel("GM");
+            gm.setApprovalSeq(2);
+            gm.setApprovalRound(round);
+            gm.setStatus("PENDING");
+            gm.setSubmittedById(pending.getSubmittedById());
+            gm.setSubmittedByName(pending.getSubmittedByName());
+            gm.setSubmittedAt(LocalDateTime.now());
+            gm.setCreatedAt(LocalDateTime.now());
+            gm.setUpdatedAt(LocalDateTime.now());
+            approvalMapper.insert(gm);
+            node.setStatus("RD_APPROVED");
+        } else {
+            node.setStatus("DONE");
+            validateStatus(node);
+        }
+        node.setUpdatedAt(LocalDateTime.now());
+        nodeMapper.updateById(node);
+        return approvalSummary(nodeId);
+    }
+
+    public Map<String, Object> approvalSummary(Long nodeId) {
+        ProjectNode node = nodeMapper.selectById(nodeId);
+        if (node == null) throw new BusinessException("节点不存在");
+        List<ProjectNodeApproval> records = approvalRecords(nodeId);
+        int round = records.stream().map(ProjectNodeApproval::getApprovalRound)
+                .filter(Objects::nonNull).max(Integer::compareTo).orElse(0);
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (ProjectNodeApproval a : records) {
+            if (!Objects.equals(a.getApprovalRound(), round)) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", a.getId());
+            m.put("level", a.getApprovalLevel());
+            m.put("seq", a.getApprovalSeq());
+            m.put("status", a.getStatus());
+            m.put("approverId", a.getApproverId());
+            m.put("approverName", a.getApproverName());
+            m.put("comment", a.getComment());
+            m.put("submittedAt", a.getSubmittedAt());
+            m.put("decidedAt", a.getDecidedAt());
+            items.add(m);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("nodeId", nodeId);
+        out.put("nodeCode", node.getNodeCode());
+        out.put("nodeStatus", node.getStatus());
+        out.put("approvalRound", round);
+        out.put("complete", isApprovalComplete(nodeId));
+        out.put("records", items);
+        return out;
+    }
+
+    private List<ProjectNodeApproval> approvalRecords(Long nodeId) {
+        return approvalMapper.selectList(new LambdaQueryWrapper<ProjectNodeApproval>()
+                .eq(ProjectNodeApproval::getNodeId, nodeId)
+                .orderByAsc(ProjectNodeApproval::getApprovalRound)
+                .orderByAsc(ProjectNodeApproval::getApprovalSeq)
+                .orderByAsc(ProjectNodeApproval::getId));
+    }
+
+    private boolean isApprovalComplete(Long nodeId) {
+        List<ProjectNodeApproval> records = approvalRecords(nodeId);
+        int round = records.stream().map(ProjectNodeApproval::getApprovalRound)
+                .filter(Objects::nonNull).max(Integer::compareTo).orElse(0);
+        if (round < 1) return false;
+        boolean rd = records.stream().anyMatch(a -> Objects.equals(a.getApprovalRound(), round)
+                && "RD_LEAD".equals(a.getApprovalLevel()) && "APPROVED".equals(a.getStatus()));
+        boolean gm = records.stream().anyMatch(a -> Objects.equals(a.getApprovalRound(), round)
+                && "GM".equals(a.getApprovalLevel()) && "APPROVED".equals(a.getStatus()));
+        return rd && gm;
+    }
+
+    private boolean isKeyNode(ProjectNode node) {
+        return node != null && node.getIsKey() != null && node.getIsKey() == 1;
+    }
+
+    private double projectCompleteness(List<ProjectNode> nodes) {
+        int required = 0;
+        int filled = 0;
+        for (ProjectNode n : nodes) {
+            required += 3; // plan_date / owner / delivery_desc
+            if (n.getPlanDate() != null) filled++;
+            if (StringUtils.hasText(n.getOwner())) filled++;
+            if (StringUtils.hasText(n.getDeliveryDesc())) filled++;
+            if (DONE_LIKE.contains(n.getStatus())) {
+                required += 2; // actual_date / evidence
+                if (n.getActualDate() != null) filled++;
+                if (n.getEvidenceCount() != null && n.getEvidenceCount() > 0) filled++;
+            }
+        }
+        return required == 0 ? 0 : (double) filled / required;
+    }
+
+    private String newEvidenceId() {
+        return "EVID-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase(Locale.ROOT);
+    }
+
+    private void registerAeosEvidence(ProjectNode node, ProjectNodeEvidence ev) {
+        AeosEvidence e = new AeosEvidence();
+        e.setEvidenceId(ev.getAeosEvidenceId());
+        e.setDomain("R&D");
+        e.setProjectId(node.getProjectId());
+        e.setObjectType("PROJECT_NODE");
+        e.setObjectId(String.valueOf(node.getId()));
+        e.setObjectVersion("EDIT-" + (node.getEditCount() == null ? 0 : node.getEditCount()));
+        e.setEvidenceType(StringUtils.hasText(ev.getDocType()) ? ev.getDocType() : "NODE_EVIDENCE");
+        e.setSourceType(StringUtils.hasText(ev.getSource()) ? ev.getSource() : "FILE");
+        e.setSourceSystem("PLM-2");
+        e.setFileId(ev.getFileId());
+        e.setContentRef(ev.getContent() == null ? null : "plm_project_node_evidence.content");
+        e.setRecordRef("plm_project_node_evidence:" + ev.getId());
+        e.setStatus("SUBMITTED");
+        e.setCreatedBy(ev.getUploadedBy());
+        e.setCreatedAt(ev.getUploadedAt());
+        e.setVersionNo(StringUtils.hasText(ev.getVersionNo()) ? ev.getVersionNo() : "V1");
+        aeosEvidenceMapper.insert(e);
+    }
+
+    private void revokeAeosEvidence(String evidenceId) {
+        if (!StringUtils.hasText(evidenceId)) return;
+        AeosEvidence e = aeosEvidenceMapper.selectById(evidenceId);
+        if (e == null) return;
+        e.setStatus("REVOKED");
+        aeosEvidenceMapper.updateById(e);
     }
 
     private void addIssue(List<Map<String, Object>> issues, String severity, ProjectNode n, String message) {
