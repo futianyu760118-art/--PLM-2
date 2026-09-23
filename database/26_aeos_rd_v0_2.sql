@@ -6,6 +6,9 @@
 -- =============================================================================
 
 -- ---------- 1. 关键节点双级审批 ----------
+-- 审批中间状态 READY_FOR_APPROVAL 超过原 VARCHAR(16)，先扩容节点状态字段。
+ALTER TABLE plm_project_node ALTER COLUMN status TYPE VARCHAR(24);
+
 CREATE TABLE IF NOT EXISTS plm_project_node_approval (
     id                  BIGSERIAL PRIMARY KEY,
     node_id             BIGINT NOT NULL REFERENCES plm_project_node(id) ON DELETE CASCADE,
