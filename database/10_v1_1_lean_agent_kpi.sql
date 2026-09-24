@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS plm_code_issue_log (
     object_type     VARCHAR(32) NOT NULL,
     object_id       VARCHAR(64),
     generated_code  VARCHAR(128) NOT NULL,
+    rule_code       VARCHAR(64),
     rule_id         BIGINT,
     rule_version    VARCHAR(16),
     context_json    JSONB,
