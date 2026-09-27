@@ -98,12 +98,13 @@ const openStages = ref([])
 
 // 工序前后顺序(上游 → 下游)
 const STAGE_ORDER = [
-  '工作台', '项目与物料', '产品结构', '3D与档案', '工程变更',
+  '工作台', '研发自治中心', '项目与物料', '产品结构', '3D与档案', '工程变更',
   '模具与工序', '品质检验', '外协协同', '数据治理', '度量分析',
   '导出集成', '智能改善', '系统管理'
 ]
 const STAGE_ICONS = {
-  '工作台': 'HomeFilled', '项目与物料': 'Flag', '产品结构': 'Connection',
+  '工作台': 'HomeFilled', '研发自治中心': 'DataBoard', '项目与物料': 'Flag',
+  '产品结构': 'Connection',
   '3D与档案': 'FolderOpened', '工程变更': 'Switch', '模具与工序': 'SetUp',
   '品质检验': 'CircleCheckFilled', '外协协同': 'Promotion', '数据治理': 'DataLine',
   '度量分析': 'TrendCharts', '导出集成': 'Upload', '智能改善': 'MagicStick',

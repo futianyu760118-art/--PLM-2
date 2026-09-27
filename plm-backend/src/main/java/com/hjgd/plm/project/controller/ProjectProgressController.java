@@ -22,7 +22,7 @@ public class ProjectProgressController {
 
     private final ProjectProgressService service;
 
-    @Operation(summary = "进度节点矩阵(19节点)")
+    @Operation(summary = "进度节点矩阵(22节点)")
     @GetMapping("/{projectId}/nodes")
     public Result<Map<String, Object>> matrix(@PathVariable Long projectId) {
         return Result.success(service.matrix(projectId));

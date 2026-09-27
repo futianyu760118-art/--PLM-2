@@ -26,7 +26,7 @@ import java.util.*;
 
 /**
  * 研发项目进度跟踪(小模型/试点)。
- * 19 节点矩阵 + 节点表单 + 证据文件 + 完成硬标准 + 自检(健康分)。
+ * 22 节点矩阵 + 节点表单 + 证据文件 + 完成硬标准 + 自检(健康分)。
  * 标准见 docs/plm-project-progress-tracking-spec.md
  */
 @Slf4j
@@ -38,8 +38,9 @@ public class ProjectProgressService {
     private final ProjectNodeMapper nodeMapper;
     private final ProjectNodeEvidenceMapper evidenceMapper;
     private final FileService fileService;
+    private final com.hjgd.plm.event.service.DomainEventService domainEventService;
 
-    /** 19 节点定义: {编码, 名称, 是否关键} */
+    /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
             {"PLAN", "计划表", "0"},
             {"BOM", "BOM", "0"},
@@ -48,6 +49,9 @@ public class ProjectProgressService {
             {"MOLD_DRAWING", "模具图纸", "0"},
             {"MOLD_REVIEW", "开模评审", "1"},
             {"HAND_SAMPLE", "手样", "0"},
+            {"APPEARANCE", "外观", "0"},
+            {"STRUCTURE", "结构", "0"},
+            {"ELECTRONICS", "电子", "0"},
             {"MOLD", "模具", "1"},
             {"MOLD_SAMPLE", "模样", "0"},
             {"PACKAGING", "包装设计", "0"},
@@ -64,29 +68,43 @@ public class ProjectProgressService {
 
     private static final List<String> DONE_LIKE = List.of("DONE");
 
-    /** 项目创建时初始化 19 节点(幂等)。 */
+    /** 初始化/补齐进度节点(幂等): 缺失则插入, 顺序按 NODES 重排。 */
     @Transactional
     public void initNodes(Long projectId, String projectNo) {
-        Long cnt = nodeMapper.selectCount(new LambdaQueryWrapper<ProjectNode>()
-                .eq(ProjectNode::getProjectId, projectId));
-        if (cnt != null && cnt > 0) return;
-        int seq = 0;
-        for (String[] n : NODES) {
-            ProjectNode node = new ProjectNode();
-            node.setProjectId(projectId);
-            node.setProjectNo(projectNo);
-            node.setNodeCode(n[0]);
-            node.setSeq(++seq);
-            node.setNodeName(n[1]);
-            node.setIsKey(Integer.parseInt(n[2]));
-            node.setStatus("NOT_SET");
-            node.setEvidenceCount(0);
-            node.setEditCount(0);
-            node.setCreatedAt(LocalDateTime.now());
-            node.setUpdatedAt(LocalDateTime.now());
-            nodeMapper.insert(node);
+        Map<String, ProjectNode> existing = new HashMap<>();
+        for (ProjectNode n : nodeMapper.selectList(new LambdaQueryWrapper<ProjectNode>()
+                .eq(ProjectNode::getProjectId, projectId))) {
+            existing.put(n.getNodeCode(), n);
         }
-        log.info("[进度] 项目 {} 初始化 {} 个进度节点", projectNo, NODES.length);
+        int seq = 0;
+        int added = 0;
+        for (String[] n : NODES) {
+            int mySeq = ++seq;
+            ProjectNode node = existing.get(n[0]);
+            if (node == null) {
+                node = new ProjectNode();
+                node.setProjectId(projectId);
+                node.setProjectNo(projectNo);
+                node.setNodeCode(n[0]);
+                node.setSeq(mySeq);
+                node.setNodeName(n[1]);
+                node.setIsKey(Integer.parseInt(n[2]));
+                node.setStatus("NOT_SET");
+                node.setEvidenceCount(0);
+                node.setEditCount(0);
+                node.setCreatedAt(LocalDateTime.now());
+                node.setUpdatedAt(LocalDateTime.now());
+                nodeMapper.insert(node);
+                added++;
+            } else if (node.getSeq() == null || node.getSeq() != mySeq) {
+                node.setSeq(mySeq);
+                node.setUpdatedAt(LocalDateTime.now());
+                nodeMapper.updateById(node);
+            }
+        }
+        if (added > 0) {
+            log.info("[进度] 项目 {} 补齐 {} 个节点(共 {} 个)", projectNo, added, NODES.length);
+        }
     }
 
     public Map<String, Object> matrix(Long projectId) {
@@ -131,6 +149,20 @@ public class ProjectProgressService {
         // 若后续再取消完成(回退), 同步刷新证据数
         node.setEvidenceCount(refreshEvidenceCount(node.getId()));
         nodeMapper.updateById(node);
+
+        // 发布领域事件(供同步中枢出站 EBMS)
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("status", node.getStatus());
+            payload.put("plan_date", node.getPlanDate() == null ? null : node.getPlanDate().toString());
+            payload.put("actual_date", node.getActualDate() == null ? null : node.getActualDate().toString());
+            payload.put("owner", node.getOwner());
+            payload.put("remark", node.getRemark());
+            domainEventService.publish("m04.project_node.updated", "PROJECT_NODE",
+                    node.getProjectNo() + ":" + node.getNodeCode(), payload);
+        } catch (Exception e) {
+            log.warn("[进度] 发布节点事件失败: {}", e.getMessage());
+        }
         return node;
     }
 

@@ -28,18 +28,26 @@ const routes = [
     ]
   },
   {
-    // ===== 工序阶段 1: 项目与物料 (上游立项/建档) =====
+    // ===== 工序阶段 1: 研发自治中心 (M04: 研发项目/进度总表/异常/推广/复盘/统计) =====
     path: '/project',
     component: Layout,
     redirect: '/project/list',
-    meta: { title: '项目NPI', icon: 'Flag', workflowStage: '项目与物料' },
+    meta: { title: '研发自治中心', icon: 'DataBoard', workflowStage: '研发自治中心' },
     children: [
       { path: 'list', name: 'ProjectList', component: () => import('@/views/project/index.vue'),
         meta: { title: '研发项目' } },
+      { path: 'progress', name: 'ProjectProgress', component: () => import('@/views/project/progress.vue'),
+        meta: { title: '研发进度总表' } },
+      { path: 'supply', name: 'ProjectSupply', component: () => import('@/views/project/supply.vue'),
+        meta: { title: '供应链品质异常' } },
+      { path: 'sales', name: 'ProjectSales', component: () => import('@/views/project/sales.vue'),
+        meta: { title: '销售推广进度' } },
+      { path: 'review', name: 'ProjectReview', component: () => import('@/views/project/review.vue'),
+        meta: { title: '项目复盘' } },
       { path: 'initiation', name: 'ProjectInitiation', component: () => import('@/views/project/initiation.vue'),
         meta: { title: '立项申请' } },
-      { path: 'progress', name: 'ProjectProgress', component: () => import('@/views/project/progress.vue'),
-        meta: { title: '进度跟踪' } },
+      { path: 'analysis', name: 'ProjectAnalysis', component: () => import('@/views/project/analysis.vue'),
+        meta: { title: '统计分析' } },
       { path: 'evidence', name: 'ProjectEvidence', component: () => import('@/views/project/evidence.vue'),
         meta: { title: '证据台账' } }
     ]

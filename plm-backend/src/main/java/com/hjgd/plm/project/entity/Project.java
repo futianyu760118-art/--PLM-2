@@ -37,6 +37,9 @@ public class Project {
     private String status;
     private String riskLevel;
     private String remarks;
+    private String sourceSystem;
+    private Integer revision;
+    private String syncStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
