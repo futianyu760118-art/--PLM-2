@@ -39,11 +39,12 @@ public class ProjectProgressService {
     private final ProjectNodeEvidenceMapper evidenceMapper;
     private final FileService fileService;
     private final com.hjgd.plm.event.service.DomainEventService domainEventService;
+    private final com.hjgd.plm.rd.service.ChangeLogService changeLogService;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
             {"PLAN", "计划表", "0"},
-            {"BOM", "BOM", "0"},
+            {"BOM", "基础BOM", "0"},
             {"SPEC", "规格书", "0"},
             {"CONFIG", "配置表", "0"},
             {"MOLD_DRAWING", "模具图纸", "0"},
@@ -66,7 +67,91 @@ public class ProjectProgressService {
             {"OTHER", "其他", "0"}
     };
 
+    /** 与 EBMS「研发项目跟踪」表一致的列顺序(22 节点) */
+    public static final List<String> TRACKING_ORDER = List.of(
+            "PLAN", "BOM", "SPEC", "CONFIG", "MOLD_DRAWING", "MOLD_REVIEW",
+            "HAND_SAMPLE", "APPEARANCE", "STRUCTURE", "ELECTRONICS",
+            "MOLD", "MOLD_SAMPLE", "PACKAGING", "ELEC_TRIAL", "RD_TRIAL",
+            "TECH_TRANSFER", "ENG_TRIAL", "PROD_TRIAL", "TEST_REPORT",
+            "SHIPMENT", "REVIEW", "OTHER");
+
     private static final List<String> DONE_LIKE = List.of("DONE");
+
+    /** 节点编码 -> 名称 */
+    public static String nodeName(String code) {
+        for (String[] n : NODES) if (n[0].equals(code)) return n[1];
+        return code;
+    }
+
+    /** 节点编码 -> 是否关键 */
+    public static boolean isKey(String code) {
+        for (String[] n : NODES) if (n[0].equals(code)) return "1".equals(n[2]);
+        return false;
+    }
+
+    /** 结构化节点 -> EBMS 单元格值 (V/X/进行中/待定/日期/空) */
+    public static String cellValue(ProjectNode n) {
+        if (n == null || n.getStatus() == null) return "";
+        return switch (n.getStatus()) {
+            case "DONE" -> "V";
+            case "FAILED" -> "X";
+            case "IN_PROGRESS" -> "进行中";
+            case "PENDING" -> "待定";
+            case "PLANNED" -> n.getPlanDate() != null ? n.getPlanDate().toString() : "待进行";
+            default -> "";
+        };
+    }
+
+    /** 按 EBMS 单元格值写入节点(跟踪总表内联编辑, 不做完成证据硬校验)。 */
+    @Transactional
+    public ProjectNode applyCell(Long projectId, String code, String raw) {
+        ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
+                .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getNodeCode, code));
+        if (node == null) throw new BusinessException("节点不存在: " + code);
+        String oldStatus = node.getStatus();
+        String v = raw == null ? "" : raw.trim();
+        if (v.isEmpty() || "-".equals(v) || "/".equals(v)) {
+            node.setStatus("NOT_SET");
+        } else if (v.equals("V") || v.equals("√") || v.equals("完成")) {
+            node.setStatus("DONE");
+            if (node.getActualDate() == null) node.setActualDate(LocalDate.now());
+        } else if (v.equals("X") || v.equals("未完成")) {
+            node.setStatus("FAILED");
+        } else if (v.equals("进行中")) {
+            node.setStatus("IN_PROGRESS");
+        } else if (v.equals("待定") || v.equals("暂停")) {
+            node.setStatus("PENDING");
+        } else if (v.equals("待进行") || v.equals("待设置")) {
+            node.setStatus("PLANNED");
+        } else if (v.matches("\\d{4}-\\d{2}-\\d{2}.*")) {
+            node.setStatus("PLANNED");
+            node.setPlanDate(LocalDate.parse(v.substring(0, 10)));
+        } else {
+            node.setRemark(v);
+        }
+        node.setEditCount((node.getEditCount() == null ? 0 : node.getEditCount()) + 1);
+        node.setUpdatedAt(LocalDateTime.now());
+        nodeMapper.updateById(node);
+        publishNodeEvent(node);
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                node.getNodeCode(), "CELL", "status", oldStatus, node.getStatus(), "UI");
+        return node;
+    }
+
+    private void publishNodeEvent(ProjectNode node) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("status", node.getStatus());
+            payload.put("plan_date", node.getPlanDate() == null ? null : node.getPlanDate().toString());
+            payload.put("actual_date", node.getActualDate() == null ? null : node.getActualDate().toString());
+            payload.put("owner", node.getOwner());
+            payload.put("remark", node.getRemark());
+            domainEventService.publish("m04.project_node.updated", "PROJECT_NODE",
+                    node.getProjectNo() + ":" + node.getNodeCode(), payload);
+        } catch (Exception e) {
+            log.warn("[进度] 发布节点事件失败: {}", e.getMessage());
+        }
+    }
 
     /** 初始化/补齐进度节点(幂等): 缺失则插入, 顺序按 NODES 重排。 */
     @Transactional
@@ -132,6 +217,7 @@ public class ProjectProgressService {
         ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
                 .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getNodeCode, code));
         if (node == null) throw new BusinessException("节点不存在: " + code);
+        String oldStatus = node.getStatus();
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
         if (req.getActualDate() != null) node.setActualDate(req.getActualDate());
@@ -151,18 +237,10 @@ public class ProjectProgressService {
         nodeMapper.updateById(node);
 
         // 发布领域事件(供同步中枢出站 EBMS)
-        try {
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("status", node.getStatus());
-            payload.put("plan_date", node.getPlanDate() == null ? null : node.getPlanDate().toString());
-            payload.put("actual_date", node.getActualDate() == null ? null : node.getActualDate().toString());
-            payload.put("owner", node.getOwner());
-            payload.put("remark", node.getRemark());
-            domainEventService.publish("m04.project_node.updated", "PROJECT_NODE",
-                    node.getProjectNo() + ":" + node.getNodeCode(), payload);
-        } catch (Exception e) {
-            log.warn("[进度] 发布节点事件失败: {}", e.getMessage());
-        }
+        publishNodeEvent(node);
+        // 变更列表留痕
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                node.getNodeCode(), "UPDATE", "status", oldStatus, node.getStatus(), "UI");
         return node;
     }
 

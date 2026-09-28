@@ -2,6 +2,10 @@
   <div class="page-container">
     <OperationGuide module-key="material" />
     <DataIOBar module="material" name="物料主数据" />
+
+    <el-dialog v-model="importVisible" title="批量导入物料" width="660px">
+      <BatchImport endpoint="/v1/parts/import-file" @done="onImported" />
+    </el-dialog>
     <el-card>
       <el-form :inline="true" :model="query" class="filter-bar">
         <el-form-item label="料号"><el-input v-model="query.partNo" placeholder="料号" clearable /></el-form-item>
@@ -26,6 +30,7 @@
         <el-button type="primary" icon="Plus" @click="openDialog()" v-if="userStore.hasPermission('material:add')">新增物料</el-button>
         <el-button type="warning" icon="MagicStick" @click="$router.push('/material/wizard')" v-if="userStore.hasPermission('material:add')">建档向导</el-button>
         <el-button type="success" icon="Download" @click="handleExport" v-if="userStore.hasPermission('material:export')">导出</el-button>
+        <el-button type="primary" plain icon="Upload" @click="importVisible = true" v-if="userStore.hasPermission('material:add')">批量导入</el-button>
       </div>
 
       <el-table v-loading="loading" :data="tableData" border stripe row-key="id">
@@ -243,7 +248,13 @@ import { dqScores } from '@/api/metric'
 import { listSuppliers, listHistory, uploadDrawing } from '@/api/ux'
 
 const userStore = useUserStore()
+const importVisible = ref(false)
 const loading = ref(false)
+
+function onImported() {
+  importVisible.value = false
+  loadData()
+}
 const submitting = ref(false)
 const tableData = ref([])
 const total = ref(0)

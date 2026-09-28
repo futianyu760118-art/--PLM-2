@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 import OperationGuide from './components/OperationGuide.vue'
 import DataIOBar from './components/DataIOBar.vue'
+import BatchImport from './components/BatchImport.vue'
 import './assets/styles/global.scss'
 
 const app = createApp(App)
@@ -16,6 +17,7 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 app.component('OperationGuide', OperationGuide)
 app.component('DataIOBar', DataIOBar)
+app.component('BatchImport', BatchImport)
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })

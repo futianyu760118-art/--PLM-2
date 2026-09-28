@@ -104,6 +104,14 @@
             <el-badge :value="row.evidenceCount || 0" :type="row.evidenceCount ? 'success' : 'info'" />
           </template>
         </el-table-column>
+        <el-table-column label="工作表" width="110" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="nodeSheet(row.nodeCode)" link type="primary" size="small" @click="openSheet(row)">填工作表</el-button>
+            <el-tooltip v-else :content="unmappedTip(row.nodeCode)" placement="top">
+              <el-button link type="info" size="small" disabled>无工作表</el-button>
+            </el-tooltip>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty v-else description="请选择项目查看进度节点" :image-size="100" />
     </el-card>
@@ -180,8 +188,13 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProject } from '@/api/project'
+import { nodeSheet, UNMAPPED_NODES } from '@/config/nodeSheetLinks'
+
+const route = useRoute()
+const router = useRouter()
 import { getNodeMatrix, updateNode, listEvidence, uploadEvidence, deleteEvidence, progressCheck, downloadEvidence, createTextEvidence, updateEvidence, fetchPreview, fetchTextEvidence } from '@/api/progress'
 
 const projects = ref([])
@@ -209,13 +222,31 @@ const statusTag = (s) => ({ DONE: 'success', IN_PROGRESS: 'warning', FAILED: 'da
 const pct = (v) => Math.round((v || 0) * 100) + '%'
 const scoreColor = (s) => s >= 85 ? '#67c23a' : s >= 70 ? '#e6a23c' : '#f56c6c'
 
+function unmappedTip(code) { return UNMAPPED_NODES[code] || '该节点暂无可填写工作表' }
+
+function openSheet(row) {
+  const link = nodeSheet(row.nodeCode)
+  if (!link) { ElMessage.info(unmappedTip(row.nodeCode)); return }
+  const project = projects.value.find(p => p.id === projectId.value)
+  router.push({
+    path: '/project/worksheets',
+    query: {
+      type: link.sheet,
+      projectNo: project?.projectNo || '',
+      preset: link.preset ? encodeURIComponent(JSON.stringify(link.preset)) : undefined,
+      new: '1'
+    }
+  })
+}
+
 async function loadProjects() {
   const res = await pageProject({ pageNum: 1, pageSize: 200 })
   projects.value = res.data.records || []
-  if (!projectId.value && projects.value.length) {
-    projectId.value = projects.value[0].id
-    await load()
-  }
+  const wanted = route.query.project ? Number(route.query.project) : null
+  const found = wanted ? projects.value.find(p => p.id === wanted) : null
+  if (found) projectId.value = found.id
+  if (!projectId.value && projects.value.length) projectId.value = projects.value[0].id
+  if (projectId.value) await load()
 }
 
 async function load() {

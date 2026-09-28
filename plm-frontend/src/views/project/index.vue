@@ -24,17 +24,21 @@
 
       <el-table v-loading="loading" :data="tableData" border stripe>
         <el-table-column prop="projectNo" label="项目编号" width="160" fixed />
+        <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
         <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="partNo" label="关联料号" width="140" />
-        <el-table-column prop="customerName" label="客户" width="120" show-overflow-tooltip />
-        <el-table-column prop="owner" label="负责人" width="80" />
-        <el-table-column label="当前门" width="90" align="center">
+        <el-table-column label="类型" width="90" align="center">
+          <template #default="{row}">{{ typeLabel(row.projectType) }}</template>
+        </el-table-column>
+        <el-table-column prop="projectLevel" label="等级" width="70" align="center" />
+        <el-table-column prop="owner" label="负责人" width="90" />
+        <el-table-column label="目前阶段" width="90" align="center">
           <template #default="{row}">
             <el-tag size="small" :type="gateTag(row.gateStatus)">{{ row.currentGate }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="targetDate" label="目标日期" width="110" />
-        <el-table-column label="状态" width="80" align="center">
+        <el-table-column prop="investAmount" label="投入金额" width="110" align="right" />
+        <el-table-column prop="orderAmount" label="订单金额" width="110" align="right" />
+        <el-table-column label="状态" width="90" align="center">
           <template #default="{row}">{{ statusLabel(row.status) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -60,6 +64,16 @@
           <el-col :span="12"><el-form-item label="关联料号"><el-input v-model="form.partNo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="负责人"><el-input v-model="form.owner" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="类型">
+            <el-select v-model="form.projectType" style="width:100%">
+              <el-option label="自研" value="SELF" /><el-option label="客制" value="NEW" />
+            </el-select>
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="等级">
+            <el-select v-model="form.projectLevel" style="width:100%">
+              <el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="C" value="C" />
+            </el-select>
+          </el-form-item></el-col>
           <el-col :span="12"><el-form-item label="目标日期"><el-date-picker v-model="form.targetDate" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="紧急度">
             <el-select v-model="form.urgency" style="width:100%">
@@ -112,7 +126,8 @@ const total = ref(0)
 const statusMap = [
   { v: 'ACTIVE', l: '进行中' }, { v: 'MP', l: '已量产' }, { v: 'CLOSED', l: '已关闭' }, { v: 'ON_HOLD', l: '暂停' }
 ]
-const statusLabel = (s) => ({ ACTIVE:'进行中', MP:'已量产', CLOSED:'已关闭', ON_HOLD:'暂停' }[s] || s)
+const statusLabel = (s) => ({ ACTIVE:'进行中', MP:'已量产', CLOSED:'已关闭', ON_HOLD:'暂停', CANCELLED:'取消' }[s] || s)
+const typeLabel = (t) => ({ SELF:'自研', NEW:'客制', CUSTOM:'客制' }[t] || t || '')
 const gateTag = (gs) => ({ ON_TRACK:'success', BLOCKED:'danger', DELAYED:'warning' }[gs] || 'info')
 const gateList = [
   { code:'G0', name:'概念' },{ code:'G1', name:'方案' },{ code:'G2', name:'结构冻结' },

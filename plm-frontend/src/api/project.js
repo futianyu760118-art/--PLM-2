@@ -1,4 +1,12 @@
+import axios from 'axios'
 import request from '@/utils/request'
+
+const raw = axios.create({ baseURL: '/api', timeout: 120000 })
+raw.interceptors.request.use(cfg => {
+  const token = localStorage.getItem('plm_token')
+  if (token) cfg.headers['Authorization'] = 'Bearer ' + token
+  return cfg
+}, e => Promise.reject(e))
 
 export function pageProject(params) {
   return request({ url: '/v1/projects', method: 'get', params })
@@ -66,6 +74,63 @@ export function updateReview(data) {
 }
 export function deleteReview(id) {
   return request({ url: `/v1/rd/reviews/${id}`, method: 'delete' })
+}
+
+// ===== 研发项目跟踪总表 =====
+export function getTrackingNodeDefs() {
+  return request({ url: '/v1/rd/tracking/node-defs', method: 'get' })
+}
+export function getNodeSheetMap() {
+  return request({ url: '/v1/rd/tracking/node-sheet-map', method: 'get' })
+}
+export function pageTracking(params) {
+  return request({ url: '/v1/rd/tracking', method: 'get', params })
+}
+export function saveTrackingCell(projectId, data) {
+  return request({ url: `/v1/rd/tracking/${projectId}/cell`, method: 'put', data })
+}
+
+// ===== 项目工作表 (规格书/配置表/样品单/评审单/测试/试产/出货) =====
+export function getSheetMeta() {
+  return request({ url: '/v1/rd/sheets/meta', method: 'get' })
+}
+export function getSheetContext(projectNo) {
+  return request({ url: '/v1/rd/sheets/context', method: 'get', params: { projectNo } })
+}
+export function pageSheet(type, params) {
+  return request({ url: `/v1/rd/sheets/${type}`, method: 'get', params })
+}
+export function createSheet(type, data) {
+  return request({ url: `/v1/rd/sheets/${type}`, method: 'post', data })
+}
+export function updateSheet(type, data) {
+  return request({ url: `/v1/rd/sheets/${type}`, method: 'put', data })
+}
+export function deleteSheet(type, id) {
+  return request({ url: `/v1/rd/sheets/${type}/${id}`, method: 'delete' })
+}
+export async function exportSheet(type) {
+  const res = await raw.get(`/v1/rd/sheets/${type}/export`, { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url; a.download = `rd-sheet-${type}.xlsx`; a.click()
+  URL.revokeObjectURL(url)
+}
+export function importSheet(type, formData) {
+  return raw.post(`/v1/rd/sheets/${type}/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+}
+
+// ===== 项目变更列表 =====
+export function pageChanges(params) {
+  return request({ url: '/v1/rd/changes', method: 'get', params })
+}
+
+// ===== 完成判定汇总 (工作表/台账 -> 项目明细表节点) =====
+export function rollupAll() {
+  return request({ url: '/v1/rd/tracking/rollup', method: 'post' })
+}
+export function rollupProject(projectId) {
+  return request({ url: `/v1/rd/tracking/${projectId}/rollup`, method: 'post' })
 }
 
 export function analysisSummary() {

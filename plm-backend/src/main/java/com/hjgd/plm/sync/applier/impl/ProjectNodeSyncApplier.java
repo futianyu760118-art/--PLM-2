@@ -5,6 +5,7 @@ import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectNode;
 import com.hjgd.plm.project.mapper.ProjectMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeMapper;
+import com.hjgd.plm.project.service.ProjectProgressService;
 import com.hjgd.plm.sync.applier.SyncApplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class ProjectNodeSyncApplier implements SyncApplier {
 
     private final ProjectMapper projectMapper;
     private final ProjectNodeMapper nodeMapper;
+    private final ProjectProgressService progressService;
 
     @Override
     public String objectType() {
@@ -45,6 +47,15 @@ public class ProjectNodeSyncApplier implements SyncApplier {
                 .eq(Project::getProjectNo, projectNo).last("limit 1"));
         if (p == null) {
             log.warn("[sync] 项目不存在: {}", projectNo);
+            return;
+        }
+        // EBMS 原始单元格值(V/X/进行中/待定/日期/文字) 直接同步
+        if (payload != null && payload.containsKey("value")) {
+            try {
+                progressService.applyCell(p.getId(), nodeCode, Objects.toString(payload.get("value"), ""));
+            } catch (Exception e) {
+                log.warn("[sync] 节点单元格写入失败 {}/{}: {}", projectNo, nodeCode, e.getMessage());
+            }
             return;
         }
         ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
