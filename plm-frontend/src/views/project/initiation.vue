@@ -25,6 +25,8 @@
 
       <div class="table-toolbar">
         <el-button type="primary" icon="Plus" @click="openForm()">新建立项申请</el-button>
+        <el-button icon="Upload" @click="importVisible = true">导入申请书</el-button>
+        <el-button icon="Download" @click="downloadTpl">下载模板</el-button>
         <span class="stat-line">
           共 <b>{{ stats.total || 0 }}</b> 项 ·
           草稿 <b>{{ stats.byStatus?.draft || 0 }}</b> ·
@@ -71,6 +73,12 @@
     </el-card>
 
     <!-- 新建 / 编辑 -->
+    <el-dialog v-model="importVisible" title="导入立项申请书（多Sheet结构化，同 EBMS）" width="660px">
+      <el-alert type="info" :closable="false" style="margin-bottom:10px"
+        title="支持按 Sheet 名识别：立项申请书/基本信息、产品规格对比、可实现性评估、销售预测、特殊要求" />
+      <BatchImport endpoint="/v1/initiations/import-structured" accept=".xlsx,.xls" @done="onImported" />
+    </el-dialog>
+
     <el-drawer v-model="formDrawer.visible" :title="form.id ? '编辑立项申请书' : '新建立项申请书'" size="1000px">
       <el-form :model="form" label-width="120px">
         <el-divider content-position="left">一、基本信息</el-divider>
@@ -192,6 +200,7 @@
             <el-button v-if="canApproveToProject" type="success" size="small" @click="handleApproveToProject">
               {{ detail.projectId ? '查看已转项目 #' + detail.projectId : '批准并转为研发项目' }}
             </el-button>
+            <el-button size="small" icon="Printer" @click="previewInit">汇总预览/打印</el-button>
           </div>
         </div>
 
@@ -315,8 +324,12 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   pageInitiation, getInitiation, initiationStats, createInitiation, updateInitiation,
-  deleteInitiation, advanceInitiation, rejectInitiation, approveToProject
+  deleteInitiation, advanceInitiation, rejectInitiation, approveToProject, downloadInitiationTemplate
 } from '@/api/initiation'
+
+const importVisible = ref(false)
+function onImported() { importVisible.value = false; loadData() }
+function downloadTpl() { downloadInitiationTemplate() }
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -347,6 +360,72 @@ const reqRows = ref([])
 
 const detailDrawer = reactive({ visible: false })
 const detail = ref({})
+
+// 汇总预览/打印 (对应 EBMS 立项申请书「汇总预览」)
+function esc(v) { return (v === null || v === undefined || v === '') ? '-' : String(v).replace(/</g, '&lt;') }
+function previewInit() {
+  const d = detail.value || {}
+  const td = (l, v) => `<tr><td class="k">${l}</td><td>${esc(v)}</td></tr>`
+  let h = '<html><head><meta charset="utf-8"><title>销售需求立项申请书</title><style>' +
+    'body{font-family:"Microsoft YaHei",sans-serif;color:#222;padding:24px;font-size:13px}' +
+    'h2{text-align:center;margin:0 0 4px} .sub{text-align:center;color:#888;font-size:12px;margin-bottom:16px}' +
+    'h3{color:#3a6df0;border-bottom:2px solid #3a6df0;padding-bottom:4px;margin:18px 0 8px}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:12px} td,th{border:1px solid #ddd;padding:5px;text-align:left;vertical-align:top}' +
+    'td.k{color:#888;width:130px;background:#fafafa} .sign{display:flex;justify-content:space-between;margin-top:40px}' +
+    '.sign div{text-align:center;width:170px} .sign .line{border-top:1px solid #333;padding-top:4px;font-size:12px}' +
+    '.bar{text-align:center;margin:16px 0}@media print{.bar{display:none}}</style></head><body>' +
+    '<div class="bar"><button onclick="window.print()">打印</button></div>' +
+    '<h2>销售需求立项申请书</h2>' +
+    `<div class="sub">项目编号：${esc(d.projectNo)} ｜ 申请人：${esc(d.applicant)} ｜ 日期：${esc(d.applyDate)}</div>`
+
+  h += '<h3>一、基本信息</h3><table>'
+  h += td('申请编号', d.initNo) + td('项目编号', d.projectNo) + td('项目名称', d.projectName)
+  h += td('项目类型', d.projectType) + td('起始时间', d.startDate) + td('项目部门', d.department)
+  h += td('主要负责人', d.owner) + td('配合人员', d.cooperators) + td('其他', d.otherInfo)
+  h += '</table>'
+
+  h += '<h3>二、客户信息</h3><table>'
+  h += td('客户编号', d.customerNo) + td('客户类型', d.customerType) + td('客户等级', d.customerLevel)
+  h += td('客户赢率', d.customerWinRate) + td('市场状况', d.marketStatus) + td('竞争对手', d.hasCompetitor)
+  h += td('采购周期', d.purchaseCycle) + td('定制开发类型', d.devType) + td('客户痛点', d.customerPain)
+  h += td('关键成功要素', d.keySuccess) + '</table>'
+
+  h += '<h3>三、产品规格对比</h3>'
+  h += (d.specRows && d.specRows.length)
+    ? '<table><tr><th>规格项</th>' + Object.keys(d.specRows[0]).filter(k => k !== '规格项').map(k => `<th>${esc(k)}</th>`).join('') + '</tr>' +
+      d.specRows.map(r => `<tr><td class="k">${esc(r['规格项'])}</td>` + Object.keys(r).filter(k => k !== '规格项').map(k => `<td>${esc(r[k])}</td>`).join('') + '</tr>').join('') + '</table>'
+    : '<p class="k">暂无</p>'
+
+  h += '<h3>四、可实现性评估</h3>'
+  h += (d.feasRows && d.feasRows.length)
+    ? '<table><tr><th>类别</th><th>评估项</th><th>结果</th><th>关联项</th><th>备注</th></tr>' +
+      d.feasRows.map(r => `<tr><td>${esc(r['类别'])}</td><td>${esc(r['评估项'])}</td><td>${esc(r['结果'])}</td><td>${esc(r['关联项'])}</td><td>${esc(r['备注'])}</td></tr>`).join('') + '</table>'
+    : '<p class="k">暂无</p>'
+
+  h += '<h3>五、销售预测</h3>'
+  h += (d.forecastRows && d.forecastRows.length)
+    ? '<table><tr><th>周期</th><th>产品型号</th><th>数量</th><th>金额</th></tr>' +
+      d.forecastRows.map(r => `<tr><td>${esc(r['周期'])}</td><td>${esc(r['产品型号'])}</td><td>${esc(r['数量'])}</td><td>${esc(r['金额'])}</td></tr>`).join('') + '</table>'
+    : '<p class="k">暂无</p>'
+
+  h += '<h3>六、特殊要求</h3>'
+  h += (d.reqRows && d.reqRows.length)
+    ? '<table><tr><th>产品</th><th>要求</th></tr>' +
+      d.reqRows.map(r => `<tr><td>${esc(r['产品'])}</td><td>${esc(r['要求'])}</td></tr>`).join('') + '</table>'
+    : '<p class="k">暂无</p>'
+
+  h += '<h3>七、审批</h3><table>'
+  h += td('审批状态', statusLabel(d.approvalStatus)) + td('审批人', d.approver)
+  h += td('审批日期', d.approvalDate) + td('审批意见', d.approvalOpinion)
+  h += '</table>'
+  h += '<div class="sign"><div class="line">项目经理</div><div class="line">销售总监</div><div class="line">研发中心</div></div>'
+  h += '</body></html>'
+
+  const w = window.open('', '_blank')
+  if (!w) { ElMessage.warning('浏览器拦截了新窗口，请允许弹窗'); return }
+  w.document.write(h)
+  w.document.close()
+}
 const advanceDialog = reactive({ visible: false })
 const advanceForm = reactive({ reviewer: '', opinion: '', result: '通过' })
 

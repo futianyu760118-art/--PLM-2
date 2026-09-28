@@ -4,13 +4,19 @@ import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.log.annotation.OperationLog;
 import com.hjgd.plm.project.entity.ProjectInitiation;
+import com.hjgd.plm.project.service.InitiationImportService;
 import com.hjgd.plm.project.service.ProjectInitiationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.OutputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Tag(name = "研发项目-立项申请书")
@@ -20,6 +26,23 @@ import java.util.Map;
 public class ProjectInitiationController {
 
     private final ProjectInitiationService service;
+    private final InitiationImportService importService;
+
+    @Operation(summary = "多Sheet结构化导入立项申请书")
+    @PostMapping("/import-structured")
+    public Result<Map<String, Object>> importStructured(@RequestParam("file") MultipartFile file) {
+        return Result.success(importService.importStructured(file));
+    }
+
+    @Operation(summary = "下载立项申请书导入模板")
+    @GetMapping("/import-template")
+    public void importTemplate(HttpServletResponse response) throws Exception {
+        byte[] bytes = importService.template();
+        String name = URLEncoder.encode("立项申请书导入模板.xlsx", StandardCharsets.UTF_8);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + name);
+        try (OutputStream os = response.getOutputStream()) { os.write(bytes); }
+    }
 
     @Operation(summary = "立项申请书分页")
     @GetMapping("/list")

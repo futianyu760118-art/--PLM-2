@@ -1,4 +1,21 @@
+import axios from 'axios'
 import request from '@/utils/request'
+
+const raw = axios.create({ baseURL: '/api', timeout: 120000 })
+raw.interceptors.request.use(cfg => {
+  const token = localStorage.getItem('plm_token')
+  if (token) cfg.headers['Authorization'] = 'Bearer ' + token
+  return cfg
+}, e => Promise.reject(e))
+
+/** 下载立项申请书导入模板(xlsx) */
+export async function downloadInitiationTemplate() {
+  const res = await raw.get('/initiation/import-template', { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url; a.download = '立项申请书导入模板.xlsx'; a.click()
+  URL.revokeObjectURL(url)
+}
 
 export function pageInitiation(params) { return request({ url: '/initiation/list', method: 'get', params }) }
 export function getInitiation(id) { return request({ url: `/initiation/${id}`, method: 'get' }) }

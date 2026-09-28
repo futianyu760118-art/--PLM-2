@@ -391,10 +391,15 @@ public class DataIoService {
     private ColumnDef findColumn(ModuleDef d, String header) {
         if (header == null || header.isBlank()) return null;
         String h = header.trim();
+        // 按字段模糊匹配(忽略大小写/空格/标点, 支持中文包含)
+        ColumnDef best = null;
+        int bestScore = 0;
         for (ColumnDef c : d.getColumns()) {
-            if (h.equalsIgnoreCase(c.getField()) || h.equals(c.getLabel())) return c;
+            int sc = Math.max(com.hjgd.plm.common.FuzzyMatcher.score(h, c.getLabel()),
+                    com.hjgd.plm.common.FuzzyMatcher.score(h, c.getField()));
+            if (sc > bestScore) { bestScore = sc; best = c; }
         }
-        return null;
+        return bestScore > 0 ? best : null;
     }
 
     private String whereClause(ModuleDef d) { return d.isLogicDelete() ? " WHERE deleted=0" : ""; }

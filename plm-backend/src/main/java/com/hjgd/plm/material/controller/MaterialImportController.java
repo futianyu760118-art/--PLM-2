@@ -2,6 +2,7 @@ package com.hjgd.plm.material.controller;
 
 import com.alibaba.excel.EasyExcel;
 import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.common.FuzzyMatcher;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.material.dto.MaterialDTO;
 import com.hjgd.plm.material.enums.MaterialType;
@@ -124,10 +125,19 @@ public class MaterialImportController {
         List<String> header = grid.get(0);
         Map<Integer, String> colField = new LinkedHashMap<>();
         for (int i = 0; i < header.size(); i++) {
-            String h = header.get(i) == null ? "" : header.get(i).trim().toLowerCase(Locale.ROOT);
-            if (h.isEmpty()) continue;
-            String f = HEADER_ALIAS.get(h);
-            if (f != null && !colField.containsValue(f)) colField.put(i, f);
+            String h = header.get(i) == null ? "" : header.get(i);
+            if (h.trim().isEmpty()) continue;
+            // 按字段模糊匹配表头
+            String bestField = null;
+            int bestScore = 0;
+            for (Map.Entry<String, String> e : HEADER_ALIAS.entrySet()) {
+                int sc = FuzzyMatcher.score(h, e.getKey());
+                if (sc > bestScore && !colField.containsValue(e.getValue())) {
+                    bestScore = sc;
+                    bestField = e.getValue();
+                }
+            }
+            if (bestField != null) colField.put(i, bestField);
         }
         if (colField.isEmpty()) throw new BusinessException("未识别到有效表头(需含 料号/物料名称 等)");
         for (int r = 1; r < grid.size(); r++) {

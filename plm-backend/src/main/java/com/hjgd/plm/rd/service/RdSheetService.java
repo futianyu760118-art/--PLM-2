@@ -1,8 +1,11 @@
 package com.hjgd.plm.rd.service;
 
 import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.ExcelWriter;
+import com.alibaba.excel.write.metadata.WriteSheet;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.common.FuzzyMatcher;
 import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.rd.RdSheetDefs;
 import lombok.RequiredArgsConstructor;
@@ -223,8 +226,28 @@ public class RdSheetService {
             data.add(row);
         }
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-        EasyExcel.write(os).head(head).sheet(d.label()).doWrite(data);
+        // 标准文件格式: Sheet1 数据 + Sheet2 填写说明
+        ExcelWriter writer = EasyExcel.write(os).build();
+        writer.write(data, EasyExcel.writerSheet(0, d.label()).head(head).build());
+        writer.write(instructions(d), EasyExcel.writerSheet(1, "填写说明").head(
+                List.of(List.of("字段"), List.of("类型"), List.of("取值/说明"))).build());
+        writer.finish();
         return os.toByteArray();
+    }
+
+    private List<List<String>> instructions(RdSheetDefs.Def d) {
+        List<List<String>> rows = new ArrayList<>();
+        for (RdSheetDefs.Col c : d.cols()) {
+            String note = switch (c.type() == null ? "text" : c.type()) {
+                case "select" -> c.options() == null ? "" : "枚举: " + c.options();
+                case "date" -> "日期(yyyy-MM-dd)";
+                case "number" -> "数字";
+                case "textarea" -> "长文本";
+                default -> "文本";
+            };
+            rows.add(List.of(c.label(), c.type() == null ? "text" : c.type(), note));
+        }
+        return rows;
     }
 
     @SuppressWarnings("unchecked")
@@ -238,13 +261,17 @@ public class RdSheetService {
             Map<Integer, String> header = rows.get(0);
             Map<Integer, String> idxToKey = new HashMap<>();
             for (Map.Entry<Integer, String> e : header.entrySet()) {
-                String lbl = e.getValue() == null ? "" : e.getValue().trim();
+                String lbl = e.getValue() == null ? "" : e.getValue();
+                if (lbl.trim().isEmpty()) continue;
+                String bestKey = null;
+                int bestScore = 0;
                 for (RdSheetDefs.Col col : d.cols()) {
-                    if (col.label().equals(lbl) || col.key().equalsIgnoreCase(lbl)) {
-                        idxToKey.put(e.getKey(), col.key());
-                        break;
+                    int sc = Math.max(FuzzyMatcher.score(lbl, col.label()), FuzzyMatcher.score(lbl, col.key()));
+                    if (sc > bestScore && !idxToKey.containsValue(col.key())) {
+                        bestScore = sc; bestKey = col.key();
                     }
                 }
+                if (bestKey != null) idxToKey.put(e.getKey(), bestKey);
             }
             for (int i = 1; i < rows.size(); i++) {
                 Map<Integer, String> r = rows.get(i);
