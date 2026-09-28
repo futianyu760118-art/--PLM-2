@@ -1,0 +1,43 @@
+name: Sync main from Gitee (PLM2)
+
+# Gitee `PLM2` main is the single source of truth for `main`; this workflow
+# mirrors it onto GitHub `--PLM-2` main. Runs every 5 minutes and on demand.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# One mirror run at a time. A second run waits rather than cancelling the first,
+# so a push is never interrupted half-way.
+concurrency:
+  group: sync-from-gitee-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Mirror Gitee main -> GitHub main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch Gitee main
+        run: |
+          git fetch --no-tags https://gitee.com/ningbohengjianguangdian/PLM2.git main
+
+      - name: Report incoming change
+        run: |
+          echo "Gitee main : $(git rev-parse FETCH_HEAD)"
+          echo "GitHub main: $(git rev-parse HEAD)"
+          git log --oneline HEAD..FETCH_HEAD -n 50 || true
+
+      - name: Push mirror to GitHub main
+        run: |
+          git push origin FETCH_HEAD:refs/heads/main --force
