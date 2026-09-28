@@ -25,3 +25,6 @@ Thumbs.db
 
 # Temp
 *.tmp
+
+# AEOS standard reference checkout (governance Phase 0)
+AEOS-/
