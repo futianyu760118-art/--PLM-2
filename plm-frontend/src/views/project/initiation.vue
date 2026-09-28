@@ -244,17 +244,27 @@
           <el-table-column prop="备注" label="备注" />
         </el-table>
         <el-divider content-position="left">五、销售预测</el-divider>
-        <el-table :data="detail.forecastRows" border size="small" empty-text="无">
-          <el-table-column prop="周期" label="周期" width="150" />
-          <el-table-column prop="产品型号" label="产品型号" />
-          <el-table-column prop="数量" label="数量" width="140" />
-          <el-table-column prop="金额" label="金额" width="140" />
+        <el-table v-if="detail.forecastRows && detail.forecastRows.length" :data="detail.forecastRows" border size="small">
+          <el-table-column prop="周期" label="时间周期" width="120" />
+          <el-table-column v-for="c in (detail.forecastCols || [])" :key="c" :prop="c" :label="String(c).replace(/\n/g, ' ')" />
         </el-table>
+        <el-table v-if="detail.forecastExtra && detail.forecastExtra.length" :data="detail.forecastExtra"
+          border size="small" style="margin-top:6px">
+          <el-table-column prop="项目" label="金额汇总" width="140" />
+          <el-table-column label="值"><template #default="{ row }">{{ (row.值 || []).join('　') }}</template></el-table-column>
+        </el-table>
+        <el-empty v-if="!(detail.forecastRows || []).length && !(detail.forecastExtra || []).length" description="暂无" :image-size="60" />
         <el-divider content-position="left">六、特殊要求</el-divider>
         <el-table :data="detail.reqRows" border size="small" empty-text="无">
           <el-table-column prop="产品" label="产品" width="200" />
           <el-table-column prop="要求" label="要求" />
         </el-table>
+        <el-divider content-position="left">立项决议</el-divider>
+        <el-table v-if="detail.approvalRows && detail.approvalRows.length" :data="detail.approvalRows" border size="small">
+          <el-table-column prop="项目" label="项目" width="140" />
+          <el-table-column label="值"><template #default="{ row }">{{ (row.值 || []).join('　') }}</template></el-table-column>
+        </el-table>
+        <el-empty v-else description="暂无" :image-size="60" />
         <el-divider content-position="left">七、研发目标与内容</el-divider>
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="立项背景">{{ detail.background }}</el-descriptions-item>
@@ -403,9 +413,10 @@ function previewInit() {
     : '<p class="k">暂无</p>'
 
   h += '<h3>五、销售预测</h3>'
+  const fcols = d.forecastCols || []
   h += (d.forecastRows && d.forecastRows.length)
-    ? '<table><tr><th>周期</th><th>产品型号</th><th>数量</th><th>金额</th></tr>' +
-      d.forecastRows.map(r => `<tr><td>${esc(r['周期'])}</td><td>${esc(r['产品型号'])}</td><td>${esc(r['数量'])}</td><td>${esc(r['金额'])}</td></tr>`).join('') + '</table>'
+    ? '<table><tr><th>时间周期</th>' + fcols.map(c => `<th>${esc(String(c).replace(/\n/g, ' '))}</th>`).join('') + '</tr>' +
+      d.forecastRows.map(r => `<tr><td class="k">${esc(r['周期'])}</td>` + fcols.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>').join('') + '</table>'
     : '<p class="k">暂无</p>'
 
   h += '<h3>六、特殊要求</h3>'
@@ -513,8 +524,20 @@ async function openDetail(row) {
   const d = res.data
   d.specRows = parseJson(d.productSpecs, [])
   d.feasRows = parseJson(d.feasibility, [])
-  d.forecastRows = parseJson(d.salesForecast, [])
   d.reqRows = parseJson(d.specialReqs, [])
+  d.approvalRows = parseJson(d.approvalSigns, [])
+  // 销售预测可能是对象 {cols,rows,extra} 或数组
+  d.forecastCols = []; d.forecastRows = []; d.forecastExtra = []
+  try {
+    const sf = JSON.parse(d.salesForecast || 'null')
+    if (sf && !Array.isArray(sf) && Array.isArray(sf.rows)) {
+      d.forecastCols = sf.cols || []
+      d.forecastRows = sf.rows
+      d.forecastExtra = sf.extra || []
+    } else if (Array.isArray(sf)) {
+      d.forecastRows = sf
+    }
+  } catch (e) { /* ignore */ }
   detail.value = d
   detailDrawer.visible = true
 }

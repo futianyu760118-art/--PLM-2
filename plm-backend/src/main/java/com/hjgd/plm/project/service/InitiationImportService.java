@@ -60,6 +60,15 @@ public class InitiationImportService {
         put("定制开发类型", "devType"); put("定制开发", "devType"); put("定制", "devType");
         put("申请人", "applicant"); put("申请日期", "applyDate");
         put("备注", "remarks");
+        // 附加信息统一并入 otherInfo
+        put("需求目的", "__other"); put("询价单号", "__other");
+        put("竞争对手状态", "__other"); put("资料要求", "__other");
+    }
+
+    private static void appendOther(ProjectInitiation r, String v) {
+        if (v == null || v.isBlank()) return;
+        String cur = r.getOtherInfo();
+        r.setOtherInfo(cur == null || cur.isBlank() ? v : cur + "；" + v);
     }
 
     private static void put(String k, String f) { FLAT.put(k, f); }
@@ -83,6 +92,9 @@ public class InitiationImportService {
             if (fore != null) { String j = parseForecast(fore); if (j != null) r.setSalesForecast(j); parsed++; }
             Sheet reqs = findSheet(wb, "特殊要求", "特殊");
             if (reqs != null) { String j = parseReqs(reqs); if (j != null) r.setSpecialReqs(j); parsed++; }
+            // 五、立项决议 → approval_signs
+            String appr = parseApproval(main);
+            if (appr != null) r.setApprovalSigns(appr);
 
             if (!org.springframework.util.StringUtils.hasText(r.getProjectName())
                     && org.springframework.util.StringUtils.hasText(r.getProjectNo())) {
@@ -124,7 +136,10 @@ public class InitiationImportService {
         for (Row row : sheet) {
             String a = cellStr(row.getCell(0));
             String b = cellStr(row.getCell(1));
-            if (a.isEmpty() || b.isEmpty() || a.equals(b)) continue;
+            if (a.isEmpty()) continue;
+            // 需求目的常写在同一列(整行文字)
+            if (b.isEmpty() && a.contains("需求目的")) { appendOther(r, a.replaceFirst("^▶\\s*", "").trim()); continue; }
+            if (b.isEmpty() || a.equals(b)) continue;
             String key = a.replaceFirst("^\\d+\\.\\s*", "").replaceFirst("[:：]\\s*$", "").trim();
             String field = FLAT.get(key);
             if (field == null) {
@@ -132,6 +147,7 @@ public class InitiationImportService {
                     if (key.contains(e.getKey()) || e.getKey().contains(key)) { field = e.getValue(); break; }
                 }
             }
+            if ("__other".equals(field)) { appendOther(r, key + "：" + b); continue; }
             if (field != null) applyFlat(r, field, b);
         }
     }
@@ -191,16 +207,46 @@ public class InitiationImportService {
 
     private String parseFeas(Sheet sheet) throws Exception {
         List<Map<String, Object>> out = new ArrayList<>();
+        String cat = "";
         for (Row row : sheet) {
             String a = cellStr(row.getCell(0)), b = cellStr(row.getCell(1));
-            if (a.isEmpty() || b.isEmpty()) continue;
-            if (a.contains("评估大") || a.contains("可实现")) continue;
-            if ("类别".equals(a) || "评估项".equals(b)) continue;
+            if (a.contains("评估大") || "类别".equals(a)) continue;      // 表头
+            if (a.contains("可实现") && b.isEmpty()) continue;          // 标题
+            if (b.isEmpty()) continue;
+            if (!a.isEmpty()) cat = a;                                   // 合并单元格: 继承上一个类别
             Map<String, Object> m = new LinkedHashMap<>();
-            m.put("类别", a); m.put("评估项", b);
+            m.put("类别", cat); m.put("评估项", b);
             m.put("结果", cellStr(row.getCell(2)));
             m.put("关联项", cellStr(row.getCell(3)));
             m.put("备注", cellStr(row.getCell(4)));
+            out.add(m);
+        }
+        return out.isEmpty() ? null : json.writeValueAsString(out);
+    }
+
+    /** 五、立项决议 → approval_signs JSON */
+    private String parseApproval(Sheet sheet) throws Exception {
+        if (sheet == null) return null;
+        List<List<String>> grid = new ArrayList<>();
+        for (Row row : sheet) {
+            List<String> line = new ArrayList<>();
+            for (int i = 0; i < 6; i++) line.add(cellStr(row.getCell(i)));
+            grid.add(line);
+        }
+        int start = -1;
+        for (int i = 0; i < grid.size(); i++) if (grid.get(i).get(0).contains("立项人员")) { start = i; break; }
+        if (start < 0) return null;
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (int i = start; i < grid.size(); i++) {
+            List<String> line = grid.get(i);
+            // 遇到下一章节(六、销售预测 等)停止
+            if (i > start && !line.get(0).isEmpty() && line.get(0).matches("^[六七八九十]+、.*")) break;
+            if (line.stream().allMatch(String::isEmpty)) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("项目", line.get(0));
+            List<String> vals = new ArrayList<>();
+            for (int j = 1; j < line.size(); j++) if (!line.get(j).isEmpty()) vals.add(line.get(j));
+            m.put("值", vals);
             out.add(m);
         }
         return out.isEmpty() ? null : json.writeValueAsString(out);
@@ -232,10 +278,26 @@ public class InitiationImportService {
             }
             frows.add(m);
         }
-        if (frows.isEmpty()) return null;
+        // 金额汇总(合计销售数量/单价/小计价格/合计销售金额)
+        List<Map<String, Object>> extra = new ArrayList<>();
+        for (int i = hi + 1; i < rows.size(); i++) {
+            String label = cellStr(rows.get(i).getCell(0));
+            if (label.isEmpty() || label.matches(".*(月|年|周|季).*")) continue;
+            List<String> vals = new ArrayList<>();
+            for (int j = 1; j < 6; j++) {
+                String v = cellStr(rows.get(i).getCell(j));
+                if (!v.isEmpty()) vals.add(v);
+            }
+            if (vals.isEmpty()) continue;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("项目", label); m.put("值", vals);
+            extra.add(m);
+        }
+        if (frows.isEmpty() && extra.isEmpty()) return null;
         Map<String, Object> obj = new LinkedHashMap<>();
         obj.put("cols", cols);
         obj.put("rows", frows);
+        obj.put("extra", extra);
         return json.writeValueAsString(obj);
     }
 
