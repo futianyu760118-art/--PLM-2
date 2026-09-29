@@ -1,0 +1,18 @@
+{
+  "name": "ebms2plm-migration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EBMS → PLM2 用户/角色迁移工具（PAND-117 阶段3）",
+  "type": "module",
+  "bin": {
+    "ebms2plm-migrate": "./ebms2plm-migrate.mjs"
+  },
+  "scripts": {
+    "migrate": "node ebms2plm-migrate.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "pg": "^8.11.5"
+  }
+}

@@ -38,9 +38,14 @@ public class LoginUser implements UserDetails {
         return auths;
     }
 
+    /**
+     * 迁移期优先返回 EBMS 遗留 scrypt 串：EBMS 迁入用户的 {@code password} 是随机 BCrypt 占位，
+     * 真实可校验凭据在 {@code legacy_password}。透明重哈希后该列为空，即回落为 BCrypt。
+     */
     @Override
     public String getPassword() {
-        return user.getPassword();
+        String legacy = user.getLegacyPassword();
+        return (legacy != null && !legacy.isEmpty()) ? legacy : user.getPassword();
     }
 
     @Override
@@ -78,5 +83,10 @@ public class LoginUser implements UserDetails {
 
     public String getPrimaryRole() {
         return (roles != null && !roles.isEmpty()) ? roles.get(0) : null;
+    }
+
+    /** 是否被标记为「登录后必须改密」 */
+    public boolean isMustChangePassword() {
+        return user.getMustChangePassword() != null && user.getMustChangePassword() == 1;
     }
 }

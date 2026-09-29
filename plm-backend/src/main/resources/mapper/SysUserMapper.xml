@@ -22,4 +22,20 @@
         WHERE ur.user_id = #{userId} AND p.status = 1
     </select>
 
+    <update id="updateLoginInfo">
+        UPDATE sys_user
+        SET last_login_at = CURRENT_TIMESTAMP,
+            last_login_ip = #{ip}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePasswordClearLegacy">
+        UPDATE sys_user
+        SET password = #{password},
+            legacy_password = NULL,
+            must_change_password = 0,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
 </mapper>

@@ -5,12 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.Result;
+import com.hjgd.plm.log.annotation.OperationLog;
+import com.hjgd.plm.system.dto.ResetPasswordDTO;
 import com.hjgd.plm.system.entity.SysUser;
 import com.hjgd.plm.system.mapper.SysRoleMapper;
 import com.hjgd.plm.system.mapper.SysUserMapper;
 import com.hjgd.plm.system.entity.SysRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -99,11 +102,16 @@ public class UserController {
 
     @Operation(summary = "重置密码")
     @PreAuthorize("hasRole('ADMIN')")
+    // 留痕：口令由切面统一脱敏为 ******，审计可见「谁重置了谁」但不落明文（R3）
+    @OperationLog(value = "重置用户密码")
     @PutMapping("/{id}/password")
-    public Result<Void> resetPassword(@PathVariable Long id, @RequestParam String password) {
+    public Result<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordDTO dto) {
         SysUser user = userMapper.selectById(id);
-        user.setPassword(passwordEncoder.encode(password));
-        userMapper.updateById(user);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        // 口令走请求体，且落新口令时清空遗留态（R3 / R6）
+        userMapper.updatePasswordClearLegacy(id, passwordEncoder.encode(dto.getPassword()));
         return Result.success();
     }
 

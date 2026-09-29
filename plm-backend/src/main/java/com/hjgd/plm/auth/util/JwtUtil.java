@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class JwtUtil {
@@ -33,10 +34,23 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .claims(claims)
+                // jti: 登出黑名单以它为准（R2）
+                .id(UUID.randomUUID().toString().replace("-", ""))
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expireMs))
                 .signWith(key)
                 .compact();
+    }
+
+    /** 令牌唯一标识，登出黑名单键 */
+    public String getJti(String token) {
+        return parseToken(token).getId();
+    }
+
+    /** 令牌过期时刻（epoch millis），黑名单据此回收 */
+    public long getExpirationMillis(String token) {
+        Date exp = parseToken(token).getExpiration();
+        return exp == null ? 0L : exp.getTime();
     }
 
     public Claims parseToken(String token) {

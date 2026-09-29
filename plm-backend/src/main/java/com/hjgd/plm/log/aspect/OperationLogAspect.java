@@ -1,6 +1,9 @@
 package com.hjgd.plm.log.aspect;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.hjgd.plm.auth.security.LoginUser;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.log.annotation.OperationLog;
@@ -24,12 +27,18 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Aspect
 @Component
 @RequiredArgsConstructor
 public class OperationLogAspect {
+
+    /** 敏感字段的落库掩码 */
+    private static final String SENSITIVE_MASK = "******";
 
     private final SysOperationLogMapper logMapper;
     private final ObjectMapper objectMapper;
@@ -126,12 +135,43 @@ public class OperationLogAspect {
 
     private String buildParams(ProceedingJoinPoint joinPoint) {
         try {
-            MethodSignature signature = (MethodSignature) joinPoint.getSignature();
             Object[] args = joinPoint.getArgs();
-            return objectMapper.writeValueAsString(args.length > 0 ? args[0] : "");
+            if (args.length == 0) {
+                return objectMapper.writeValueAsString("");
+            }
+            // 先脱敏再落库：口令类字段绝不写入操作日志（R3 / AC11.2）
+            JsonNode node = objectMapper.valueToTree(args[0]);
+            maskSensitive(node);
+            return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** 递归把敏感字段值替换为掩码，字段名命中即处理，不依赖具体 DTO 类型 */
+    void maskSensitive(JsonNode node) {
+        if (node instanceof ObjectNode obj) {
+            List<String> names = new ArrayList<>();
+            obj.fieldNames().forEachRemaining(names::add);
+            for (String name : names) {
+                if (isSensitiveName(name)) {
+                    obj.put(name, SENSITIVE_MASK);
+                } else {
+                    maskSensitive(obj.get(name));
+                }
+            }
+        } else if (node instanceof ArrayNode arr) {
+            arr.forEach(this::maskSensitive);
+        }
+    }
+
+    boolean isSensitiveName(String name) {
+        if (name == null) {
+            return false;
+        }
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.contains("password") || n.contains("secret")
+                || n.contains("token") || n.contains("credential");
     }
 
     private String getClientIp(HttpServletRequest request) {

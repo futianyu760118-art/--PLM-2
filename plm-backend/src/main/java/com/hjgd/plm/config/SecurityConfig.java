@@ -2,6 +2,7 @@ package com.hjgd.plm.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hjgd.plm.auth.security.JwtAuthenticationFilter;
+import com.hjgd.plm.auth.security.NodeScryptPasswordEncoder;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.common.ResultCode;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -31,9 +31,13 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
 
+    /**
+     * BCrypt 为主，兼容 EBMS 遗留 Node scrypt 串（ADR-2）。
+     * 新口令一律 BCrypt；scrypt 仅在登录校验时被识别，命中后透明重哈希。
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new NodeScryptPasswordEncoder();
     }
 
     @Bean

@@ -255,6 +255,8 @@ const routes = [
         meta: { title: '用户管理' } },
       { path: 'role', name: 'SysRole', component: () => import('@/views/system/role.vue'),
         meta: { title: '角色权限' } },
+      { path: 'permission', name: 'SysPermission', component: () => import('@/views/system/permission.vue'),
+        meta: { title: '权限菜单' } },
       { path: 'dict', name: 'SysDict', component: () => import('@/views/system/dict.vue'),
         meta: { title: '字典管理' } },
       { path: 'base', name: 'SysBaseData', component: () => import('@/views/system/baseData.vue'),
