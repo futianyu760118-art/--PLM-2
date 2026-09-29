@@ -108,6 +108,12 @@ public class ProjectProgressController {
         return Result.success(service.selfCheck(projectId));
     }
 
+    @Operation(summary = "健康分口径定义(定义式/权重/取数来源)")
+    @GetMapping("/progress-caliber")
+    public Result<Map<String, Object>> caliber() {
+        return Result.success(ProjectProgressService.caliber());
+    }
+
     @lombok.Data
     public static class TextEvidenceReq {
         private String docType;

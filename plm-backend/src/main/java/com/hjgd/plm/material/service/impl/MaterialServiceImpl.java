@@ -308,15 +308,17 @@ public class MaterialServiceImpl implements MaterialService {
         String oldVersion = material.getVersionNo();
 
         if (material.getStatus() != MaterialStatus.CHANGING) {
-            lifecycleService.assertTransition("PART", material.getStatus(), "start_change");
+            lifecycleService.assertTransition("PART", material.getPartNo(), material.getStatus(), "start_change");
             material.setStatus(MaterialStatus.CHANGING);
         }
 
         material.setVersionNo(versionAfter);
         if (stayInProduction || "MASS_PRODUCTION".equals(material.getPhase())) {
-            material.setStatus(lifecycleService.resolveToState("PART", MaterialStatus.CHANGING, "finish_change_mp"));
+            material.setStatus(lifecycleService.resolveToState("PART", material.getPartNo(),
+                    MaterialStatus.CHANGING, "finish_change_mp"));
         } else {
-            material.setStatus(lifecycleService.resolveToState("PART", MaterialStatus.CHANGING, "finish_change"));
+            material.setStatus(lifecycleService.resolveToState("PART", material.getPartNo(),
+                    MaterialStatus.CHANGING, "finish_change"));
         }
         material.setLifecycleStatus(material.getStatus().name());
         materialMapper.updateById(material);
@@ -360,7 +362,7 @@ public class MaterialServiceImpl implements MaterialService {
     private void transition(Long id, String action, String comment) {
         Material exist = getById(id);
         MaterialStatus from = exist.getStatus();
-        MaterialStatus to = lifecycleService.resolveToState("PART", from, action);
+        MaterialStatus to = lifecycleService.resolveToState("PART", exist.getPartNo(), from, action);
 
         if ("release".equals(action) || "to_production".equals(action) || "submit_review".equals(action)) {
             DqRunResult dq = dataQualityService.runForPart(exist, "PRE_TRANSITION");
