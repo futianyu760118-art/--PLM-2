@@ -20,6 +20,12 @@
 | 安全 | 七级角色标签（弱） | RBAC + JWT + 水印 + 内外网 | **B 安全模型** |
 | 生命周期 | Trial/Official/Revised（浅） | 多枚举但断层 | **统一状态机引擎** |
 
+> **补记（治理 Phase 0，ADR 见 `adr/ADR-2026-001-3d2d-capability-package-boundary.md`）：** 上表之外实际存在**第三套** `--3D-2D` 仓库（YF3D-2D，:8000，灯具零件 STEP→三视图/装配/检验图 SVG 出图），它与「A 系统 `D:\PLM` (:3000)」**不是同一套**——A 是三维装配爆炸 + 外贸/AI 全链路演示，`--3D-2D` 是 STEP→2D 出图能力包。
+>
+> - **角色**：第三能力包（出图），经契约并入 PLM-2 底座。
+> - **边界**：唯一差异能力 = STEP→三视图/装配/检验图 SVG 出图；Part/Drawing/BOM/Release 唯一事实 Owner 收归 PLM-2（M04 R&D）；STEP 解析/GLB 以 PLM-2 `model3d`/`drawing` 为正式实现（3D-2D 的重复实现停用）；禁自建 `parts`/`drawings` 第二事实源、禁物理删除。
+> - **并入阶段**：Phase 0 止血（冻结第二事实源写入 + 禁物理删除 + 登记技术债）→ Phase 1 主数据并入 → Phase 2 出图算法并入 `plm-algorithm` → Phase 3 接入生命周期/ECN 闭环 → Phase 4 事件/Result/Evidence 回流 → Phase 5 真联调 + CI/Gate 证据。
+
 ### 0.2 核心决策（一句话）
 
 > **以 PLM-2 的 Java/PostgreSQL/RBAC/文件安全为运行底座，迁入 PLM(:3000) 的产品档案、BOM 三态、3D 爆炸任务、工艺/外贸/AI/装箱能力，并用统一生命周期引擎打通「新品→量产→变更→封存」全链路。**
