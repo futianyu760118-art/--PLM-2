@@ -23,6 +23,7 @@ public class ProjectNodeEvidence {
     private String source;
     private String mimeType;
     private String versionNo;
+    private String aeosEvidenceId;
     private String uploadedBy;
     private LocalDateTime uploadedAt;
 }

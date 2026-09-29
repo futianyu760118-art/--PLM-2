@@ -4,6 +4,24 @@
 >
 > 以 **物料料号 PartNo** 为全局唯一主键，打通新品立项、结构设计、模具开发、试模量产、图纸管控全链路的企业级 PLM 系统。
 
+## AEOS 研发自治中心 V0.2 对齐（迭代分支）
+
+本仓正在按 `AEOS研发自治中心 V0.2 / PLM-2 V1.1` 归档基线增量升级，原则是**不重写PLM-2**，而把它作为 AEOS 研发自治中心的 Engineering Kernel。
+
+本轮已进入代码的核心改造：
+
+- 19个研发节点保持现有业务定义，7个关键节点增加 `RD_LEAD → GM` 双级审批。
+- 关键节点不得再通过直接写 `DONE` 绕过审批。
+- 项目健康分升级到 `AEOS-RD-HS-V0.2`：CF使用正式项目变更，CR使用必填字段完整率。
+- 节点Evidence同步登记统一 `Evidence_ID`，为 Evidence360 / 审计 / Agent 调用提供基础。
+- 新增 Gate Namespace，区分 `DEV-G0~G6`、`RD-MG1~MG5` 与待G2冻结的 `PLM-G0~G8`。
+- 新增 Metric Object 治理字段及研发Action Center数据底座。
+- Agent自治边界仍保持 L0 查询 / L1 分析 / L2 建议，未授权L3+。
+
+实施说明见：[docs/aeos-rd-center-v0.2-implementation-baseline.md](docs/aeos-rd-center-v0.2-implementation-baseline.md)。
+
+> 注意：PLM-G0~G8正式映射、真实指标阈值及研发主管/总经理角色映射仍属于G2待冻结项；本轮不会把候选规则冒充正式生产制度。
+
 ## 一、技术架构
 
 ```
