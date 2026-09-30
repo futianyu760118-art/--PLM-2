@@ -110,7 +110,9 @@ const HELP = `EBMS → PLM2 用户迁移工具
   --mode <m>          hash-once（默认，明文源内存哈希，保原密码登录）
                       | force-reset（明文源置随机口令 + 强制改密，需管理员下发初始口令）
   --role-map <file>   覆盖默认角色映射（JSON: { "ebms角色码": "PLM2角色码" }）
-  --dept-map <file>   部门映射（JSON: { "EBMS部门名": "PLM2 dept_code" }）；未映射不迁部门
+  --dept-map <file>   部门映射覆盖（JSON: { "EBMS部门名": "PLM2 dept_code" }）；
+                      默认读 sys_dept_mapping 持久化映射表（database/33_ebms_migration.sql），
+                      本参数按同名 key 覆盖表内条目；两者都没有的部门不迁
   --report <file>     对账报告输出路径（JSON）
   --rollback <run_id> 按批次回滚（删除本批迁入数据）
 `;
@@ -180,6 +182,31 @@ async function assertSchemaReady(client) {
   if (missing.length) {
     throw new Error(`sys_user 缺少迁移列: ${missing.join(', ')}；请先执行 database/33_ebms_migration.sql（或加 --apply-schema）`);
   }
+  const { rows: deptTables } = await client.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_name = 'sys_dept_mapping'`,
+  );
+  if (!deptTables.length) {
+    throw new Error('缺少 sys_dept_mapping（F14 部门映射表）；请先执行 database/33_ebms_migration.sql（或加 --apply-schema）');
+  }
+}
+
+/**
+ * 部门映射来源：优先持久化的 sys_dept_mapping（F14 / AC14.2，可逐条核对），
+ * 再叠加 --dept-map 运行时覆盖（保留旧用法）。
+ */
+async function loadDeptMap(client, args, report) {
+  const { rows } = await client.query(
+    `SELECT source_dept, target_dept_code FROM sys_dept_mapping
+      WHERE source_system = 'EBMS' AND target_dept_code IS NOT NULL`,
+  );
+  const map = Object.fromEntries(rows.map((r) => [r.source_dept, r.target_dept_code]));
+  report.deptMappingSource = 'sys_dept_mapping';
+  report.deptMappingTotal = rows.length;
+  if (args.deptMapPath) {
+    Object.assign(map, JSON.parse(fs.readFileSync(args.deptMapPath, 'utf8')));
+    report.deptMappingSource = 'sys_dept_mapping + --dept-map(覆盖)';
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------- 迁移主体
@@ -290,9 +317,7 @@ async function migrateUsers(client, args, sourceDir, roleMap, report, runId) {
   // resolveRoles 可能新建角色，故角色码→id 必须用它的返回值，不能依赖前置缓存
   const { targetByUser, roleIdByCode } = await resolveRoles(client, sourceDir, roleMap, report);
 
-  const deptMap = args.deptMapPath
-    ? JSON.parse(fs.readFileSync(args.deptMapPath, 'utf8'))
-    : {};
+  const deptMap = await loadDeptMap(client, args, report);
   const { rows: deptRows } = await client.query('SELECT id, dept_code FROM sys_department');
   const deptIdByCode = new Map(deptRows.map((d) => [d.dept_code, d.id]));
 
@@ -357,7 +382,16 @@ async function migrateUsers(client, args, sourceDir, roleMap, report, runId) {
     let deptId = null;
     if (person?.department_name && deptMap[person.department_name]) {
       deptId = deptIdByCode.get(deptMap[person.department_name]) ?? null;
+      if (person.department_name && !deptId) {
+        // 映射存在但目标部门在 PLM2 不存在：属映射表与 sys_department 不一致，须显式暴露
+        report.conflicts.push({
+          type: 'dept_mapping_target_missing',
+          sourceDept: person.department_name,
+          targetDeptCode: deptMap[person.department_name],
+        });
+      }
     }
+    if (deptId) report.deptAssigned++;
     if (person && !deptId) report.unmappedDepartments.add(person.department_name ?? '(空)');
     if (!person) report.enrichmentMisses.push(u.username);
 
@@ -436,6 +470,7 @@ async function main() {
     userRoleLinks: 0, rolesCreated: [], conflicts: [], needAdminReset: [],
     unmappedRoles: new Set(), unmappedDepartments: new Set(), enrichmentMisses: [],
     personnelTotal: 0,
+    deptMappingSource: null, deptMappingTotal: 0, deptAssigned: 0,
   };
 
   const client = await connect(args);
@@ -480,6 +515,12 @@ async function main() {
           passwordBuckets: report.passwordBuckets,
           rolesCreated: report.rolesCreated,
           unmappedRoles: [...report.unmappedRoles],
+          deptMapping: {
+            source: report.deptMappingSource,
+            mapped: report.deptMappingTotal,
+            assigned: report.deptAssigned,
+            unmapped: [...report.unmappedDepartments],
+          },
         }),
         args.dryRun ? 'DRY_RUN' : 'SUCCESS'],
     );
@@ -518,6 +559,9 @@ function emit(report, args) {
     `新建角色           : ${report.rolesCreated.join(', ') || '(无)'}`,
     `口令处理           : scrypt=${report.passwordBuckets.scrypt} 明文一次性哈希=${report.passwordBuckets.hashOnce} 强制重置=${report.passwordBuckets.forceReset} 空=${report.passwordBuckets.empty}`,
     `人员富化命中        : ${report.sourceUsers - report.enrichmentMisses.length}/${report.sourceUsers}`,
+    `部门映射来源        : ${report.deptMappingSource ?? '-'}（映射 ${report.deptMappingTotal} 条）`,
+    `部门落库 dept_id    : ${report.deptAssigned}/${report.targetUsers}`,
+    `未映射部门          : ${report.unmappedDepartments.size ? [...report.unmappedDepartments].join(', ') : '(无)'}`,
   ];
   if (report.rollback) {
     lines.push(`回滚               : 删除用户 ${report.rollback.deletedUsers}，回收角色 ${(report.rollback.droppedRoles ?? []).join(', ') || '(无)'}`);

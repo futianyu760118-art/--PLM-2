@@ -7,19 +7,23 @@
         SELECT * FROM sys_user WHERE username = #{username} AND deleted = 0
     </select>
 
+    <!-- D1: 逻辑删除的角色不得再授权；sys_role 有 deleted 列，必须显式过滤 -->
     <select id="selectRoleCodesByUserId" resultType="java.lang.String">
         SELECT r.role_code
         FROM sys_user_role ur
         JOIN sys_role r ON ur.role_id = r.id
-        WHERE ur.user_id = #{userId} AND r.status = 1
+        WHERE ur.user_id = #{userId} AND r.status = 1 AND r.deleted = 0
     </select>
 
+    <!-- D1: 沿用同一口径——只有未删除且启用的角色才派生权限
+         （sys_permission 无 deleted 列，权限项为物理删除，故此处只需要约束 r.deleted） -->
     <select id="selectPermissionsByUserId" resultType="java.lang.String">
         SELECT DISTINCT p.perm_code
         FROM sys_user_role ur
+        JOIN sys_role r ON ur.role_id = r.id
         JOIN sys_role_permission rp ON ur.role_id = rp.role_id
         JOIN sys_permission p ON rp.permission_id = p.id
-        WHERE ur.user_id = #{userId} AND p.status = 1
+        WHERE ur.user_id = #{userId} AND r.status = 1 AND r.deleted = 0 AND p.status = 1
     </select>
 
     <update id="updateLoginInfo">

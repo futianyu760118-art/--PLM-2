@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 
 NProgress.configure({ showSpinner: false })
@@ -276,6 +277,24 @@ const router = createRouter({
 
 const WHITE_LIST = ['/login']
 
+/**
+ * 路由级越权拦截（AC7.1）：侧边栏按 meta.roles/permission 隐藏菜单，
+ * 但直接输入 URL 仍会渲染路由壳，故在守卫里沿 matched 链复核一次。
+ */
+export function canAccess(to, userStore) {
+  return to.matched.every(record => {
+    const meta = record.meta || {}
+    if (meta.roles?.length && !meta.roles.some(role => userStore.roles.includes(role))) {
+      return false
+    }
+    // hasPermission 对 ADMIN 直接放行，与侧边栏口径一致
+    if (meta.permission && !userStore.hasPermission(meta.permission)) {
+      return false
+    }
+    return true
+  })
+}
+
 router.beforeEach(async (to, from, next) => {
   NProgress.start()
   const userStore = useUserStore()
@@ -288,17 +307,24 @@ router.beforeEach(async (to, from, next) => {
   if (userStore.token) {
     if (to.path === '/login') {
       next('/')
-    } else if (!userStore.userId) {
+      return
+    }
+    // 硬刷新后 store 里只有 token，必须先补齐 userId/roles/permissions 再判权限
+    if (!userStore.userId) {
       try {
         await userStore.fetchInfo()
-        next()
       } catch {
         userStore.reset()
         next('/login')
+        return
       }
-    } else {
-      next()
     }
+    if (!canAccess(to, userStore)) {
+      ElMessage.warning('无权访问该页面')
+      next('/dashboard')
+      return
+    }
+    next()
   } else {
     if (WHITE_LIST.includes(to.path)) {
       next()

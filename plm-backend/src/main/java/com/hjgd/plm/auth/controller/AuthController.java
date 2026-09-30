@@ -11,7 +11,9 @@ import com.hjgd.plm.auth.util.JwtUtil;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.config.JwtProperties;
+import com.hjgd.plm.system.entity.SysLoginLog;
 import com.hjgd.plm.system.entity.SysUser;
+import com.hjgd.plm.system.mapper.SysLoginLogMapper;
 import com.hjgd.plm.system.mapper.SysUserMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,9 +24,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @Slf4j
 @Tag(name = "认证管理")
@@ -37,14 +42,24 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final JwtProperties jwtProperties;
     private final SysUserMapper sysUserMapper;
+    private final SysLoginLogMapper loginLogMapper;
     private final PasswordEncoder passwordEncoder;
     private final TokenBlacklistService tokenBlacklistService;
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(dto.getUsername(), dto.getPassword()));
+        String clientIp = resolveClientIp(request);
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(dto.getUsername(), dto.getPassword()));
+        } catch (AuthenticationException e) {
+            // D2: 失败登录同样留痕（用户名/结果/IP），但不落任何口令材料；
+            // 原异常照常抛出，交全局处理器统一 401，保持 AC6.2「不暴露账号存在性」。
+            saveLoginLog(dto.getUsername(), null, SysLoginLog.RESULT_FAILURE, clientIp, request, "认证失败");
+            throw e;
+        }
         LoginUser loginUser = (LoginUser) authentication.getPrincipal();
         String token = jwtUtil.generateToken(
                 loginUser.getUserId(),
@@ -66,10 +81,13 @@ public class AuthController {
 
         // R5: 登录成功留痕（AC6.6）
         try {
-            sysUserMapper.updateLoginInfo(loginUser.getUserId(), resolveClientIp(request));
+            sysUserMapper.updateLoginInfo(loginUser.getUserId(), clientIp);
         } catch (Exception e) {
             log.warn("更新登录信息失败 userId={}", loginUser.getUserId(), e);
         }
+        // D2: 成功登录审计（AC15.1）
+        saveLoginLog(loginUser.getUsername(), loginUser.getUserId(),
+                SysLoginLog.RESULT_SUCCESS, clientIp, request, null);
         // R6: EBMS 遗留 scrypt 口令透明重哈希为 BCrypt（ADR-2）
         transparentRehash(loginUser, dto.getPassword());
 
@@ -143,6 +161,34 @@ public class AuthController {
         } catch (Exception e) {
             log.warn("透明重哈希失败 userId={}", loginUser.getUserId(), e);
         }
+    }
+
+    /**
+     * 登录审计落库（D2 / AC15.1）。只写用户名、结果、IP、UA 与结果描述，绝不写口令；
+     * 审计本身失败不得影响登录主流程。
+     */
+    private void saveLoginLog(String username, Long userId, int result, String ip,
+                              HttpServletRequest request, String message) {
+        try {
+            SysLoginLog entry = new SysLoginLog();
+            entry.setUsername(username);
+            entry.setUserId(userId);
+            entry.setResult(result);
+            entry.setIp(ip);
+            entry.setDevice(truncate(request == null ? null : request.getHeader("User-Agent"), 255));
+            entry.setMessage(truncate(message, 255));
+            entry.setCreatedAt(LocalDateTime.now());
+            loginLogMapper.insert(entry);
+        } catch (Exception e) {
+            log.warn("登录审计落库失败 username={}", username, e);
+        }
+    }
+
+    private String truncate(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

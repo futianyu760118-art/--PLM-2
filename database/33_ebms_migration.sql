@@ -60,3 +60,63 @@ CREATE TABLE IF NOT EXISTS migration_run (
 COMMENT ON TABLE migration_run IS 'EBMS→PLM2 迁移批次审计（幂等/对账/回滚依据）';
 
 CREATE INDEX IF NOT EXISTS idx_migration_run_status ON migration_run (status);
+
+-- ---------- 3. EBMS 组织 → PLM2 部门映射（F14 / AC14.2）----------
+-- 此前部门映射只存在于迁移工具的运行时参数（--dept-map），无法逐条核对、默认不迁部门，
+-- 导致迁移后 dept_id 全为 NULL。改为持久化映射表：迁移工具按表落 dept_id，业务可增删改。
+CREATE TABLE IF NOT EXISTS sys_dept_mapping (
+    id               BIGSERIAL PRIMARY KEY,
+    source_system    VARCHAR(32) NOT NULL DEFAULT 'EBMS',
+    source_dept      VARCHAR(128) NOT NULL,          -- EBMS org_departments.name
+    target_dept_code VARCHAR(50) REFERENCES sys_department(dept_code),
+    note             VARCHAR(255),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (source_system, source_dept)
+);
+COMMENT ON TABLE sys_dept_mapping IS 'EBMS 组织→PLM2 部门映射表（AC14.2 可逐条核对）';
+COMMENT ON COLUMN sys_dept_mapping.target_dept_code IS 'NULL=暂不映射，需在 note 说明原因';
+
+-- 3.1 补齐 PLM2 缺失的职能部门（默认口径，可按业务调整；幂等）
+INSERT INTO sys_department (dept_code, dept_name, parent_id, sort_order) VALUES
+('FIN', '财务部',    NULL, 6),
+('ADM', '人事行政部', NULL, 7)
+ON CONFLICT (dept_code) DO NOTHING;
+
+-- 3.2 默认映射清单：覆盖 EBMS org_departments 的全部组织名，保证「未映射项 = 0」
+INSERT INTO sys_dept_mapping (source_system, source_dept, target_dept_code, note) VALUES
+('EBMS', '研发中心',   'RD',    '同名对齐'),
+('EBMS', '开发部',     'RD',    '研发职能'),
+('EBMS', '开发A部',    'RD',    '研发职能'),
+('EBMS', '开发B部',    'RD',    '研发职能'),
+('EBMS', '品质',       'QA',    '品质职能'),
+('EBMS', '供应链中心', 'SCM',   '同名对齐'),
+('EBMS', '采购',       'SCM',   '采购并入供应链中心'),
+('EBMS', '仓储',       'SCM',   '仓储并入供应链中心'),
+('EBMS', '计划',       'SCM',   '计划并入供应链中心'),
+('EBMS', '销售中心',   'SALES', '销售职能'),
+('EBMS', '销售一部',   'SALES', '销售职能'),
+('EBMS', '销售二部',   'SALES', '销售职能'),
+('EBMS', '销售行政部', 'SALES', '销售职能'),
+('EBMS', '财务部',     'FIN',   'PLM2 无财务部门，随本迁移新增'),
+('EBMS', '人事行政部', 'ADM',   'PLM2 无职能部门，随本迁移新增'),
+('EBMS', '总经办',     'ADM',   '管理职能并入人事行政部'),
+('EBMS', '管理中心',   'ADM',   '管理职能并入人事行政部'),
+('EBMS', '信息化',     'ADM',   'IT 职能并入人事行政部'),
+('EBMS', '工程',       'PROD',  '工程职能并入生产部'),
+('EBMS', '精益车间',   'PROD',  '生产车间'),
+('EBMS', '精益车间A组','PROD',  '生产车间'),
+('EBMS', '精益车间B组','PROD',  '生产车间'),
+('EBMS', '光电车间',   'PROD',  '生产车间'),
+('EBMS', '五金车间',   'PROD',  '生产车间'),
+('EBMS', '压铸车间',   'PROD',  '生产车间'),
+('EBMS', '喷塑车间',   'PROD',  '生产车间'),
+('EBMS', '前道车间',   'PROD',  '生产车间'),
+('EBMS', '装配车间',   'PROD',  '生产车间'),
+('EBMS', '组装一线',   'PROD',  '生产线'),
+('EBMS', '组装二线',   'PROD',  '生产线'),
+('EBMS', '包装',       'PROD',  '生产线'),
+('EBMS', '包装一线',   'PROD',  '生产线'),
+('EBMS', '包装二线',   'PROD',  '生产线')
+ON CONFLICT (source_system, source_dept) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_dept_mapping_target ON sys_dept_mapping (target_dept_code);

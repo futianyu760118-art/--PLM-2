@@ -1,7 +1,9 @@
 package com.hjgd.plm.system.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.Result;
+import com.hjgd.plm.log.annotation.OperationLog;
 import com.hjgd.plm.system.entity.SysPermission;
 import com.hjgd.plm.system.entity.SysRole;
 import com.hjgd.plm.system.mapper.SysPermissionMapper;
@@ -11,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,11 +54,19 @@ public class RoleController {
     @Operation(summary = "删除角色(内置角色禁止删除)")
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
+    @Transactional(rollbackFor = Exception.class)
     public Result<Void> delete(@PathVariable Long id) {
         SysRole role = roleMapper.selectById(id);
+        if (role == null) {
+            throw new BusinessException("角色不存在");
+        }
         if (role.getBuiltin() != null && role.getBuiltin() == 1) {
             return Result.failed("内置角色禁止删除");
         }
+        // D1: 角色为逻辑删除，数据库的 ON DELETE CASCADE 不会触发，
+        // 残留的 sys_role_permission / sys_user_role 会让已删角色继续授权，故在此物理清理。
+        jdbcTemplate.update("DELETE FROM sys_role_permission WHERE role_id = ?", id);
+        jdbcTemplate.update("DELETE FROM sys_user_role WHERE role_id = ?", id);
         roleMapper.deleteById(id);
         return Result.success();
     }
@@ -77,6 +88,8 @@ public class RoleController {
 
     @Operation(summary = "分配权限")
     @PreAuthorize("hasRole('ADMIN')")
+    // D3: 授权变更必须留痕（操作人/类型/目标/时间）
+    @OperationLog(value = "角色授权变更")
     @PutMapping("/{roleId}/permissions")
     public Result<Void> assignPermissions(@PathVariable Long roleId, @RequestBody Map<String, List<Long>> body) {
         jdbcTemplate.update("DELETE FROM sys_role_permission WHERE role_id = ?", roleId);

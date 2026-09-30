@@ -53,6 +53,8 @@ public class UserController {
 
     @Operation(summary = "新增用户")
     @PreAuthorize("hasRole('ADMIN')")
+    // D3: 账号变更必须留痕；口令字段由切面统一脱敏为 ******
+    @OperationLog(value = "新增用户")
     @PostMapping
     public Result<SysUser> create(@RequestBody Map<String, Object> body) {
         String username = (String) body.get("username");
@@ -78,6 +80,7 @@ public class UserController {
 
     @Operation(summary = "修改用户")
     @PreAuthorize("hasRole('ADMIN')")
+    @OperationLog(value = "修改用户")
     @PutMapping
     public Result<SysUser> update(@RequestBody Map<String, Object> body) {
         Long id = Long.valueOf(body.get("id").toString());
@@ -117,6 +120,7 @@ public class UserController {
 
     @Operation(summary = "删除用户")
     @PreAuthorize("hasRole('ADMIN')")
+    @OperationLog(value = "删除用户")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         userMapper.deleteById(id);
