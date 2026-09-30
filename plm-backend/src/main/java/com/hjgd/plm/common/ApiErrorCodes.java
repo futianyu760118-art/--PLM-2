@@ -13,4 +13,10 @@ public final class ApiErrorCodes {
     public static final String GATE_DENIED = "GATE_DENIED";
     /** 证据不满足四要素 / 不可穿透（F09） */
     public static final String EVIDENCE_INVALID = "EVIDENCE_INVALID";
+    /** 决策链路非法（源引用缺失 / 状态不允许该操作）（F16） */
+    public static final String DECISION_INVALID = "DECISION_INVALID";
+    /** 结果验证被拒：非独立验证 / 无验证证据（done ≠ verified）（F16） */
+    public static final String RESULT_VERIFY_DENIED = "RESULT_VERIFY_DENIED";
+    /** 学习条目不满足发布门槛（F16） */
+    public static final String LEARNING_NOT_PUBLISHABLE = "LEARNING_NOT_PUBLISHABLE";
 }

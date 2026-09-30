@@ -47,9 +47,15 @@ public class EvidenceService {
     public static final List<String> EVIDENCE_TYPES =
             List.of("file", "image", "record", "metric", "log", "approval", "external_ref");
 
-    /** subject 类型取值集：对象/节点/决策/动作/结果。 */
+    /**
+     * subject 类型取值集：对象/节点/决策/动作/结果/指标/变更对象。
+     *
+     * <p>{@code metric} 是架构 V0.2 §3.4 穿透样例的首段与末段类型
+     * （管理结果本身要被证据证明）；缺了它，样例链在第 1 段就会因类型校验被拒。
+     */
     public static final List<String> SUBJECT_TYPES =
-            List.of("object", "node", "decision", "action", "result");
+            List.of("object", "node", "decision", "action", "result",
+                    "metric", "ecn", "bom", "release");
 
     private final PlmEvidenceMapper evidenceMapper;
 
