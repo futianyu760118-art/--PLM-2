@@ -58,6 +58,22 @@ public class GlobalExceptionHandler {
         return Result.failed(ResultCode.FORBIDDEN);
     }
 
+    /** 数据库唯一键/约束冲突 → 友好提示 */
+    @ExceptionHandler({org.springframework.dao.DuplicateKeyException.class,
+            org.springframework.dao.DataIntegrityViolationException.class})
+    public Result<Void> handleDataIntegrity(Exception e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String m = root.getMessage() == null ? "" : root.getMessage();
+        String msg = "数据唯一性或约束冲突, 请检查是否重复";
+        if (m.contains("plm_material_part_no_key")) msg = "料号已存在, 请勿重复导入/新增";
+        else if (m.contains("plm_project_initiation")) msg = "立项申请书数据冲突";
+        else if (m.contains("null value") || m.contains("not-null")) msg = "必填字段为空, 请检查";
+        else if (m.contains("unique")) msg = "唯一键已存在(重复), 请检查";
+        log.warn("数据约束异常: {}", m);
+        return Result.failed(msg);
+    }
+
     @ExceptionHandler(Exception.class)
     public Result<Void> handleException(Exception e) {
         log.error("系统异常", e);

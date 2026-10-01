@@ -20,5 +20,5 @@ public class BaseEntity implements Serializable {
 
     @TableField(fill = FieldFill.INSERT)
     @TableLogic
-    private Integer deleted;
+    private Integer deleted = 0;
 }

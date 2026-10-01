@@ -95,7 +95,9 @@ public class GenericTableService {
         cols.add("created_at"); vals.add(LocalDateTime.now());
         cols.add("updated_at"); vals.add(LocalDateTime.now());
         String ph = String.join(",", Collections.nCopies(cols.size(), "?"));
-        jdbc.update("INSERT INTO " + d.table() + " (" + String.join(",", cols) + ") VALUES (" + ph + ")", vals.toArray());
+        Long id = jdbc.queryForObject("INSERT INTO " + d.table() + " (" + String.join(",", cols) +
+                ") VALUES (" + ph + ") RETURNING id", Long.class, vals.toArray());
+        body.put("id", id);
         return body;
     }
 

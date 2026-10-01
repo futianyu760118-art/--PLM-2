@@ -8,6 +8,15 @@ raw.interceptors.request.use(cfg => {
   return cfg
 }, e => Promise.reject(e))
 
+/** 导出立项申请书(合并版同版式) */
+export async function downloadInitiationExport(id) {
+  const res = await raw.get(`/initiation/${id}/export-structured`, { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data)
+  const a = document.createElement('a')
+  a.href = url; a.download = `立项申请书_${id}.xlsx`; a.click()
+  URL.revokeObjectURL(url)
+}
+
 /** 下载立项申请书导入模板(xlsx) */
 export async function downloadInitiationTemplate() {
   const res = await raw.get('/initiation/import-template', { responseType: 'blob' })

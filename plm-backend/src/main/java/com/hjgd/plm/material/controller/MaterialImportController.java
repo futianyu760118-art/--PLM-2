@@ -90,8 +90,13 @@ public class MaterialImportController {
                 materialService.create(dto);
                 success++;
             } catch (Exception e) {
-                errors.add((row.getPartNo() != null ? row.getPartNo() : "?") + ": " + e.getMessage());
-                log.warn("import row failed: {}", e.getMessage());
+                String msg = shortMsg(e);
+                if (msg.contains("duplicate") || msg.contains("唯一") || msg.contains("PART_NO_DUPLICATE")) {
+                    skip++;   // 料号已存在 → 跳过
+                } else {
+                    errors.add((row.getPartNo() != null ? row.getPartNo() : "?") + ": " + msg);
+                    log.warn("import row failed: {}", msg);
+                }
             }
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -209,6 +214,13 @@ public class MaterialImportController {
         }
         if (grid.isEmpty()) throw new BusinessException("PDF 未解析到文本内容(可能为扫描件)");
         return grid;
+    }
+
+    private String shortMsg(Exception e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String m = root.getMessage() == null ? e.toString() : root.getMessage();
+        return m.length() > 160 ? m.substring(0, 160) : m;
     }
 
     private MaterialType parseType(String type, String productType) {

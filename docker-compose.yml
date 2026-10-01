@@ -53,6 +53,8 @@ services:
       - ./database/30_project_changelog.sql:/docker-entrypoint-initdb.d/30_project_changelog.sql:ro
       - ./database/31_basebom_specs.sql:/docker-entrypoint-initdb.d/31_basebom_specs.sql:ro
       - ./database/32_aeos_envelope.sql:/docker-entrypoint-initdb.d/32_aeos_envelope.sql:ro
+      - ./database/33_code_issue_rule_code.sql:/docker-entrypoint-initdb.d/33_code_issue_rule_code.sql:ro
+      - ./database/34_fix_deleted_default.sql:/docker-entrypoint-initdb.d/34_fix_deleted_default.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

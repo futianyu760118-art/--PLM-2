@@ -209,8 +209,23 @@ public class DataIoService {
             String colSql = String.join(",", writeCols.stream().map(ColumnDef::getField).toList());
             String ph = String.join(",", Collections.nCopies(writeCols.size(), "?"));
             String sql = "INSERT INTO " + d.getTable() + " (" + colSql + ") VALUES (" + ph + ")";
-            int[] r = jdbc.batchUpdate(sql, batchArgs);
-            res.setInserted(r.length);
+            try {
+                int[] r = jdbc.batchUpdate(sql, batchArgs);
+                res.setInserted(r.length);
+            } catch (Exception batchEx) {
+                // 批量失败(如唯一键/约束冲突) -> 逐行插入, 跳过冲突行并报告
+                int ok = 0;
+                for (Object[] args : batchArgs) {
+                    try { jdbc.update(sql, args); ok++; }
+                    catch (Exception rowEx) {
+                        res.getErrors().add(new ImportResult.ErrorItem(0, "", "",
+                                "插入失败(可能重复或约束冲突): " + shortMsg(rowEx)));
+                    }
+                }
+                res.setInserted(ok);
+                res.setSuccess(ok);
+                res.setFailed(res.getFailed() + (batchArgs.size() - ok));
+            }
         }
         if (res.getErrors().size() > MAX_ISSUES) {
             res.getErrors().subList(MAX_ISSUES, res.getErrors().size()).clear();
@@ -250,6 +265,13 @@ public class DataIoService {
             if (Boolean.FALSE.equals(exists)) return "关联" + safe(c.getRefLabel()) + "不存在: " + v;
         }
         return null;
+    }
+
+    private String shortMsg(Exception e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        String m = root.getMessage() == null ? e.toString() : root.getMessage();
+        return m.length() > 160 ? m.substring(0, 160) : m;
     }
 
     private String crossDateError(ModuleDef d, Map<ColumnDef, String> vals) {

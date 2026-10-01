@@ -201,6 +201,7 @@
               {{ detail.projectId ? '查看已转项目 #' + detail.projectId : '批准并转为研发项目' }}
             </el-button>
             <el-button size="small" icon="Printer" @click="previewInit">汇总预览/打印</el-button>
+            <el-button size="small" icon="Download" @click="downloadInitiationExport(detail.id)">导出申请书</el-button>
           </div>
         </div>
 
@@ -334,7 +335,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   pageInitiation, getInitiation, initiationStats, createInitiation, updateInitiation,
-  deleteInitiation, advanceInitiation, rejectInitiation, approveToProject, downloadInitiationTemplate
+  deleteInitiation, advanceInitiation, rejectInitiation, approveToProject, downloadInitiationTemplate,
+  downloadInitiationExport
 } from '@/api/initiation'
 
 const importVisible = ref(false)

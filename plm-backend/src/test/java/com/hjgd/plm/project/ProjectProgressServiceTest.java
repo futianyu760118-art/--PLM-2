@@ -40,21 +40,20 @@ class ProjectProgressServiceTest {
     @Mock private ProjectNodeMapper nodeMapper;
     @Mock private ProjectNodeEvidenceMapper evidenceMapper;
     @Mock private FileService fileService;
+    @Mock private com.hjgd.plm.rd.service.ChangeLogService changeLogService;
     @InjectMocks private ProjectProgressService service;
 
     @Test
-    @DisplayName("初始化: 每项目写入 19 个节点")
-    void shouldInitNineteenNodes() {
-        when(nodeMapper.selectCount(any())).thenReturn(0L);
-
+    @DisplayName("初始化: 每项目写入 22 个节点")
+    void shouldInitTwentyTwoNodes() {
         service.initNodes(1L, "HJ001");
 
         ArgumentCaptor<ProjectNode> cap = ArgumentCaptor.forClass(ProjectNode.class);
-        verify(nodeMapper, times(19)).insert(cap.capture());
+        verify(nodeMapper, times(22)).insert(cap.capture());
         List<ProjectNode> nodes = cap.getAllValues();
         assertEquals("PLAN", nodes.get(0).getNodeCode());
         assertEquals("计划表", nodes.get(0).getNodeName());
-        assertEquals("OTHER", nodes.get(18).getNodeCode());
+        assertEquals("OTHER", nodes.get(21).getNodeCode());
         long keyCount = nodes.stream().filter(n -> n.getIsKey() == 1).count();
         assertEquals(7, keyCount, "关键节点应为 7 个");
         assertTrue(nodes.stream().allMatch(n -> "NOT_SET".equals(n.getStatus())));
@@ -127,7 +126,6 @@ class ProjectProgressServiceTest {
         p.setProjectName("投光灯项目");
         p.setStatus("ACTIVE");
         when(projectMapper.selectById(1L)).thenReturn(p);
-        when(nodeMapper.selectCount(any())).thenReturn(19L); // 已初始化
 
         List<ProjectNode> nodes = new ArrayList<>();
         ProjectNode doneNoEvidence = node("PLAN", 0, "DONE");   // 证据不足

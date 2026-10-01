@@ -33,6 +33,7 @@ import java.util.Map;
 public class InitiationImportService {
 
     private final ProjectInitiationService initiationService;
+    private final com.hjgd.plm.project.mapper.ProjectInitiationMapper initiationMapper;
     private final ObjectMapper json = new ObjectMapper();
 
     /** 详情字段名 → 实体字段 (含模糊匹配) */
@@ -106,7 +107,25 @@ public class InitiationImportService {
             }
             if (!org.springframework.util.StringUtils.hasText(r.getApprovalStatus())) r.setApprovalStatus("draft");
             if (!org.springframework.util.StringUtils.hasText(r.getWorkflowStage())) r.setWorkflowStage("apply");
-            ProjectInitiation created = initiationService.create(r);
+            // 按项目编号去重: 已存在则更新, 否则新建 (与 EBMS 一致)
+            ProjectInitiation created;
+            ProjectInitiation existing = null;
+            if (org.springframework.util.StringUtils.hasText(r.getProjectNo())) {
+                existing = initiationMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ProjectInitiation>()
+                        .eq(ProjectInitiation::getProjectNo, r.getProjectNo()).last("LIMIT 1"));
+            }
+            boolean updated = false;
+            if (existing != null) {
+                try {
+                    r.setId(existing.getId());
+                    created = initiationService.update(r);
+                    updated = true;
+                } catch (Exception e) {
+                    created = initiationService.create(r);
+                }
+            } else {
+                created = initiationService.create(r);
+            }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("success", 1);
             out.put("skipped", 0);
@@ -114,6 +133,7 @@ public class InitiationImportService {
             out.put("parsed", parsed);
             out.put("id", created.getId());
             out.put("initNo", created.getInitNo());
+            out.put("updated", updated);
             return out;
         } catch (BusinessException be) {
             throw be;
@@ -340,37 +360,229 @@ public class InitiationImportService {
         } catch (Exception e) { return ""; }
     }
 
-    // ---------- 模板 ----------
-    public byte[] template() {
+    // ---------- 模板 / 导出 (与「立项申请书_合并版.xlsx」同版式) ----------
+    public byte[] template() { return buildWorkbook(null); }
+
+    public byte[] exportStructured(Long id) { return buildWorkbook(initiationService.getById(id)); }
+
+    private byte[] buildWorkbook(ProjectInitiation r) {
         try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream os = new ByteArrayOutputStream()) {
-            Sheet main = wb.createSheet("立项申请书");
-            String[][] pairs = {
-                    {"项目编号", ""}, {"项目名称", ""}, {"项目类型", ""}, {"起始时间", ""},
-                    {"项目部门", ""}, {"主要负责人", ""}, {"配合人员", ""}, {"其他信息", ""},
-                    {"客户编号", ""}, {"客户类型", ""}, {"客户等级", ""}, {"客户赢率", ""},
-                    {"市场状况", ""}, {"竞争对手", ""}, {"采购周期", ""}, {"定制开发类型", ""},
-                    {"客户痛点识别", ""}, {"关键成功要素", ""}, {"备注", ""}
-            };
-            for (int i = 0; i < pairs.length; i++) {
-                Row r = main.createRow(i);
-                r.createCell(0).setCellValue(pairs[i][0]);
-                r.createCell(1).setCellValue(pairs[i][1]);
-            }
-            Sheet spec = wb.createSheet("产品规格对比");
-            Row s0 = spec.createRow(0); s0.createCell(0).setCellValue("规格项");
-            Row s1 = spec.createRow(1); s1.createCell(0).setCellValue("规格项"); s1.createCell(1).setCellValue("产品1"); s1.createCell(2).setCellValue("产品2");
-            Sheet feas = wb.createSheet("可实现性评估");
-            Row f0 = feas.createRow(0);
-            f0.createCell(0).setCellValue("类别"); f0.createCell(1).setCellValue("评估项"); f0.createCell(2).setCellValue("结果"); f0.createCell(3).setCellValue("关联项"); f0.createCell(4).setCellValue("备注");
-            Sheet fore = wb.createSheet("销售预测");
-            Row fo0 = fore.createRow(0);
-            fo0.createCell(0).setCellValue("时间周期"); fo0.createCell(1).setCellValue("产品型号"); fo0.createCell(2).setCellValue("数量"); fo0.createCell(3).setCellValue("金额");
-            Sheet reqs = wb.createSheet("特殊要求");
-            Row r0 = reqs.createRow(0); r0.createCell(0).setCellValue("产品"); r0.createCell(1).setCellValue("要求");
+            buildMain(wb, r);
+            buildBasic(wb, r);
+            buildSpec(wb, r);
+            buildFeas(wb, r);
+            buildForecast(wb, r);
+            buildReqs(wb, r);
             wb.write(os);
             return os.toByteArray();
         } catch (Exception e) {
-            throw new BusinessException("生成模板失败: " + e.getMessage());
+            throw new BusinessException("生成文件失败: " + e.getMessage());
         }
+    }
+
+    private void cell(Sheet s, int r, int c, Object v) {
+        Row row = s.getRow(r);
+        if (row == null) row = s.createRow(r);
+        Cell cl = row.getCell(c);
+        if (cl == null) cl = row.createCell(c);
+        if (v == null) cl.setCellValue("");
+        else if (v instanceof Number n) cl.setCellValue(n.doubleValue());
+        else cl.setCellValue(String.valueOf(v));
+    }
+
+    private String g(ProjectInitiation r, java.util.function.Function<ProjectInitiation, String> f) {
+        return r == null ? "" : (f.apply(r) == null ? "" : f.apply(r));
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseList(String j) {
+        if (j == null || j.isBlank()) return new ArrayList<>();
+        try { return json.readValue(j, List.class); } catch (Exception e) { return new ArrayList<>(); }
+    }
+
+    private List<String> productCols(List<Map<String, Object>> specs) {
+        if (specs.isEmpty()) return new ArrayList<>();
+        List<String> cols = new ArrayList<>();
+        for (String k : specs.get(0).keySet()) if (!"规格项".equals(k)) cols.add(k);
+        return cols;
+    }
+
+    private void buildMain(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("立项申请书");
+        int R = 0;
+        cell(s, R++, 0, "销售需求立项申请书    2025.11版");
+        R++;
+        cell(s, R++, 0, "一、基本信息（项目经理填写）");
+        R = kv(s, R, "1. 项目编号", g(r, ProjectInitiation::getProjectNo));
+        R = kv(s, R, "2. 项目类型", g(r, ProjectInitiation::getProjectType));
+        R = kv(s, R, "3. 起始时间", g(r, ProjectInitiation::getStartDate));
+        R = kv(s, R, "4. 项目部门", g(r, ProjectInitiation::getDepartment));
+        R = kv(s, R, "5. 项目主要负责人", g(r, ProjectInitiation::getOwner));
+        R = kv(s, R, "6. 配合人员", g(r, ProjectInitiation::getCooperators));
+        R = kv(s, R, "7. 其他", g(r, ProjectInitiation::getOtherInfo));
+        R++;
+        cell(s, R++, 0, "二、立项目和类型（销售输出填写）");
+        cell(s, R++, 0, "▶ 客户信息");
+        R = kv(s, R, "1. 客户编号", g(r, ProjectInitiation::getCustomerNo));
+        R = kv(s, R, "2. 客户类型", g(r, ProjectInitiation::getCustomerType));
+        R = kv(s, R, "3. 客户等级", g(r, ProjectInitiation::getCustomerLevel));
+        R = kv(s, R, "4. 客户赢率", g(r, ProjectInitiation::getCustomerWinRate));
+        R = kv(s, R, "5. 市场状况", g(r, ProjectInitiation::getMarketStatus));
+        R = kv(s, R, "6. 客户痛点识别", g(r, ProjectInitiation::getCustomerPain));
+        R = kv(s, R, "7. 关键成功要素", g(r, ProjectInitiation::getKeySuccess));
+        R = kv(s, R, "8. 是否有竞争对手", g(r, ProjectInitiation::getHasCompetitor));
+        R = kv(s, R, "10. 客户采购周期", g(r, ProjectInitiation::getPurchaseCycle));
+        R = kv(s, R, "11. 定制开发/转化推广", g(r, ProjectInitiation::getDevType));
+        R++;
+        cell(s, R++, 0, "三、项目信息（销售输出填写）");
+        // 产品规格对比(主表区)
+        List<Map<String, Object>> specs = parseList(r == null ? null : r.getProductSpecs());
+        List<String> cols = productCols(specs);
+        int headerRow = R;
+        cell(s, headerRow, 0, "规格项");
+        for (int j = 0; j < cols.size(); j++) cell(s, headerRow, 1 + j, cols.get(j));
+        R++;
+        if (specs.isEmpty()) {
+            cell(s, R++, 0, "产品型号");
+            cell(s, R++, 0, "产品名称");
+            cell(s, R++, 0, "功率");
+        } else {
+            for (Map<String, Object> sp : specs) {
+                cell(s, R, 0, sp.get("规格项"));
+                for (int j = 0; j < cols.size(); j++) cell(s, R, 1 + j, sp.get(cols.get(j)));
+                R++;
+            }
+        }
+        R++;
+        cell(s, R++, 0, "▶ 特殊要求（分产品）");
+        List<Map<String, Object>> reqs = parseList(r == null ? null : r.getSpecialReqs());
+        for (Map<String, Object> q : reqs) { cell(s, R, 0, q.get("产品")); cell(s, R, 1, q.get("要求")); R++; }
+        R++;
+        cell(s, R++, 0, "四、可实现性评估（研发填写）");
+        int fh = R;
+        String[] fhead = {"评估大类", "评估项", "评估结果", "关联项", "备注/数值"};
+        for (int j = 0; j < fhead.length; j++) cell(s, fh, j, fhead[j]);
+        R++;
+        for (Map<String, Object> f : parseList(r == null ? null : r.getFeasibility())) {
+            cell(s, R, 0, f.get("类别")); cell(s, R, 1, f.get("评估项")); cell(s, R, 2, f.get("结果"));
+            cell(s, R, 3, f.get("关联项")); cell(s, R, 4, f.get("备注")); R++;
+        }
+        R++;
+        cell(s, R++, 0, "五、立项决议");
+        List<Map<String, Object>> appr = parseList(r == null ? null : r.getApprovalSigns());
+        if (appr.isEmpty()) { cell(s, R, 0, "立项人员"); cell(s, R, 1, "销售总监"); cell(s, R, 2, "研发经理"); cell(s, R, 3, "项目经理"); cell(s, R, 4, "总经理"); R++; }
+        else for (Map<String, Object> a : appr) {
+            cell(s, R, 0, a.get("项目"));
+            List<?> vals = a.get("值") instanceof List<?> l ? l : List.of();
+            for (int j = 0; j < vals.size(); j++) cell(s, R, 1 + j, vals.get(j));
+            R++;
+        }
+        R++;
+        cell(s, R++, 0, "六、销售预测 & 金额汇总");
+        writeForecastRows(s, R, r);
+    }
+
+    private int kv(Sheet s, int R, String k, String v) { cell(s, R, 0, k); cell(s, R, 1, v); return R + 1; }
+
+    @SuppressWarnings("unchecked")
+    private int writeForecastRows(Sheet s, int R, ProjectInitiation r) {
+        Map<String, Object> sf = new LinkedHashMap<>();
+        if (r != null && r.getSalesForecast() != null && !r.getSalesForecast().isBlank()) {
+            try { sf = json.readValue(r.getSalesForecast(), Map.class); } catch (Exception ignore) {}
+        }
+        List<String> cols = (List<String>) sf.getOrDefault("cols", new ArrayList<>());
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) sf.getOrDefault("rows", new ArrayList<>());
+        int h = R;
+        cell(s, h, 0, "时间周期");
+        for (int j = 0; j < cols.size(); j++) cell(s, h, 1 + j, cols.get(j));
+        R++;
+        if (rows.isEmpty()) { cell(s, R, 0, "6个月"); R++; cell(s, R, 0, "1年"); R++; }
+        else for (Map<String, Object> fr : rows) {
+            cell(s, R, 0, fr.get("周期"));
+            for (int j = 0; j < cols.size(); j++) cell(s, R, 1 + j, fr.get(cols.get(j)));
+            R++;
+        }
+        List<Map<String, Object>> extra = (List<Map<String, Object>>) sf.getOrDefault("extra", new ArrayList<>());
+        for (Map<String, Object> ex : extra) {
+            cell(s, R, 0, ex.get("项目"));
+            List<?> vals = ex.get("值") instanceof List<?> l ? l : List.of();
+            for (int j = 0; j < vals.size(); j++) cell(s, R, 1 + j, vals.get(j));
+            R++;
+        }
+        return R;
+    }
+
+    private void buildBasic(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("子表-基本信息");
+        int R = 0;
+        cell(s, R++, 0, "基本信息快照");
+        R++;
+        R = kv(s, R, "项目编号", g(r, ProjectInitiation::getProjectNo));
+        R = kv(s, R, "项目类型", g(r, ProjectInitiation::getProjectType));
+        R = kv(s, R, "起始时间", g(r, ProjectInitiation::getStartDate));
+        R = kv(s, R, "项目部门", g(r, ProjectInitiation::getDepartment));
+        R = kv(s, R, "客户编号", g(r, ProjectInitiation::getCustomerNo));
+        R = kv(s, R, "客户类型", g(r, ProjectInitiation::getCustomerType));
+        R = kv(s, R, "客户等级", g(r, ProjectInitiation::getCustomerLevel));
+        R = kv(s, R, "客户赢率", g(r, ProjectInitiation::getCustomerWinRate));
+        R = kv(s, R, "市场状况", g(r, ProjectInitiation::getMarketStatus));
+        R = kv(s, R, "客户痛点", g(r, ProjectInitiation::getCustomerPain));
+        R = kv(s, R, "关键成功要素", g(r, ProjectInitiation::getKeySuccess));
+        R = kv(s, R, "竞争对手", g(r, ProjectInitiation::getHasCompetitor));
+        R = kv(s, R, "采购周期", g(r, ProjectInitiation::getPurchaseCycle));
+        kv(s, R, "定制开发", g(r, ProjectInitiation::getDevType));
+    }
+
+    private void buildSpec(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("子表-产品规格对比");
+        int R = 0;
+        cell(s, R++, 0, "产品规格对比表");
+        List<Map<String, Object>> specs = parseList(r == null ? null : r.getProductSpecs());
+        List<String> cols = productCols(specs);
+        cell(s, R, 0, "规格项");
+        for (int j = 0; j < cols.size(); j++) cell(s, R, 1 + j, cols.get(j));
+        R++;
+        if (specs.isEmpty()) {
+            String[] demo = {"产品型号", "产品名称", "功率", "产品尺寸", "输入电压", "色温", "光通量/光效", "光源", "灯壳", "防水等级", "包装要求", "认证要求", "目标价格(元)", "数量", "合计金额(元)", "样品数量", "询价单号"};
+            for (String d : demo) cell(s, R++, 0, d);
+        } else for (Map<String, Object> sp : specs) {
+            cell(s, R, 0, sp.get("规格项"));
+            for (int j = 0; j < cols.size(); j++) cell(s, R, 1 + j, sp.get(cols.get(j)));
+            R++;
+        }
+    }
+
+    private void buildFeas(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("子表-可实现性评估");
+        int R = 0;
+        cell(s, R++, 0, "可实现性评估");
+        String[] fhead = {"评估大类", "评估项", "评估结果", "关联项", "备注/数值"};
+        for (int j = 0; j < fhead.length; j++) cell(s, R, j, fhead[j]);
+        R++;
+        List<Map<String, Object>> feas = parseList(r == null ? null : r.getFeasibility());
+        if (feas.isEmpty()) {
+            String[][] demo = {{"设计标准", "是否有设计标准"}, {"测试标准", "是否有测试标准"}, {"测试报告", "是否有现成测试报告模板"}, {"工艺标准", "是否有现成工艺标准"}, {"包装评估", "现成包装是否满足"}, {"竞品评估", "是否有竞品"}, {"硬件评估", "能否实现"}};
+            for (String[] d : demo) { cell(s, R, 0, d[0]); cell(s, R, 1, d[1]); R++; }
+        } else for (Map<String, Object> f : feas) {
+            cell(s, R, 0, f.get("类别")); cell(s, R, 1, f.get("评估项")); cell(s, R, 2, f.get("结果"));
+            cell(s, R, 3, f.get("关联项")); cell(s, R, 4, f.get("备注")); R++;
+        }
+    }
+
+    private void buildForecast(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("子表-销售预测");
+        int R = 0;
+        cell(s, R++, 0, "销售预测 & 金额汇总");
+        writeForecastRows(s, R, r);
+    }
+
+    private void buildReqs(XSSFWorkbook wb, ProjectInitiation r) {
+        Sheet s = wb.createSheet("子表-特殊要求");
+        int R = 0;
+        cell(s, R++, 0, "各产品特殊要求");
+        R++;
+        List<Map<String, Object>> reqs = parseList(r == null ? null : r.getSpecialReqs());
+        if (reqs.isEmpty()) { cell(s, R, 0, "产品特殊要求"); cell(s, R, 1, ""); }
+        else for (Map<String, Object> q : reqs) { cell(s, R, 0, q.get("产品")); cell(s, R, 1, q.get("要求")); R++; }
     }
 }

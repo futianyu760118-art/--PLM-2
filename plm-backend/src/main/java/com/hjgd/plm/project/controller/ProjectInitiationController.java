@@ -34,11 +34,21 @@ public class ProjectInitiationController {
         return Result.success(importService.importStructured(file));
     }
 
-    @Operation(summary = "下载立项申请书导入模板")
+    @Operation(summary = "下载立项申请书导入模板(合并版同版式)")
     @GetMapping("/import-template")
     public void importTemplate(HttpServletResponse response) throws Exception {
         byte[] bytes = importService.template();
-        String name = URLEncoder.encode("立项申请书导入模板.xlsx", StandardCharsets.UTF_8);
+        String name = URLEncoder.encode("立项申请书_合并版模板.xlsx", StandardCharsets.UTF_8);
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + name);
+        try (OutputStream os = response.getOutputStream()) { os.write(bytes); }
+    }
+
+    @Operation(summary = "导出立项申请书(合并版同版式)")
+    @GetMapping("/{id}/export-structured")
+    public void exportStructured(@PathVariable Long id, HttpServletResponse response) throws Exception {
+        byte[] bytes = importService.exportStructured(id);
+        String name = URLEncoder.encode("立项申请书_" + id + ".xlsx", StandardCharsets.UTF_8);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + name);
         try (OutputStream os = response.getOutputStream()) { os.write(bytes); }
