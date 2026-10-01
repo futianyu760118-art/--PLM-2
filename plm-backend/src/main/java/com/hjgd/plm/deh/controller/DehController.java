@@ -160,7 +160,7 @@ public class DehController {
                 req.source(), req.content(), req.version(), req.rollbackRef())));
     }
 
-    @Operation(summary = "发布学习（三门槛：独立验证/无退化越权/可回退）")
+    @Operation(summary = "发布学习（三门槛：独立验证/无收益退化越权/可回退）")
     @OperationLog(value = "DEH 发布学习")
     @PostMapping("/learnings/{learningId}/publish")
     public Result<Learning> publishLearning(@PathVariable String learningId,

@@ -23,8 +23,8 @@ import java.util.UUID;
  * <p>发布门槛（三项全过才允许 published）：
  * <ol>
  *   <li><b>独立验证</b>：{@code verifiedBy} 非空且 ≠ 产出人；</li>
- *   <li><b>无退化/越权</b>：收益判定不得为 {@code degraded}（比原来更差）
- *       或 {@code overreach}（超出授权范围）；</li>
+ *   <li><b>无收益/退化/越权</b>：收益判定不得为 {@code no_benefit}（无收益）、
+ *       {@code degraded}（比原来更差）或 {@code overreach}（超出授权范围）；</li>
  *   <li><b>可版本化回退</b>：必须有 {@code rollbackRef} —— 不可回退的经验不得发布。</li>
  * </ol>
  *
@@ -40,8 +40,9 @@ public class LearningService {
     public static final List<String> BENEFIT_VERDICTS =
             List.of("improved", "neutral", "no_benefit", "degraded", "overreach");
 
-    /** 不予发布的判定（无收益可留档观察，退化与越权必须挡住）。 */
-    private static final List<String> BLOCKING_VERDICTS = List.of("degraded", "overreach");
+    /** 不予发布的判定：无收益、退化、越权三者一律不得发布（需求 PAND-51 §5.2 F16 / 架构 V0.1 §3.7）。 */
+    private static final List<String> BLOCKING_VERDICTS =
+            List.of("no_benefit", "degraded", "overreach");
 
     private final LearningMapper learningMapper;
 
@@ -81,7 +82,7 @@ public class LearningService {
     /**
      * 发布：三门槛校验，任一不过则拒绝并给出未过项。
      *
-     * @throws BusinessException 独立验证缺失 / 判定为退化或越权 / 无回退引用
+     * @throws BusinessException 独立验证缺失 / 判定为无收益或退化或越权 / 无回退引用
      */
     @Transactional
     public Learning publish(String learningId, PublishCommand cmd) {

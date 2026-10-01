@@ -25,7 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * F16 学习发布门槛：独立验证 + 无退化/越权 + 可版本化回退，三者缺一不得发布。
+ * F16 学习发布门槛：独立验证 + 无收益/退化/越权 + 可版本化回退，三者缺一不得发布。
  */
 @DisplayName("F16 DEH 学习发布门槛")
 @ExtendWith(MockitoExtension.class)
@@ -138,13 +138,28 @@ class LearningServiceTest {
     }
 
     @Test
-    @DisplayName("无收益可留档观察，不按退化处理")
-    void noBenefitIsNotBlocking() {
+    @DisplayName("no_benefit → 不得发布（无收益与退化/越权同列阻断项，PAND-154 R-1）")
+    void noBenefitIsBlocking() {
+        loginAs("品保");
+        when(learningMapper.selectById("LRN-1")).thenReturn(learning("LRN-1", "draft", "架构师", "learn-v0"));
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                service.publish("LRN-1", new LearningService.PublishCommand("品保", "no_benefit", null)));
+        assertEquals(409, ex.getCode());
+        assertTrue(ex.getMessage().contains("LEARNING_NOT_PUBLISHABLE"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("no_benefit"), ex.getMessage());
+        verify(learningMapper, never()).updateById(any());
+    }
+
+    @Test
+    @DisplayName("判定为 neutral → 照常发布（中性不等于无收益）")
+    void neutralVerdictPublishes() {
         loginAs("品保");
         when(learningMapper.selectById("LRN-1")).thenReturn(learning("LRN-1", "draft", "架构师", "learn-v0"));
 
         Learning l = service.publish("LRN-1",
-                new LearningService.PublishCommand("品保", "no_benefit", null));
+                new LearningService.PublishCommand("品保", "neutral", null));
+
         assertEquals("published", l.getStatus());
     }
 
