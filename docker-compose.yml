@@ -54,6 +54,7 @@ services:
       - ./database/31_basebom_specs.sql:/docker-entrypoint-initdb.d/31_basebom_specs.sql:ro
       - ./database/32_aeos_envelope.sql:/docker-entrypoint-initdb.d/32_aeos_envelope.sql:ro
       - ./database/33_feedback.sql:/docker-entrypoint-initdb.d/33_feedback.sql:ro
+      - ./database/34_feedback_transition.sql:/docker-entrypoint-initdb.d/34_feedback_transition.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

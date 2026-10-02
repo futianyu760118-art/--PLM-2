@@ -24,4 +24,12 @@ public @interface OperationLog {
      * 文件版本SpEL表达式
      */
     String fileVersion() default "";
+
+    /**
+     * 入参摘要SpEL表达式。默认留空时取 args[0] 的 JSON, 这只适合「首个入参就是业务主体」的接口;
+     * 形如 {@code @PostMapping("/{id}/xxx")}(Long id, XxxDTO dto) 的接口, args[0] 只是路径变量,
+     * 留空会把日志记成无意义的 "1"。此类接口须显式给出表达式, 例如
+     * {@code params = "'targetStatus=' + (#dto.targetStatus ?: '')"}。
+     */
+    String params() default "";
 }

@@ -11,9 +11,12 @@ import com.hjgd.plm.feedback.dto.FeedbackQueryDTO;
 import com.hjgd.plm.feedback.dto.FeedbackReceiptVO;
 import com.hjgd.plm.feedback.dto.FeedbackSubmitDTO;
 import com.hjgd.plm.feedback.dto.FeedbackTransitionDTO;
+import com.hjgd.plm.feedback.dto.FeedbackTransitionVO;
 import com.hjgd.plm.feedback.dto.FeedbackVO;
 import com.hjgd.plm.feedback.entity.Feedback;
+import com.hjgd.plm.feedback.entity.FeedbackTransition;
 import com.hjgd.plm.feedback.mapper.FeedbackMapper;
+import com.hjgd.plm.feedback.mapper.FeedbackTransitionMapper;
 import com.hjgd.plm.feedback.service.FeedbackService;
 import com.hjgd.plm.system.entity.SysUser;
 import com.hjgd.plm.system.mapper.SysUserMapper;
@@ -55,6 +58,7 @@ public class FeedbackServiceImpl implements FeedbackService {
             FeedbackConstants.STATUS_RETURNED, "已退回");
 
     private final FeedbackMapper feedbackMapper;
+    private final FeedbackTransitionMapper feedbackTransitionMapper;
     private final SysUserMapper sysUserMapper;
     private final SequenceService sequenceService;
     private final StringRedisTemplate stringRedisTemplate;
@@ -97,6 +101,9 @@ public class FeedbackServiceImpl implements FeedbackService {
             releaseDedupLock(dedupKey);
             throw e;
         }
+        // AC F16a: 提交即时间线起点, 与后续流转记录拼成完整状态变更记录
+        appendTransition(entity.getId(), null, FeedbackConstants.STATUS_PENDING,
+                FeedbackConstants.NOTE_SUBMITTED, null, submitterId);
         return new FeedbackReceiptVO(entity.getFeedbackNo(), entity.getCreatedAt());
     }
 
@@ -109,7 +116,9 @@ public class FeedbackServiceImpl implements FeedbackService {
             // 非本人且非总控时按不存在处理,避免泄露他人反馈是否存在
             throw new BusinessException(ResultCode.NOT_FOUND, "反馈编号不存在");
         }
-        return toVO(fb, manage);
+        FeedbackVO vo = toVO(fb, manage);
+        vo.setTransitions(timeline(fb.getId()));
+        return vo;
     }
 
     @Override
@@ -161,14 +170,52 @@ public class FeedbackServiceImpl implements FeedbackService {
             throw new BusinessException(ResultCode.PARAM_ERROR, "立项流转必须回填立项 issue 编号");
         }
 
+        String fromStatus = fb.getStatus();
+        Long operatorId = SecurityUtils.getCurrentUserId();
         fb.setStatus(target);
         fb.setEvaluateNote(note);
         if (FeedbackConstants.STATUS_INITIATED.equals(target)) {
             fb.setRelatedIssueNo(relatedIssueNo);
         }
-        fb.setEvaluatedBy(SecurityUtils.getCurrentUserId());
+        fb.setEvaluatedBy(operatorId);
         fb.setEvaluatedAt(LocalDateTime.now());
         feedbackMapper.updateById(fb);
+
+        // AC F16a: 追加流转向, plm_feedback 上的快照仍只表示「最新一次」, 历史以本表为准
+        appendTransition(fb.getId(), fromStatus, target, note,
+                FeedbackConstants.STATUS_INITIATED.equals(target) ? relatedIssueNo : null, operatorId);
+    }
+
+    /** 追加一条流转历史。只增不改, 故不提供更新/删除。 */
+    private void appendTransition(Long feedbackId, String fromStatus, String toStatus,
+                                  String note, String relatedIssueNo, Long operatorId) {
+        FeedbackTransition t = new FeedbackTransition();
+        t.setFeedbackId(feedbackId);
+        t.setFromStatus(fromStatus);
+        t.setToStatus(toStatus);
+        t.setNote(note);
+        t.setRelatedIssueNo(relatedIssueNo);
+        t.setOperatorId(operatorId);
+        feedbackTransitionMapper.insert(t);
+    }
+
+    /** 读完整状态变更记录, 按发生时间正序(同一时间戳按自增 id 兜底)。 */
+    private List<FeedbackTransitionVO> timeline(Long feedbackId) {
+        List<FeedbackTransition> rows = feedbackTransitionMapper.selectList(
+                new LambdaQueryWrapper<FeedbackTransition>()
+                        .eq(FeedbackTransition::getFeedbackId, feedbackId)
+                        .orderByAsc(FeedbackTransition::getCreatedAt)
+                        .orderByAsc(FeedbackTransition::getId));
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, String> names = realNames(rows.stream().map(FeedbackTransition::getOperatorId).toList());
+        return rows.stream().map(t -> {
+            FeedbackTransitionVO vo = new FeedbackTransitionVO();
+            BeanUtils.copyProperties(t, vo);
+            vo.setOperatorName(t.getOperatorId() == null ? null : names.get(t.getOperatorId()));
+            return vo;
+        }).toList();
     }
 
     /** AC F8:一次性收集全部字段错误后统一抛出,避免用户逐个试错 */

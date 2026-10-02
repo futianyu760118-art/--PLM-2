@@ -38,8 +38,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="提交时间" width="160" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{row}">
+            <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
             <el-button link type="primary" size="small" :disabled="isTerminal(row.status)"
               @click="openTransition(row)">流转</el-button>
           </template>
@@ -74,9 +75,37 @@
             placeholder="评估结论；退回时须写明不满足的条款编号与原因" />
         </el-form-item>
       </el-form>
+
+      <el-divider content-position="left">状态流转记录</el-divider>
+      <FeedbackTimeline v-loading="dialog.timelineLoading" :items="timeline" />
+
       <template #footer>
         <el-button @click="dialog.visible = false">取消</el-button>
         <el-button type="primary" :loading="dialog.submitting" @click="submitTransition">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="detail.visible" title="反馈详情" width="680px">
+      <el-descriptions v-if="detail.row" :column="2" border size="small">
+        <el-descriptions-item label="反馈编号">{{ detail.row.feedbackNo }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="statusTagType(detail.row.status)" size="small">{{ statusLabel(detail.row.status) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="类型">{{ typeLabel(detail.row.type) }}</el-descriptions-item>
+        <el-descriptions-item label="提交人">{{ detail.row.submitterName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="提交时间">{{ detail.row.createdAt }}</el-descriptions-item>
+        <el-descriptions-item label="联系方式">{{ detail.row.contact || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="来源页面" :span="2">{{ detail.row.pagePath }}</el-descriptions-item>
+        <el-descriptions-item label="反馈内容" :span="2">{{ detail.row.content }}</el-descriptions-item>
+        <el-descriptions-item label="期望结果" :span="2">{{ detail.row.expectedResult || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="关联 issue" :span="2">{{ detail.row.relatedIssueNo || '-' }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-divider content-position="left">状态流转记录</el-divider>
+      <FeedbackTimeline v-loading="detail.timelineLoading" :items="detail.transitions" />
+
+      <template #footer>
+        <el-button @click="detail.visible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -85,7 +114,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { pageFeedback, transitionFeedback } from '@/api/feedback'
+import { pageFeedback, transitionFeedback, getFeedbackByNo } from '@/api/feedback'
+import FeedbackTimeline from '@/components/feedback/FeedbackTimeline.vue'
 
 const TYPES = [
   { value: 'BUG', label: '缺陷' },
@@ -112,7 +142,9 @@ const total = ref(0)
 const dateRange = ref([])
 const query = reactive({ pageNum: 1, pageSize: 20, status: '', type: '' })
 
-const dialog = reactive({ visible: false, row: null, submitting: false })
+const dialog = reactive({ visible: false, row: null, submitting: false, timelineLoading: false })
+const detail = reactive({ visible: false, row: null, timelineLoading: false, transitions: [] })
+const timeline = ref([])
 const transitionForm = reactive({ targetStatus: '', relatedIssueNo: '', note: '' })
 
 const nextStatuses = computed(() =>
@@ -158,12 +190,37 @@ function reset() {
   search()
 }
 
-function openTransition(row) {
+/** 完整状态变更记录(AC F16a)随详情接口返回; 取不到时只降级为无历史, 不阻断流转 */
+async function fetchTransitions(row) {
+  try {
+    const res = await getFeedbackByNo(row.feedbackNo)
+    return res.data.transitions || []
+  } catch {
+    return []
+  }
+}
+
+async function openTransition(row) {
   dialog.row = row
   transitionForm.targetStatus = (TRANSITIONS[row.status] || [])[0] || ''
   transitionForm.relatedIssueNo = row.relatedIssueNo || ''
   transitionForm.note = ''
+  timeline.value = []
+  dialog.timelineLoading = true
   dialog.visible = true
+  const rows = await fetchTransitions(row)
+  timeline.value = rows
+  dialog.timelineLoading = false
+}
+
+async function openDetail(row) {
+  detail.row = row
+  detail.transitions = []
+  detail.timelineLoading = true
+  detail.visible = true
+  const rows = await fetchTransitions(row)
+  detail.transitions = rows
+  detail.timelineLoading = false
 }
 
 watch(() => transitionForm.targetStatus, (v) => {

@@ -38,4 +38,7 @@ public final class FeedbackConstants {
 
     /** 去重时间窗口(秒),与 AC F11 假设 A5 一致 */
     public static final long DEDUP_WINDOW_SECONDS = 300L;
+
+    /** 流转历史的首行文案(AC F16a: 提交即时间线的起点) */
+    public static final String NOTE_SUBMITTED = "用户提交反馈";
 }

@@ -3,6 +3,7 @@ package com.hjgd.plm.feedback.dto;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 反馈出参视图。submitterName 由 sys_user join 取得(不落身份快照);
@@ -28,4 +29,9 @@ public class FeedbackVO {
     private LocalDateTime evaluatedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /**
+     * 完整状态变更记录(AC F16a), 按时间正序。仅在详情查询(getByNo)时装载;
+     * 列表查询为控制开销不装载此字段。
+     */
+    private List<FeedbackTransitionVO> transitions;
 }

@@ -12,7 +12,7 @@ public interface FeedbackService {
     /** 唯一提交入口:校验 → 去重 → 编号 → 落库,返回回执 */
     FeedbackReceiptVO submit(FeedbackSubmitDTO dto);
 
-    /** 凭反馈编号查询状态(本人 或 总控) */
+    /** 凭反馈编号查询状态(本人 或 总控), 返回体含完整状态变更记录(AC F16a) */
     FeedbackVO getByNo(String feedbackNo);
 
     /** 总控分页查询 */

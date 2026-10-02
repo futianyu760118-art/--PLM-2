@@ -46,8 +46,16 @@ public class FeedbackController {
         return Result.success(feedbackService.page(query));
     }
 
+    /**
+     * 操作日志须记录这次流转「流到哪、为什么」: 该接口首个入参是路径变量 id,
+     * 默认取 args[0] 只会留下无意义的 "1", 无法还原变更轨迹(AC F16a)。
+     * note 不含联系方式的隐私问题, 但它可能很长, 故截断到 500 字符。
+     */
     @Operation(summary = "总控反馈状态流转")
-    @OperationLog(value = "反馈状态流转")
+    @OperationLog(value = "反馈状态流转",
+            params = "'id=' + #id + ', targetStatus=' + (#dto.targetStatus ?: '')"
+                    + " + ', relatedIssueNo=' + (#dto.relatedIssueNo ?: '')"
+                    + " + ', note=' + (#dto.note != null && #dto.note.length() > 500 ? #dto.note.substring(0, 500) : (#dto.note ?: ''))")
     @PreAuthorize("hasAuthority('feedback:manage')")
     @PostMapping("/{id}/transition")
     public Result<Void> transition(@PathVariable Long id, @RequestBody FeedbackTransitionDTO dto) {

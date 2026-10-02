@@ -11,7 +11,9 @@ import com.hjgd.plm.feedback.dto.FeedbackSubmitDTO;
 import com.hjgd.plm.feedback.dto.FeedbackTransitionDTO;
 import com.hjgd.plm.feedback.dto.FeedbackVO;
 import com.hjgd.plm.feedback.entity.Feedback;
+import com.hjgd.plm.feedback.entity.FeedbackTransition;
 import com.hjgd.plm.feedback.mapper.FeedbackMapper;
+import com.hjgd.plm.feedback.mapper.FeedbackTransitionMapper;
 import com.hjgd.plm.feedback.service.impl.FeedbackServiceImpl;
 import com.hjgd.plm.system.entity.SysUser;
 import com.hjgd.plm.system.mapper.SysUserMapper;
@@ -46,6 +48,7 @@ class FeedbackServiceTest {
     private static final String NO = "FB-20260930-0001";
 
     @Mock private FeedbackMapper feedbackMapper;
+    @Mock private FeedbackTransitionMapper feedbackTransitionMapper;
     @Mock private SysUserMapper sysUserMapper;
     @Mock private SequenceService sequenceService;
     @Mock private StringRedisTemplate stringRedisTemplate;
@@ -56,8 +59,9 @@ class FeedbackServiceTest {
     /** 单元测试无 MyBatis 上下文,需手动注册实体元数据,否则 LambdaQueryWrapper 无法解析列名 */
     @BeforeAll
     static void initTableInfo() {
-        TableInfoHelper.initTableInfo(
-                new MapperBuilderAssistant(new MybatisConfiguration(), ""), Feedback.class);
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "");
+        TableInfoHelper.initTableInfo(assistant, Feedback.class);
+        TableInfoHelper.initTableInfo(assistant, FeedbackTransition.class);
     }
 
     @BeforeEach
@@ -74,6 +78,7 @@ class FeedbackServiceTest {
             f.setCreatedAt(LocalDateTime.now());
             return 1;
         });
+        when(feedbackTransitionMapper.selectList(any())).thenReturn(List.of());
     }
 
     @AfterEach
@@ -418,6 +423,134 @@ class FeedbackServiceTest {
             ArgumentCaptor<Feedback> captor = ArgumentCaptor.forClass(Feedback.class);
             verify(feedbackMapper).insert(captor.capture());
             assertEquals(0, captor.getValue().getDeleted());
+        }
+    }
+
+    // ---------- F16a 完整状态变更记录 ----------
+
+    @Nested
+    @DisplayName("状态变更记录")
+    class TransitionHistory {
+
+        private FeedbackTransitionDTO target(String status) {
+            FeedbackTransitionDTO d = new FeedbackTransitionDTO();
+            d.setTargetStatus(status);
+            d.setNote("对照 E1-E5 的评估说明");
+            return d;
+        }
+
+        private Feedback feedback(Long submitterId) {
+            Feedback f = new Feedback();
+            f.setId(1L);
+            f.setFeedbackNo(NO);
+            f.setSubmitterId(submitterId);
+            return f;
+        }
+
+        @Test
+        @DisplayName("F16a 提交即写入时间线起点记录")
+        void submitAppendsInitialEntry() {
+            feedbackService.submit(dto("BUG", content(10), null));
+
+            ArgumentCaptor<FeedbackTransition> captor = ArgumentCaptor.forClass(FeedbackTransition.class);
+            verify(feedbackTransitionMapper).insert(captor.capture());
+            FeedbackTransition row = captor.getValue();
+            assertEquals(100L, row.getFeedbackId());
+            assertNull(row.getFromStatus());
+            assertEquals(FeedbackConstants.STATUS_PENDING, row.getToStatus());
+            assertEquals(FeedbackConstants.NOTE_SUBMITTED, row.getNote());
+            assertEquals(1L, row.getOperatorId());
+        }
+
+        @Test
+        @DisplayName("F16a 多步流转逐次追加, 后一步不覆盖前一步")
+        void keepsEveryStepAcrossTransitions() {
+            Feedback row = feedback(1L);
+            row.setStatus(FeedbackConstants.STATUS_PENDING);
+            when(feedbackMapper.selectById(1L)).thenReturn(row);
+
+            feedbackService.transition(1L, target(FeedbackConstants.STATUS_EVALUATING));
+            FeedbackTransitionDTO toInitiated = target(FeedbackConstants.STATUS_INITIATED);
+            toInitiated.setRelatedIssueNo("PAND-999");
+            feedbackService.transition(1L, toInitiated);
+
+            ArgumentCaptor<FeedbackTransition> captor = ArgumentCaptor.forClass(FeedbackTransition.class);
+            verify(feedbackTransitionMapper, times(2)).insert(captor.capture());
+            List<FeedbackTransition> rows = captor.getAllValues();
+
+            assertEquals(FeedbackConstants.STATUS_PENDING, rows.get(0).getFromStatus());
+            assertEquals(FeedbackConstants.STATUS_EVALUATING, rows.get(0).getToStatus());
+            assertNull(rows.get(0).getRelatedIssueNo());
+            // 第一步的结论仍在, 未被第二步覆盖
+            assertEquals("对照 E1-E5 的评估说明", rows.get(0).getNote());
+
+            assertEquals(FeedbackConstants.STATUS_EVALUATING, rows.get(1).getFromStatus());
+            assertEquals(FeedbackConstants.STATUS_INITIATED, rows.get(1).getToStatus());
+            assertEquals("PAND-999", rows.get(1).getRelatedIssueNo());
+            assertEquals(1L, rows.get(1).getOperatorId());
+        }
+
+        @Test
+        @DisplayName("F16a 退回流转记录退回原因, 且不带立项编号")
+        void returnedEntryCarriesReason() {
+            Feedback row = feedback(1L);
+            row.setStatus(FeedbackConstants.STATUS_EVALUATING);
+            when(feedbackMapper.selectById(1L)).thenReturn(row);
+
+            FeedbackTransitionDTO d = target(FeedbackConstants.STATUS_RETURNED);
+            d.setNote("不满足 E3: 与既有能力池重复, 且无 Owner");
+            feedbackService.transition(1L, d);
+
+            ArgumentCaptor<FeedbackTransition> captor = ArgumentCaptor.forClass(FeedbackTransition.class);
+            verify(feedbackTransitionMapper).insert(captor.capture());
+            FeedbackTransition saved = captor.getValue();
+            assertEquals(FeedbackConstants.STATUS_RETURNED, saved.getToStatus());
+            assertEquals("不满足 E3: 与既有能力池重复, 且无 Owner", saved.getNote());
+            assertNull(saved.getRelatedIssueNo());
+        }
+
+        @Test
+        @DisplayName("F16a 详情按时间正序返回完整时间线并带操作方姓名")
+        void detailCarriesOrderedTimelineWithOperatorName() {
+            when(feedbackMapper.selectOne(any())).thenReturn(feedback(1L));
+
+            FeedbackTransition first = new FeedbackTransition();
+            first.setId(11L);
+            first.setFeedbackId(1L);
+            first.setToStatus(FeedbackConstants.STATUS_PENDING);
+            first.setNote(FeedbackConstants.NOTE_SUBMITTED);
+            first.setOperatorId(1L);
+            first.setCreatedAt(LocalDateTime.now().minusHours(3));
+            FeedbackTransition second = new FeedbackTransition();
+            second.setId(12L);
+            second.setFeedbackId(1L);
+            second.setFromStatus(FeedbackConstants.STATUS_PENDING);
+            second.setToStatus(FeedbackConstants.STATUS_EVALUATING);
+            second.setNote("评估中");
+            second.setOperatorId(2L);
+            second.setCreatedAt(LocalDateTime.now());
+            when(feedbackTransitionMapper.selectList(any())).thenReturn(List.of(first, second));
+
+            SysUser manager = new SysUser();
+            manager.setId(2L);
+            manager.setRealName("总控甲");
+            when(sysUserMapper.selectBatchIds(any())).thenReturn(List.of(manager));
+
+            FeedbackVO vo = feedbackService.getByNo(NO);
+
+            assertEquals(2, vo.getTransitions().size());
+            assertEquals(FeedbackConstants.STATUS_PENDING, vo.getTransitions().get(0).getToStatus());
+            assertEquals(FeedbackConstants.STATUS_EVALUATING, vo.getTransitions().get(1).getToStatus());
+            assertEquals("总控甲", vo.getTransitions().get(1).getOperatorName());
+            assertEquals("评估中", vo.getTransitions().get(1).getNote());
+        }
+
+        @Test
+        @DisplayName("F16a 无流转记录时返回空时间线而非 null")
+        void emptyTimelineIsEmptyList() {
+            when(feedbackMapper.selectOne(any())).thenReturn(feedback(1L));
+
+            assertTrue(feedbackService.getByNo(NO).getTransitions().isEmpty());
         }
     }
 }

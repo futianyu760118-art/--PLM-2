@@ -45,7 +45,7 @@ public class OperationLogAspect {
         try {
             fillOperator(record);
             fillRequest(record);
-            record.setParams(buildParams(joinPoint));
+            record.setParams(buildParams(joinPoint, operationLog));
             fillSpel(record, joinPoint, operationLog);
         } catch (Exception e) {
             log.warn("操作日志预处理失败", e);
@@ -93,17 +93,7 @@ public class OperationLogAspect {
     }
 
     private void fillSpel(SysOperationLog record, ProceedingJoinPoint joinPoint, OperationLog ann) {
-        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-        Method method = signature.getMethod();
-        Object[] args = joinPoint.getArgs();
-        String[] paramNames = discoverer.getParameterNames(method);
-        if (paramNames == null) {
-            return;
-        }
-        EvaluationContext ctx = new StandardEvaluationContext();
-        for (int i = 0; i < paramNames.length && i < args.length; i++) {
-            ctx.setVariable(paramNames[i], args[i]);
-        }
+        EvaluationContext ctx = buildContext(joinPoint);
         try {
             if (!ann.partNo().isEmpty()) {
                 Expression exp = parser.parseExpression(ann.partNo());
@@ -124,7 +114,37 @@ public class OperationLogAspect {
         }
     }
 
-    private String buildParams(ProceedingJoinPoint joinPoint) {
+    /** 把方法入参按参数名注册为 SpEL 变量, 供 partNo/fileVersion/params 三类表达式取用 */
+    private EvaluationContext buildContext(ProceedingJoinPoint joinPoint) {
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        Object[] args = joinPoint.getArgs();
+        String[] paramNames = discoverer.getParameterNames(method);
+        EvaluationContext ctx = new StandardEvaluationContext();
+        if (paramNames != null) {
+            for (int i = 0; i < paramNames.length && i < args.length; i++) {
+                ctx.setVariable(paramNames[i], args[i]);
+            }
+        }
+        return ctx;
+    }
+
+    /**
+     * 记录入参摘要。注解显式给出 params 表达式时按表达式求值 —— 用于 args[0] 只是路径变量、
+     * 或首个入参含隐私字段的场景; 否则维持取 args[0] 的既有行为。
+     */
+    private String buildParams(ProceedingJoinPoint joinPoint, OperationLog ann) {
+        if (!ann.params().isEmpty()) {
+            try {
+                Object val = parser.parseExpression(ann.params()).getValue(buildContext(joinPoint));
+                if (val != null) {
+                    return val.toString();
+                }
+            } catch (Exception e) {
+                log.debug("操作日志 params SpEL解析失败: {}", e.getMessage());
+            }
+            return null;
+        }
         try {
             MethodSignature signature = (MethodSignature) joinPoint.getSignature();
             Object[] args = joinPoint.getArgs();
