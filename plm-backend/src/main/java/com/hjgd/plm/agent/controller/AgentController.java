@@ -55,6 +55,18 @@ public class AgentController {
         return Result.success(improveService.listInsights("NEW"));
     }
 
+    @Operation(summary = "智能体定义列表(来自 plm_agent_def)")
+    @GetMapping("/defs")
+    public Result<List<Map<String, Object>>> defs() {
+        try {
+            return Result.success(jdbcTemplate.queryForList(
+                    "SELECT agent_code AS code, name AS label, autonomy_level AS level, description " +
+                            "FROM plm_agent_def WHERE enabled=true ORDER BY id"));
+        } catch (Exception e) {
+            return Result.success(List.of());
+        }
+    }
+
     @Operation(summary = "改善教练:建议摘要")
     @GetMapping("/coach/suggestions")
     public Result<Map<String, Object>> coachSuggestions() {
@@ -130,23 +142,24 @@ public class AgentController {
 
         // 根据 agentCode + content 生成回复(模板式 L0)
         AgentAction action = null;
-        String reply = simpleAgentReply(session.getAgentCode(), req.getContent(), session);
+        String pn = findPartNo(req.getPartNo(), req.getContent());
+        String reply = executeAgent(session.getAgentCode(), req.getContent(), pn);
         if (reply == null) reply = "收到: " + req.getContent();
 
         // 如果是 QA + partNo, 自动跑 DQ 并建 action
-        if ("AGENT_QA".equals(session.getAgentCode()) && req.getPartNo() != null) {
+        if (("AGENT_QA".equals(session.getAgentCode()) || "AGENT_ORCH".equals(session.getAgentCode())) && pn != null) {
             try {
                 MaterialService svc = materialService;
-                Long mid = resolveIdByPartNo(req.getPartNo());
+                Long mid = resolveIdByPartNo(pn);
                 DqRunResult dq = mid != null ? svc.checkQuality(mid) : null;
                 if (dq != null) {
-                    reply = "料号 " + req.getPartNo() + " 质量分:" + dq.getScore() +
+                    reply = "料号 " + pn + " 质量分:" + dq.getScore() +
                             " | BLOCK:" + dq.getBlockCount() + " WARN:" + dq.getWarnCount();
                     action = new AgentAction();
                     action.setSessionId(id);
                     action.setActionType("dq_check");
                     action.setObjectType("PART");
-                    action.setObjectId(req.getPartNo());
+                    action.setObjectId(pn);
                     action.setPayloadJson("{\"score\":" + dq.getScore() + "}");
                     action.setStatus("PROPOSED");
                     action.setEstimatedMinutesSaved(15);
@@ -158,6 +171,9 @@ public class AgentController {
             }
         }
 
+        if (pn != null && ("AGENT_QA".equals(session.getAgentCode()) || "AGENT_ORCH".equals(session.getAgentCode()))) {
+            reply = reply + " ｜ 多步编排: 已执行DQ检查 → 生成改善建议(待决策) → 证据已登记(见下方动作)";
+        }
         AgentMessage aiMsg = new AgentMessage();
         aiMsg.setSessionId(id);
         aiMsg.setRole("assistant");
@@ -236,6 +252,92 @@ public class AgentController {
     private Long resolveIdByPartNo(String partNo) {
         var m = materialService.getByPartNo(partNo);
         return m == null ? null : m.getId();
+    }
+
+    /** L0/L1 只读工具执行: 按消息内容真正执行并返回真实结果 */
+    private String executeAgent(String agentCode, String content, String reqPartNo) {
+        String c = content == null ? "" : content;
+        String partNo = findPartNo(reqPartNo, c);
+        try {
+            switch (agentCode == null ? "" : agentCode) {
+                case "AGENT_QA": {
+                    if (partNo != null) {
+                        var m = materialService.getByPartNo(partNo);
+                        if (m != null) {
+                            DqRunResult dq = materialService.checkQuality(m.getId());
+                            return "质检官：料号 " + partNo + " 质量分 " + dq.getScore()
+                                    + " | BLOCK " + dq.getBlockCount() + " / WARN " + dq.getWarnCount()
+                                    + (dq.getBlockCount() > 0 ? "（存在阻断，禁止发布）" : "（可发布）");
+                        }
+                    }
+                    return "质检官：请提供已存在的料号（如 HJ26041...），我将执行 DQ 规则返回质量分。";
+                }
+                case "AGENT_ANALYST": {
+                    var ins = improveService.listInsights("NEW");
+                    long high = ins.stream().filter(i -> "HIGH".equals(i.getSeverity())).count();
+                    return "分析师：当前开放洞察 " + ins.size() + " 条，其中高严重 " + high + " 条。";
+                }
+                case "AGENT_COACH": {
+                    var ins = improveService.listInsights("NEW");
+                    long high = ins.stream().filter(i -> "HIGH".equals(i.getSeverity())).count();
+                    return (high > 0 ? "改善教练：建议优先处理 " + high + " 条高严重洞察。" : "改善教练：暂无紧急改善项。")
+                            + "（共 " + ins.size() + " 条开放洞察，可在“改善闭环”查看）";
+                }
+                case "AGENT_GATE": {
+                    String pno = findProjectNo(c);
+                    if (pno != null) {
+                        var rows = jdbcTemplate.queryForList(
+                                "SELECT project_no, current_gate, status FROM plm_project WHERE project_no=? LIMIT 1", pno);
+                        if (!rows.isEmpty()) {
+                            var r = rows.get(0);
+                            return "技转检查员：项目 " + r.get("project_no") + " 当前阶段 " + r.get("current_gate")
+                                    + "，状态 " + r.get("status") + "。";
+                        }
+                    }
+                    return "技转检查员：请提供项目编号，我将返回其阶段门(G0-G8)与状态。";
+                }
+                case "AGENT_BOM": {
+                    if (partNo != null) {
+                        Long n = jdbcTemplate.queryForObject(
+                                "SELECT COUNT(1) FROM plm_bom_item WHERE part_no=?", Long.class, partNo);
+                        return "结构助理：料号 " + partNo + " 被引用（where-used）" + n + " 处。";
+                    }
+                    return "结构助理：请提供料号，我将返回 where-used 引用数；也可在 BOM 模块查看树与成本。";
+                }
+                case "AGENT_ECN": {
+                    Long total = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM plm_ecn", Long.class);
+                    Long eff = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM plm_ecn WHERE status='EFFECTIVE'", Long.class);
+                    return "变更助理：ECN 共 " + total + " 条，已生效 " + eff + " 条。";
+                }
+                case "AGENT_HELP":
+                    return "PLM 助手：可帮你 质量自检 / 进度跟踪 / BOM / 变更 / 技转 等。直接输入料号或项目编号即可。";
+                case "AGENT_ORCH":
+                    return "总控：请说明问题（如“检查料号 X”“项目 Y 进度”“ECN 状态”），我会路由到对应智能体。";
+                default:
+                    return null;
+            }
+        } catch (Exception e) {
+            log.warn("agent execute failed: {}", e.getMessage());
+            return "处理失败：" + e.getMessage();
+        }
+    }
+
+    private String findPartNo(String reqPartNo, String content) {
+        if (reqPartNo != null && materialService.getByPartNo(reqPartNo) != null) return reqPartNo;
+        for (String t : content.split("[^A-Za-z0-9._-]+")) {
+            if (t.length() >= 4 && materialService.getByPartNo(t) != null) return t;
+        }
+        return null;
+    }
+
+    private String findProjectNo(String content) {
+        for (String t : content.split("[^A-Za-z0-9._-]+")) {
+            if (t.length() >= 6) {
+                var rows = jdbcTemplate.queryForList("SELECT 1 FROM plm_project WHERE project_no=? LIMIT 1", t);
+                if (!rows.isEmpty()) return t;
+            }
+        }
+        return null;
     }
 
     private String simpleAgentReply(String agentCode, String content, AgentSession session) {

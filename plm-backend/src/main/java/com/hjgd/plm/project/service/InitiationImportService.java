@@ -82,8 +82,11 @@ public class InitiationImportService {
         try (InputStream is = file.getInputStream(); Workbook wb = WorkbookFactory.create(is)) {
             Sheet main = findSheet(wb, "立项申请", "主表", "申请书");
             Sheet basic = findSheet(wb, "基本信息");
-            extractFlat(main != null ? main : basic, r);
+            Sheet cust = findSheet(wb, "客户信息");
+            // 录入源(基本信息/客户信息)先读; 主表最后读(高优先级)。联动版主表为公式(缓存0)会被忽略
             if (basic != null && basic != main) extractFlat(basic, r);
+            if (cust != null && cust != main && cust != basic) extractFlat(cust, r);
+            extractFlat(main != null ? main : basic, r);
 
             Sheet spec = findSheet(wb, "产品规格", "规格对比");
             if (spec != null) { String j = parseSpec(spec); if (j != null) r.setProductSpecs(j); parsed++; }
@@ -97,6 +100,10 @@ public class InitiationImportService {
             String appr = parseApproval(main);
             if (appr != null) r.setApprovalSigns(appr);
 
+            if (!org.springframework.util.StringUtils.hasText(r.getProjectName()) && r.getProductSpecs() != null) {
+                String nm = firstProductName(r.getProductSpecs());
+                if (org.springframework.util.StringUtils.hasText(nm)) r.setProjectName(nm);
+            }
             if (!org.springframework.util.StringUtils.hasText(r.getProjectName())
                     && org.springframework.util.StringUtils.hasText(r.getProjectNo())) {
                 r.setProjectName(r.getProjectNo()); // 回退: 无项目名称时用料号
@@ -159,7 +166,8 @@ public class InitiationImportService {
             if (a.isEmpty()) continue;
             // 需求目的常写在同一列(整行文字)
             if (b.isEmpty() && a.contains("需求目的")) { appendOther(r, a.replaceFirst("^▶\\s*", "").trim()); continue; }
-            if (b.isEmpty() || a.equals(b)) continue;
+            // 忽略空值及公式缓存产生的 0 / 0.0 (联动版公式列)
+            if (b.isEmpty() || "0".equals(b) || "0.0".equals(b) || a.equals(b)) continue;
             String key = a.replaceFirst("^\\d+\\.\\s*", "").replaceFirst("[:：]\\s*$", "").trim();
             String field = FLAT.get(key);
             if (field == null) {
@@ -319,6 +327,18 @@ public class InitiationImportService {
         obj.put("rows", frows);
         obj.put("extra", extra);
         return json.writeValueAsString(obj);
+    }
+
+    /** 取产品规格对比首个产品列名作为项目名称回退 */
+    @SuppressWarnings("unchecked")
+    private String firstProductName(String specsJson) {
+        try {
+            List<Map<String, Object>> list = json.readValue(specsJson, List.class);
+            if (!list.isEmpty()) {
+                for (String k : list.get(0).keySet()) if (!"规格项".equals(k)) return k;
+            }
+        } catch (Exception ignore) { }
+        return null;
     }
 
     private String parseReqs(Sheet sheet) throws Exception {

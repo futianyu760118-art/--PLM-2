@@ -118,8 +118,7 @@
         </el-divider>
         <el-table :data="specRows" border size="small" style="margin-bottom:8px">
           <el-table-column label="规格项" width="180"><template #default="{row}"><el-input v-model="row.规格项" size="small" /></template></el-table-column>
-          <el-table-column label="产品1"><template #default="{row}"><el-input v-model="row.产品1" size="small" /></template></el-table-column>
-          <el-table-column label="产品2"><template #default="{row}"><el-input v-model="row.产品2" size="small" /></template></el-table-column>
+          <el-table-column v-for="c in formSpecCols" :key="c" :label="c"><template #default="{row}"><el-input v-model="row[c]" size="small" /></template></el-table-column>
           <el-table-column width="60" align="center"><template #default="{$index}"><el-button link type="danger" size="small" @click="specRows.splice($index,1)">删除</el-button></template></el-table-column>
         </el-table>
 
@@ -233,8 +232,7 @@
         <el-divider content-position="left">三、产品规格对比</el-divider>
         <el-table :data="detail.specRows" border size="small" empty-text="无">
           <el-table-column prop="规格项" label="规格项" width="180" />
-          <el-table-column prop="产品1" label="产品1" />
-          <el-table-column prop="产品2" label="产品2" />
+          <el-table-column v-for="c in (detail.specCols || [])" :key="c" :prop="c" :label="c" />
         </el-table>
         <el-divider content-position="left">四、可实现性评估</el-divider>
         <el-table :data="detail.feasRows" border size="small" empty-text="无">
@@ -366,6 +364,11 @@ const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', status: '', stag
 const formDrawer = reactive({ visible: false })
 const form = reactive({})
 const specRows = ref([])
+const formSpecCols = computed(() => {
+  const r = specRows.value
+  const keys = (r && r[0]) ? Object.keys(r[0]).filter(k => k !== '规格项') : []
+  return keys.length ? keys : ['产品1', '产品2']
+})
 const feasRows = ref([])
 const forecastRows = ref([])
 const reqRows = ref([])
@@ -525,6 +528,7 @@ async function openDetail(row) {
   const res = await getInitiation(row.id)
   const d = res.data
   d.specRows = parseJson(d.productSpecs, [])
+  d.specCols = (d.specRows[0] ? Object.keys(d.specRows[0]).filter(k => k !== '规格项') : [])
   d.feasRows = parseJson(d.feasibility, [])
   d.reqRows = parseJson(d.specialReqs, [])
   d.approvalRows = parseJson(d.approvalSigns, [])

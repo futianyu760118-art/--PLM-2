@@ -240,8 +240,25 @@ public class ProjectInitiationService {
             return already;
         }
 
+        // 若同项目编号的研发项目已存在(如 EBMS 同步而来), 直接关联, 避免重复
+        if (StringUtils.hasText(rec.getProjectNo())) {
+            Project exist = projectService.getByProjectNo(rec.getProjectNo());
+            if (exist != null) {
+                rec.setProjectId(exist.getId());
+                rec.setUpdatedAt(LocalDateTime.now());
+                initiationMapper.updateById(rec);
+                Map<String, Object> linked = new LinkedHashMap<>();
+                linked.put("message", "已关联既有研发项目(同项目编号)");
+                linked.put("projectId", exist.getId());
+                linked.put("project", exist);
+                linked.put("linked", true);
+                return linked;
+            }
+        }
+
         Project p = new Project();
         p.setProjectName(rec.getProjectName());
+        p.setProjectNo(rec.getProjectNo());
         p.setPartNo(rec.getProjectNo());
         p.setCustomerCode(rec.getCustomerNo());
         p.setCustomerName(StringUtils.hasText(rec.getCustomerNo()) ? rec.getCustomerNo() : rec.getCustomerType());

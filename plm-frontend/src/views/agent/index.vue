@@ -71,7 +71,7 @@
 <script setup>
 import { ref, reactive, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createSession, listSessions, closeSession as closeSessionApi, sendMessage, listMessages, pendingActions, decideAction } from '@/api/agent'
+import { createSession, listSessions, closeSession as closeSessionApi, sendMessage, listMessages, pendingActions, decideAction, agentDefs } from '@/api/agent'
 
 const agents = [
   { code:'AGENT_QA', label:'质检官', tag:'L0只读' },
@@ -104,6 +104,15 @@ async function startNewSession() {
   await loadSessions()
   messages.value = []
   ElMessage.success('新会话已创建')
+}
+
+async function loadDefs() {
+  try {
+    const res = await agentDefs()
+    if (res.data && res.data.length) {
+      agents.splice(0, agents.length, ...res.data.map(d => ({ code: d.code, label: d.label, tag: d.level || 'L0' })))
+    }
+  } catch (e) { /* 保留默认列表 */ }
 }
 
 async function loadSessions() {
@@ -162,7 +171,7 @@ function scrollBottom() {
   if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight
 }
 
-onMounted(async () => { await loadSessions(); await loadActions() })
+onMounted(async () => { await loadDefs(); await loadSessions(); await loadActions() })
 </script>
 
 <style scoped lang="scss">
