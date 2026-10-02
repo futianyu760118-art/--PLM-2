@@ -187,7 +187,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProject } from '@/api/project'
@@ -239,13 +239,17 @@ function openSheet(row) {
   })
 }
 
-async function loadProjects() {
-  const res = await pageProject({ pageNum: 1, pageSize: 200 })
-  projects.value = res.data.records || []
+function syncFromRoute() {
   const wanted = route.query.project ? Number(route.query.project) : null
   const found = wanted ? projects.value.find(p => p.id === wanted) : null
   if (found) projectId.value = found.id
-  if (!projectId.value && projects.value.length) projectId.value = projects.value[0].id
+  else if (!projectId.value && projects.value.length) projectId.value = projects.value[0].id
+}
+
+async function loadProjects() {
+  const res = await pageProject({ pageNum: 1, pageSize: 200 })
+  projects.value = res.data.records || []
+  syncFromRoute()
   if (projectId.value) await load()
 }
 
@@ -363,6 +367,12 @@ async function doCheck() {
   check.value = res.data
   checkVisible.value = true
 }
+
+watch(() => route.query.project, async () => {
+  if (!projects.value.length) { await loadProjects(); return }
+  syncFromRoute()
+  if (projectId.value) await load()
+})
 
 onMounted(loadProjects)
 </script>

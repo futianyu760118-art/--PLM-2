@@ -95,21 +95,25 @@ public class ProjectTrackingService {
             row.put("status", p.getStatus());
 
             Map<String, String> cells = new LinkedHashMap<>();
+            Map<String, Boolean> doneCells = new LinkedHashMap<>();
             int done = 0, keyDone = 0, keyTotal = 0, inProgress = 0, notSet = 0, hasDate = 0;
             for (String code : ProjectProgressService.TRACKING_ORDER) {
                 ProjectNode n = byCode.get(code);
                 String v = ProjectProgressService.cellValue(n);
                 cells.put(code, v);
+                boolean nodeDone = n != null && "DONE".equals(n.getStatus());
+                if (nodeDone) doneCells.put(code, true);
                 if (ProjectProgressService.isKey(code)) {
                     keyTotal++;
-                    if ("V".equals(v)) keyDone++;
+                    if (nodeDone) keyDone++;
                 }
-                if ("V".equals(v)) done++;
+                if (nodeDone) done++;
                 if ("进行中".equals(v)) inProgress++;
                 if (v == null || v.isEmpty()) notSet++;
                 if (n != null && n.getPlanDate() != null) hasDate++;
             }
             row.put("cells", cells);
+            row.put("doneCells", doneCells);
             row.put("nodeTotal", ProjectProgressService.TRACKING_ORDER.size());
             row.put("nodeDone", done);
             row.put("keyDone", keyDone);

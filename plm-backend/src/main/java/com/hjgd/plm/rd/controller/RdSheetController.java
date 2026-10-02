@@ -114,6 +114,7 @@ public class RdSheetController {
     public Result<Map<String, Object>> importExcel(@PathVariable String type,
                                                    @RequestParam("file") MultipartFile file) {
         int n = sheetService.importData(type, file);
+        try { rollupService.rollupAll(); } catch (Exception ignore) {}
         return Result.success(Map.of("imported", n));
     }
 }

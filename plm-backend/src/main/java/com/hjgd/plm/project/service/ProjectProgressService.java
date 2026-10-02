@@ -89,16 +89,22 @@ public class ProjectProgressService {
         return false;
     }
 
-    /** 结构化节点 -> EBMS 单元格值 (V/X/进行中/待定/日期/空) */
+    /** 结构化节点 -> EBMS 单元格值 (完成=实际日期/其他日期/进行中/待定/空) */
     public static String cellValue(ProjectNode n) {
-        if (n == null || n.getStatus() == null) return "";
+        if (n == null) return "";
+        if (n.getStatus() == null) return n.getPlanDate() != null ? n.getPlanDate().toString() : "";
         return switch (n.getStatus()) {
-            case "DONE" -> "V";
+            case "DONE" -> {
+                if (n.getActualDate() != null) yield n.getActualDate().toString();
+                if (n.getPlanDate() != null) yield n.getPlanDate().toString();
+                if (n.getUpdatedAt() != null) yield n.getUpdatedAt().toLocalDate().toString();
+                yield "V";
+            }
             case "FAILED" -> "X";
             case "IN_PROGRESS" -> "进行中";
             case "PENDING" -> "待定";
             case "PLANNED" -> n.getPlanDate() != null ? n.getPlanDate().toString() : "待进行";
-            default -> "";
+            default -> n.getPlanDate() != null ? n.getPlanDate().toString() : "";
         };
     }
 

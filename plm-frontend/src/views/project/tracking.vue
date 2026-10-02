@@ -3,10 +3,11 @@
     <el-card>
       <div class="legend">
         研发项目跟踪总表（一行一项目 × 22 节点）　
-        <el-tag size="small" type="success" effect="plain">V = 完成</el-tag>
+        <el-tag size="small" type="success" effect="plain">绿底 = 已完成(显示实际完成日期)</el-tag>
+        <el-tag size="small" type="primary" effect="plain">日期 = 计划</el-tag>
         <el-tag size="small" type="danger" effect="plain">X = 未完成</el-tag>
         <el-tag size="small" type="warning" effect="plain">进行中</el-tag>
-        <el-tag size="small" type="info" effect="plain">日期 = 计划</el-tag>
+        <el-tag size="small" type="info" effect="plain">待定</el-tag>
         <span class="tip">点击单元格即可编辑</span>
       </div>
 
@@ -64,7 +65,7 @@
               <el-option label="待定" value="待定" />
               <el-option label="待进行" value="待进行" />
             </el-select>
-            <span v-else class="cell" :class="cellClass(row.cells[col.code])" @click="startEdit(row, col.code)">
+            <span v-else class="cell" :class="cellClass(row, col.code)" @click="startEdit(row, col.code)">
               {{ row.cells[col.code] || '—' }}
             </span>
           </template>
@@ -103,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll } from '@/api/project'
@@ -122,8 +123,9 @@ const syncing = ref(false)
 
 const statusLabel = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停', CANCELLED: '取消' }[s] || s || '')
 const statusTag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON_HOLD: 'warning', CANCELLED: 'danger' }[s] || 'info')
-const cellClass = (v) => {
-  if (v === 'V') return 'c-done'
+const cellClass = (row, code) => {
+  const v = row.cells[code]
+  if (row.doneCells && row.doneCells[code]) return 'c-done'
   if (v === 'X') return 'c-fail'
   if (v === '进行中') return 'c-ing'
   if (v === '待定') return 'c-hold'
@@ -183,7 +185,7 @@ async function openMap() {
   }
 }
 
-onMounted(async () => { await loadDefs(); loadData() })
+onActivated(async () => { if (!nodeDefs.value.length) await loadDefs(); loadData() })
 </script>
 
 <style scoped>
@@ -191,7 +193,7 @@ onMounted(async () => { await loadDefs(); loadData() })
 .legend .tip { margin-left: 8px; color: #999; font-size: 12px; }
 .cell { display: inline-block; min-width: 60px; cursor: pointer; padding: 1px 4px; border-radius: 3px; }
 .cell:hover { background: #ecf5ff; }
-.c-done { color: #67c23a; font-weight: 600; }
+.c-done { background: #f0f9eb; color: #67c23a; font-weight: 600; }
 .c-fail { color: #f56c6c; font-weight: 600; }
 .c-ing { color: #e6a23c; }
 .c-hold { color: #909399; }
