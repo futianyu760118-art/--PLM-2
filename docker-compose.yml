@@ -56,6 +56,7 @@ services:
       - ./database/33_code_issue_rule_code.sql:/docker-entrypoint-initdb.d/33_code_issue_rule_code.sql:ro
       - ./database/34_fix_deleted_default.sql:/docker-entrypoint-initdb.d/34_fix_deleted_default.sql:ro
       - ./database/35_initiation_text_columns.sql:/docker-entrypoint-initdb.d/35_initiation_text_columns.sql:ro
+      - ./database/36_ebms_users_roles.sql:/docker-entrypoint-initdb.d/36_ebms_users_roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s
