@@ -2,12 +2,15 @@ package com.hjgd.plm.project;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.evidence.mapper.AeosEvidenceMapper;
 import com.hjgd.plm.file.entity.PlmFile;
 import com.hjgd.plm.file.service.FileService;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectNode;
 import com.hjgd.plm.project.entity.ProjectNodeEvidence;
+import com.hjgd.plm.project.mapper.ProjectChangeMapper;
 import com.hjgd.plm.project.mapper.ProjectMapper;
+import com.hjgd.plm.project.mapper.ProjectNodeApprovalMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeEvidenceMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeMapper;
 import com.hjgd.plm.project.service.ProjectProgressService;
@@ -39,6 +42,9 @@ class ProjectProgressServiceTest {
     @Mock private ProjectMapper projectMapper;
     @Mock private ProjectNodeMapper nodeMapper;
     @Mock private ProjectNodeEvidenceMapper evidenceMapper;
+    @Mock private ProjectNodeApprovalMapper approvalMapper;
+    @Mock private ProjectChangeMapper changeMapper;
+    @Mock private AeosEvidenceMapper aeosEvidenceMapper;
     @Mock private FileService fileService;
     @InjectMocks private ProjectProgressService service;
 
@@ -79,9 +85,9 @@ class ProjectProgressServiceTest {
     }
 
     @Test
-    @DisplayName("完成硬标准满足: 实际日期 + 证据>=1 → 通过")
+    @DisplayName("普通节点完成硬标准满足: 实际日期 + 证据>=1 → 通过")
     void shouldCompleteWhenEvidencePresent() {
-        ProjectNode node = node("MOLD_REVIEW", 1, "IN_PROGRESS");
+        ProjectNode node = node("BOM", 0, "IN_PROGRESS");
         node.setEvidenceCount(1);
         when(nodeMapper.selectOne(any())).thenReturn(node);
         when(evidenceMapper.selectCount(any())).thenReturn(1L);
@@ -89,11 +95,48 @@ class ProjectProgressServiceTest {
         ProjectNode req = new ProjectNode();
         req.setStatus("DONE");
         req.setActualDate(LocalDate.now());
-        ProjectNode out = service.updateNode(1L, "MOLD_REVIEW", req);
+        ProjectNode out = service.updateNode(1L, "BOM", req);
 
         assertEquals("DONE", out.getStatus());
         assertNotNull(out.getActualDate());
         verify(nodeMapper, atLeastOnce()).updateById(node);
+    }
+
+    @Test
+    @DisplayName("关键节点禁止绕过双级审批直接DONE")
+    void shouldRejectKeyNodeDoneWithoutApproval() {
+        ProjectNode node = node("MOLD_REVIEW", 1, "IN_PROGRESS");
+        node.setEvidenceCount(1);
+        when(nodeMapper.selectOne(any())).thenReturn(node);
+        when(approvalMapper.selectList(any())).thenReturn(List.of());
+
+        ProjectNode req = new ProjectNode();
+        req.setStatus("DONE");
+        req.setActualDate(LocalDate.now());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateNode(1L, "MOLD_REVIEW", req));
+        assertNotNull(ex.getMessage());
+        verify(approvalMapper).selectList(any());
+    }
+
+    @Test
+    @DisplayName("关键节点Evidence齐全后可提交RD_LEAD审批")
+    void shouldSubmitKeyNodeApproval() {
+        ProjectNode node = node("TEST_REPORT", 1, "IN_PROGRESS");
+        node.setId(9L);
+        node.setActualDate(LocalDate.now());
+        node.setEvidenceCount(1);
+        when(nodeMapper.selectById(9L)).thenReturn(node);
+        when(evidenceMapper.selectCount(any())).thenReturn(1L);
+        when(approvalMapper.selectList(any())).thenReturn(List.of());
+
+        Map<String, Object> out = service.submitApproval(9L, 100L, "提交人", "请审批", "REQ-001");
+
+        assertEquals("READY_FOR_APPROVAL", node.getStatus());
+        verify(approvalMapper).insert(any());
+        verify(nodeMapper).updateById(node);
+        assertEquals("READY_FOR_APPROVAL", out.get("nodeStatus"));
     }
 
     @Test
@@ -114,7 +157,9 @@ class ProjectProgressServiceTest {
 
         assertEquals(5L, ev.getFileId());
         assertEquals("HJ001_测试报告_V1.pdf", ev.getFileName());
+        assertNotNull(ev.getAeosEvidenceId());
         verify(evidenceMapper).insert(any(ProjectNodeEvidence.class));
+        verify(aeosEvidenceMapper).insert(any());
         assertEquals(1, node.getEvidenceCount());
     }
 
@@ -140,6 +185,7 @@ class ProjectProgressServiceTest {
         nodes.add(keyNotDone);
         nodes.add(overdue);
         when(nodeMapper.selectList(any())).thenReturn(nodes);
+        when(changeMapper.selectCount(any())).thenReturn(0L);
 
         Map<String, Object> res = service.selfCheck(1L);
 
@@ -168,7 +214,9 @@ class ProjectProgressServiceTest {
         assertEquals("TEXT", ev.getSource());
         assertTrue(ev.getFileName().contains("填写"));
         assertEquals("1. 里程碑A 2026-10-01", ev.getContent());
+        assertNotNull(ev.getAeosEvidenceId());
         verify(evidenceMapper).insert(any(ProjectNodeEvidence.class));
+        verify(aeosEvidenceMapper).insert(any());
         assertEquals(1, node.getEvidenceCount());
     }
 

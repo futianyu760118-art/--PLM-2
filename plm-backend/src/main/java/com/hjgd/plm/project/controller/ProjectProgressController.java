@@ -1,5 +1,6 @@
 package com.hjgd.plm.project.controller;
 
+import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.log.annotation.OperationLog;
 import com.hjgd.plm.project.entity.ProjectNode;
@@ -8,6 +9,7 @@ import com.hjgd.plm.project.service.ProjectProgressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -106,6 +108,56 @@ public class ProjectProgressController {
     @GetMapping("/{projectId}/progress-check")
     public Result<Map<String, Object>> progressCheck(@PathVariable Long projectId) {
         return Result.success(service.selfCheck(projectId));
+    }
+
+    @Operation(summary = "关键节点提交双级审批")
+    @OperationLog(value = "提交关键节点审批")
+    @PreAuthorize("hasAuthority('project:node:submit') or hasRole('ADMIN')")
+    @PostMapping("/nodes/{nodeId}/approval/submit")
+    public Result<Map<String, Object>> submitApproval(@PathVariable Long nodeId,
+                                                       @RequestBody(required = false) ApprovalSubmitReq req) {
+        String comment = req == null ? null : req.getComment();
+        String requestId = req == null ? null : req.getRequestId();
+        return Result.success(service.submitApproval(nodeId, SecurityUtils.getCurrentUserId(),
+                SecurityUtils.getCurrentRealName(), comment, requestId));
+    }
+
+    @Operation(summary = "研发主管审批关键节点")
+    @OperationLog(value = "研发主管审批关键节点")
+    @PreAuthorize("hasAuthority('project:node:approve:rd') or hasRole('ADMIN')")
+    @PostMapping("/nodes/{nodeId}/approval/rd")
+    public Result<Map<String, Object>> reviewRd(@PathVariable Long nodeId,
+                                                @RequestBody ApprovalDecisionReq req) {
+        return Result.success(service.reviewApproval(nodeId, "RD_LEAD", req.getDecision(), req.getComment(),
+                SecurityUtils.getCurrentUserId(), SecurityUtils.getCurrentRealName()));
+    }
+
+    @Operation(summary = "总经理审批关键节点")
+    @OperationLog(value = "总经理审批关键节点")
+    @PreAuthorize("hasAuthority('project:node:approve:gm') or hasRole('ADMIN')")
+    @PostMapping("/nodes/{nodeId}/approval/gm")
+    public Result<Map<String, Object>> reviewGm(@PathVariable Long nodeId,
+                                                @RequestBody ApprovalDecisionReq req) {
+        return Result.success(service.reviewApproval(nodeId, "GM", req.getDecision(), req.getComment(),
+                SecurityUtils.getCurrentUserId(), SecurityUtils.getCurrentRealName()));
+    }
+
+    @Operation(summary = "关键节点审批状态")
+    @GetMapping("/nodes/{nodeId}/approval")
+    public Result<Map<String, Object>> approvalStatus(@PathVariable Long nodeId) {
+        return Result.success(service.approvalSummary(nodeId));
+    }
+
+    @lombok.Data
+    public static class ApprovalSubmitReq {
+        private String comment;
+        private String requestId;
+    }
+
+    @lombok.Data
+    public static class ApprovalDecisionReq {
+        private String decision;
+        private String comment;
     }
 
     @lombok.Data
