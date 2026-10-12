@@ -79,6 +79,9 @@
         </router-view>
       </el-main>
     </el-container>
+
+    <!-- 全局反馈入口:单点注入,所有走 Layout 的页面自动覆盖(AC F1) -->
+    <FeedbackFab />
   </el-container>
 </template>
 
@@ -87,6 +90,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import FeedbackFab from '@/components/feedback/FeedbackFab.vue'
 import router from '@/router'
 
 const route = useRoute()

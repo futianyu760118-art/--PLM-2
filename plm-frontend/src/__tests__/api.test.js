@@ -64,6 +64,14 @@ describe('API 路径定义', () => {
     expect(typeof api.addTrial).toBe('function')
     expect(typeof api.scrapMold).toBe('function')
   })
+
+  it('feedback API 包含提交/查询/列表/流转', async () => {
+    const api = await import('@/api/feedback')
+    expect(typeof api.submitFeedback).toBe('function')
+    expect(typeof api.getFeedbackByNo).toBe('function')
+    expect(typeof api.pageFeedback).toBe('function')
+    expect(typeof api.transitionFeedback).toBe('function')
+  })
 })
 
 describe('Pinia Store', () => {
@@ -83,5 +91,11 @@ describe('Router 配置', () => {
     expect(routePaths).toContain('/ecn/list')
     expect(routePaths).toContain('/bom/list')
     expect(routePaths.some(p => p.includes('share'))).toBe(true)
+  })
+
+  it('反馈管理挂在系统管理下', async () => {
+    const router = (await import('@/router')).default
+    const routePaths = router.getRoutes().map(r => r.path)
+    expect(routePaths).toContain('/admin/feedback')
   })
 })

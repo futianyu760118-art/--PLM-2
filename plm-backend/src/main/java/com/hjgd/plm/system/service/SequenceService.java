@@ -25,7 +25,7 @@ public class SequenceService {
         lock.lock();
         try {
             Map<String, Object> row = jdbcTemplate.queryForMap(
-                    "SELECT prefix, date_pattern, length FROM sys_sequence WHERE seq_key = ? FOR UPDATE",
+                    "SELECT prefix, date_pattern, length, separator FROM sys_sequence WHERE seq_key = ? FOR UPDATE",
                     seqKey);
             jdbcTemplate.update(
                     "UPDATE sys_sequence SET current_val = current_val + 1, updated_at = now() WHERE seq_key = ?",
@@ -35,9 +35,10 @@ public class SequenceService {
                     Long.class, seqKey);
             String prefix = (String) row.get("prefix");
             Integer length = ((Number) row.get("length")).intValue();
+            String separator = (String) row.get("separator");
             String datePart = LocalDateTime.now().format(DATE_FMT);
             String seqPart = String.format("%0" + length + "d", currentVal);
-            return prefix + datePart + seqPart;
+            return prefix + datePart + (separator == null ? "" : separator) + seqPart;
         } finally {
             lock.unlock();
         }

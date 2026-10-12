@@ -262,7 +262,9 @@ const routes = [
       { path: 'log', name: 'SysLog', component: () => import('@/views/system/log.vue'),
         meta: { title: '操作日志' } },
       { path: 'share', name: 'ShareList', component: () => import('@/views/share/index.vue'),
-        meta: { title: '分享链接' } }
+        meta: { title: '分享链接' } },
+      { path: 'feedback', name: 'SysFeedback', component: () => import('@/views/feedback/manage.vue'),
+        meta: { title: '反馈管理' } }
     ]
   }
 ]

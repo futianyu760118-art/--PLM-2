@@ -43,7 +43,11 @@ mybatis-plus:
       logic-not-delete-value: 0
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 隐私要求(F7/N7): SQL 及绑定参数一律不得进入运行日志。
+    # 原 StdOutImpl 会把 INSERT 语句连同参数明文打到 stdout,plm_feedback.contact 等隐私字段随之外泄;
+    # 且它写在基线配置里, prod 未覆盖, 生产同样在打。统一走 Slf4jImpl + 见下方 logging.level=info,
+    # MyBatis 的 DEBUG 级 SQL 日志默认不输出。本地排查需看 SQL 时用 PLM_LOG_LEVEL=debug 临时启动。
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 plm:
   jwt:
@@ -84,3 +88,9 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+logging:
+  level:
+    # 收敛业务包日志级别: MyBatis SQL 走 DEBUG, 默认 info 即不上日志,
+    # 保证任何隐私字段(如 plm_feedback.contact)不因 SQL 参数日志外泄。
+    com.hjgd.plm: ${PLM_LOG_LEVEL:info}

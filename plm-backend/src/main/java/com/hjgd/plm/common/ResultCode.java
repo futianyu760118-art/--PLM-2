@@ -23,7 +23,10 @@ public enum ResultCode {
     ECN_NO_PERMISSION(11004, "无当前节点审批权限"),
 
     BOM_CYCLE_ERROR(12001, "BOM存在循环引用"),
-    BOM_ITEM_NOT_FOUND(12002, "BOM明细不存在");
+    BOM_ITEM_NOT_FOUND(12002, "BOM明细不存在"),
+
+    FEEDBACK_DUPLICATE(13001, "您刚刚提交过相同反馈"),
+    FEEDBACK_STATUS_ERROR(13002, "反馈状态不允许此操作");
 
     private final int code;
     private final String message;
