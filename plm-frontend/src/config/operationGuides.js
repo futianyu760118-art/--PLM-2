@@ -134,6 +134,10 @@ export const operationGuides = {
     name: '角色权限',
     steps: ['查看六大固定角色', '为角色勾选权限树', '保存权限矩阵']
   },
+  'sys-permission': {
+    name: '权限菜单',
+    steps: ['查看权限项树', '新增/编辑菜单、按钮或接口权限', '删除前先清空子节点']
+  },
   'sys-dict': {
     name: '字典管理',
     steps: ['选择字典类型', '新增/编辑字典项', '调整排序与启停']

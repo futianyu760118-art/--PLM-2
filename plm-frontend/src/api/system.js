@@ -10,7 +10,8 @@ export function updateUser(data) {
   return request({ url: '/system/user', method: 'put', data })
 }
 export function resetPassword(id, password) {
-  return request({ url: `/system/user/${id}/password`, method: 'put', params: { password } })
+  // 口令走 body，避免出现在 URL / 访问日志里
+  return request({ url: `/system/user/${id}/password`, method: 'put', data: { password } })
 }
 export function deleteUser(id) {
   return request({ url: `/system/user/${id}`, method: 'delete' })
@@ -38,6 +39,19 @@ export function getRolePermissions(roleId) {
 }
 export function assignPermissions(roleId, permissionIds) {
   return request({ url: `/system/role/${roleId}/permissions`, method: 'put', data: { permissionIds } })
+}
+// ---- 权限项维护（R1）----
+export function getPermissionTree() {
+  return request({ url: '/system/permission/tree', method: 'get' })
+}
+export function createPermission(data) {
+  return request({ url: '/system/permission', method: 'post', data })
+}
+export function updatePermission(data) {
+  return request({ url: `/system/permission/${data.id}`, method: 'put', data })
+}
+export function deletePermission(id) {
+  return request({ url: `/system/permission/${id}`, method: 'delete' })
 }
 export function pageDict(params) {
   return request({ url: '/system/dict/page', method: 'get', params })

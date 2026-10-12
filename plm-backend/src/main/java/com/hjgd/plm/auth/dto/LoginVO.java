@@ -16,4 +16,6 @@ public class LoginVO {
     private String avatar;
     private List<String> roles;
     private List<String> permissions;
+    /** 是否需强制改密（迁移期空口令/强制重置账号），前端据此跳转改密页 */
+    private Boolean mustChangePassword;
 }

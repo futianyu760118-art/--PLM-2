@@ -2,6 +2,7 @@ package com.hjgd.plm.improve.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hjgd.plm.auth.security.SecurityUtils;
+import com.hjgd.plm.common.datascope.DataScope;
 import com.hjgd.plm.improve.entity.ImproveAction;
 import com.hjgd.plm.improve.entity.ImproveResult;
 import com.hjgd.plm.improve.entity.Insight;
@@ -35,6 +36,8 @@ public class ImproveService {
     private final StandardWorkMapper standardWorkMapper;
     private final SequenceService sequenceService;
 
+    /** 数据范围：plm_issue 既有 dept_id（本部门）也有 owner_id（本人），按登录用户角色生效（R4/F13） */
+    @DataScope(tables = "plm_issue", deptColumn = "dept_id", userColumn = "owner_id")
     public List<Issue> listIssues(String status, String severity) {
         LambdaQueryWrapper<Issue> w = new LambdaQueryWrapper<>();
         w.eq(StringUtils.hasText(status), Issue::getStatus, status)

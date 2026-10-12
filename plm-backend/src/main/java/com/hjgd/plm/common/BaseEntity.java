@@ -18,8 +18,8 @@ public class BaseEntity implements Serializable {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
-    // 必须带初值: 该字段标注了 fill=INSERT,MyBatis-Plus 会无条件把 deleted 列写入 INSERT 语句,
-    // 而 MetaObjectHandler 未填充该字段,初值缺失时会落库为 NULL,导致后续 deleted=0 的查询查不到数据。
+    // 必须给非 null 初值：该字段标注了 FieldFill.INSERT 但 MetaObjectHandler 未填充，
+    // 若保持 null，MP 会显式写入 NULL，逻辑删除过滤条件 deleted = 0 随即把新行永久隐藏。
     @TableField(fill = FieldFill.INSERT)
     @TableLogic
     private Integer deleted = 0;
