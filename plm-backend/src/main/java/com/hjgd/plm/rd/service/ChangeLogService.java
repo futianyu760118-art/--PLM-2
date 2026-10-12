@@ -1,6 +1,7 @@
 package com.hjgd.plm.rd.service;
 
 import com.hjgd.plm.auth.security.SecurityUtils;
+import com.hjgd.plm.metric.domain.HealthScoreDef;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,34 @@ public class ChangeLogService {
         } catch (Exception e) {
             // 变更留痕失败不影响业务
         }
+    }
+
+    /**
+     * 正式变更次数（健康分变更因子 CF 的唯一取数口径，见 HealthScoreDef）。
+     *
+     * <p>「正式变更」= {@code action in ('CREATE','UPDATE','DELETE')}；
+     * {@code ROLLUP}（工作表汇总派生）与 {@code CELL}（跟踪总表内联编辑）为系统派生记录，
+     * 不是人发起的正式变更，不计入 CF —— 这正是 ISS-002 口径错误的修复点：
+     * 原实现用「节点编辑次数」近似，把系统派生回写也算成了变更。
+     *
+     * <p>未知动作码同样不计入（由 {@link HealthScoreDef.ChangeCategory#fromAction} 判定），
+     * 保证口径只有一处来源。
+     */
+    public long countFormalChanges(String projectNo) {
+        if (!StringUtils.hasText(projectNo)) return 0L;
+        List<String> codes = new java.util.ArrayList<>();
+        for (HealthScoreDef.ChangeCategory c : HealthScoreDef.ChangeCategory.values()) {
+            if (c.isFormal()) codes.add(c.actionCode());
+        }
+        if (codes.isEmpty()) return 0L;
+        String placeholders = String.join(",", codes.stream().map(x -> "?").toList());
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add(projectNo);
+        args.addAll(codes);
+        Long n = jdbc.queryForObject(
+                "SELECT count(*) FROM plm_project_change_log WHERE project_no=? AND action IN ("
+                        + placeholders + ")", Long.class, args.toArray());
+        return n == null ? 0L : n;
     }
 
     public Map<String, Object> list(String projectNo, String objectType, int pageNum, int pageSize) {

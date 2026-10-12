@@ -62,6 +62,8 @@ services:
       - ./database/39_ebms_migration.sql:/docker-entrypoint-initdb.d/39_ebms_migration.sql:ro
       - ./database/40_permission_seq_fix.sql:/docker-entrypoint-initdb.d/40_permission_seq_fix.sql:ro
       - ./database/41_login_log.sql:/docker-entrypoint-initdb.d/41_login_log.sql:ro
+      - ./database/42_m04_autonomy_slice2.sql:/docker-entrypoint-initdb.d/42_m04_autonomy_slice2.sql:ro
+      - ./database/43_m04_decision_loop.sql:/docker-entrypoint-initdb.d/43_m04_decision_loop.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

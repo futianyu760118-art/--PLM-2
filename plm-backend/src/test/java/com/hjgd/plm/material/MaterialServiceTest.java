@@ -79,13 +79,14 @@ class MaterialServiceTest {
                 .thenReturn(DqRunResult.builder().blockCount(0).warnCount(0).score(100).build());
         lenient().doNothing().when(dataQualityService).assertNoBlock(any());
         lenient().doNothing().when(domainEventService).publish(any(), any(), any(), any());
-        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.DRAFT), eq("submit_review")))
+        // 迁移调用带对象标识（F04：非法跳转按对象留痕），故按 4 参重载打桩
+        lenient().when(lifecycleService.resolveToState(eq("PART"), any(), eq(MaterialStatus.DRAFT), eq("submit_review")))
                 .thenReturn(MaterialStatus.REVIEWING);
-        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.DRAFT), eq("release")))
+        lenient().when(lifecycleService.resolveToState(eq("PART"), any(), eq(MaterialStatus.DRAFT), eq("release")))
                 .thenReturn(MaterialStatus.RELEASED);
-        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.REVIEWING), eq("release")))
+        lenient().when(lifecycleService.resolveToState(eq("PART"), any(), eq(MaterialStatus.REVIEWING), eq("release")))
                 .thenReturn(MaterialStatus.RELEASED);
-        lenient().when(lifecycleService.resolveToState(eq("PART"), eq(MaterialStatus.RELEASED), eq("submit_review")))
+        lenient().when(lifecycleService.resolveToState(eq("PART"), any(), eq(MaterialStatus.RELEASED), eq("submit_review")))
                 .thenThrow(new BusinessException("lifecycle denied"));
     }
 

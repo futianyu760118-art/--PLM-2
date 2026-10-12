@@ -106,15 +106,86 @@ public class LifecycleServiceImpl implements LifecycleService {
     }
 
     @Override
+    public void assertTransition(String objectType, String objectId, MaterialStatus from, String actionCode) {
+        resolveToState(objectType, objectId, from, actionCode);
+    }
+
+    @Override
     public MaterialStatus resolveToState(String objectType, MaterialStatus from, String actionCode) {
+        return resolve(objectType, null, from, actionCode);
+    }
+
+    @Override
+    public MaterialStatus resolveToState(String objectType, String objectId, MaterialStatus from, String actionCode) {
+        return resolve(objectType, objectId, from, actionCode);
+    }
+
+    /**
+     * 迁移解析（唯一实现）。
+     *
+     * <p>F04：非法跳转不再只抛 409 —— 同时向 {@code plm_lifecycle_history} 写一条
+     * {@code result='DENIED'} 的记录，使「被拒绝」也留下可计数的证据。
+     * 此前实现只写成功迁移，非法跳转在库里查无此事，无法验证「连续 3 次非法跳转」。
+     *
+     * @param objectId 可为空；为空时留痕记录 object_id 为空，仍可用于按对象类型的拒统计数
+     */
+    private MaterialStatus resolve(String objectType, String objectId, MaterialStatus from, String actionCode) {
         if (!"PART".equalsIgnoreCase(objectType)) {
-            throw new BusinessException(409, "[" + ApiErrorCodes.LIFECYCLE_DENIED + "] 不支持的对象类型: " + objectType);
+            String msg = "不支持的对象类型: " + objectType;
+            recordDenied(objectType, objectId, from, actionCode, msg);
+            throw new BusinessException(409, "[" + ApiErrorCodes.LIFECYCLE_DENIED + "] " + msg);
         }
         Map<String, MaterialStatus> actions = partMatrix.get(from.name());
         if (actions == null || !actions.containsKey(actionCode)) {
-            throw new BusinessException(409, "[" + ApiErrorCodes.LIFECYCLE_DENIED + "] 生命周期不允许: " + from + " --" + actionCode + "--> ?");
+            String msg = "生命周期不允许: " + from + " --" + actionCode + "--> ?";
+            recordDenied(objectType, objectId, from, actionCode, msg);
+            throw new BusinessException(409, "[" + ApiErrorCodes.LIFECYCLE_DENIED + "] " + msg);
         }
         return actions.get(actionCode);
+    }
+
+    /**
+     * 非法跳转留痕：写失败不影响拒绝本身（拒绝结果仍由异常保证）。
+     *
+     * <p>{@code object_id} / {@code to_state} 本就该为空（无目标状态、旧调用方拿不到对象标识），
+     * 约束已放开；{@code action_code} 仍是 NOT NULL，故缺省填空串 —— 被拒的动作是什么，
+     * 由 {@code comment} 一并说明，留痕不会因为一个空动作码而整条丢失。
+     */
+    private void recordDenied(String objectType, String objectId, MaterialStatus from,
+                              String actionCode, String reason) {
+        try {
+            jdbcTemplate.update(
+                    "INSERT INTO plm_lifecycle_history(object_type,object_id,from_state,to_state,action_code,operator,comment,result) "
+                            + "VALUES(?,?,?,?,?,?,?, 'DENIED')",
+                    objectType, objectId, from == null ? null : from.name(), null,
+                    actionCode == null ? "" : actionCode, currentOperator(), reason);
+        } catch (Exception e) {
+            log.debug("lifecycle DENIED history write skipped: {}", e.getMessage());
+        }
+    }
+
+    /** 生命周期拒统计数（按对象/对象类型），供自检核对「非法跳转是否被记录」。 */
+    public long countDenied(String objectType, String objectId) {
+        try {
+            Long n = objectId == null
+                    ? jdbcTemplate.queryForObject(
+                            "SELECT count(*) FROM plm_lifecycle_history WHERE object_type=? AND result='DENIED'",
+                            Long.class, objectType)
+                    : jdbcTemplate.queryForObject(
+                            "SELECT count(*) FROM plm_lifecycle_history WHERE object_type=? AND object_id=? AND result='DENIED'",
+                            Long.class, objectType, objectId);
+            return n == null ? 0L : n;
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private String currentOperator() {
+        try {
+            return com.hjgd.plm.auth.security.SecurityUtils.getCurrentRealName();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override
@@ -122,7 +193,7 @@ public class LifecycleServiceImpl implements LifecycleService {
                               String actionCode, String operator, String comment) {
         try {
             jdbcTemplate.update(
-                    "INSERT INTO plm_lifecycle_history(object_type,object_id,from_state,to_state,action_code,operator,comment) VALUES(?,?,?,?,?,?,?)",
+                    "INSERT INTO plm_lifecycle_history(object_type,object_id,from_state,to_state,action_code,operator,comment,result) VALUES(?,?,?,?,?,?,?,'OK')",
                     objectType, objectId, from, to, actionCode, operator, comment);
         } catch (Exception e) {
             log.debug("lifecycle history write skipped: {}", e.getMessage());

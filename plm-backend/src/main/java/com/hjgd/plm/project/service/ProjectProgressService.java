@@ -7,6 +7,8 @@ import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.file.entity.PlmFile;
 import com.hjgd.plm.file.service.FileService;
+import com.hjgd.plm.gate.service.GateService;
+import com.hjgd.plm.metric.domain.HealthScoreDef;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectNode;
 import com.hjgd.plm.project.entity.ProjectNodeEvidence;
@@ -40,6 +42,10 @@ public class ProjectProgressService {
     private final FileService fileService;
     private final com.hjgd.plm.event.service.DomainEventService domainEventService;
     private final com.hjgd.plm.rd.service.ChangeLogService changeLogService;
+    /** 统一 Gate 引擎：节点完成放行的唯一判定入口（F08）。 */
+    private final GateService gateService;
+    /** 统一证据底座：节点证据同时登记进 plm_evidence，形成可穿透链路（F09）。 */
+    private final com.hjgd.plm.evidence.service.EvidenceService evidenceService;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
@@ -108,7 +114,13 @@ public class ProjectProgressService {
         };
     }
 
-    /** 按 EBMS 单元格值写入节点(跟踪总表内联编辑, 不做完成证据硬校验)。 */
+    /**
+     * 按 EBMS 单元格值写入节点(跟踪总表内联编辑)。
+     *
+     * <p>ISS-001 修复：内联编辑曾直接置 DONE 而绕过完成硬标准，导致「未验证即完成」
+     * 可从跟踪总表进入。现在与 {@link #updateNode} 共用同一条 {@link #validateStatus}
+     * 校验链，并在关键节点完成时走统一 Gate 放行判定 —— 系统内不存在第二套完成判定。
+     */
     @Transactional
     public ProjectNode applyCell(Long projectId, String code, String raw) {
         ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
@@ -137,7 +149,9 @@ public class ProjectProgressService {
         }
         node.setEditCount((node.getEditCount() == null ? 0 : node.getEditCount()) + 1);
         node.setUpdatedAt(LocalDateTime.now());
+        validateFacts(node);
         nodeMapper.updateById(node);
+        validateGate(node, oldStatus);
         publishNodeEvent(node);
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
                 node.getNodeCode(), "CELL", "status", oldStatus, node.getStatus(), "UI");
@@ -232,11 +246,13 @@ public class ProjectProgressService {
         if (req.getRemark() != null) node.setRemark(req.getRemark());
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
 
-        validateStatus(node);
+        validateFacts(node);
 
         node.setEditCount((node.getEditCount() == null ? 0 : node.getEditCount()) + 1);
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
+
+        validateGate(node, oldStatus);
 
         // 若后续再取消完成(回退), 同步刷新证据数
         node.setEvidenceCount(refreshEvidenceCount(node.getId()));
@@ -250,17 +266,35 @@ public class ProjectProgressService {
         return node;
     }
 
-    /** 完成硬标准: DONE 必须 实际日期 + 证据>=1。 */
-    private void validateStatus(ProjectNode node) {
-        if (DONE_LIKE.contains(node.getStatus())) {
-            if (node.getActualDate() == null) {
-                throw new BusinessException("完成节点必须填写「实际完成日期」");
-            }
-            int ev = node.getEvidenceCount() == null ? 0 : node.getEvidenceCount();
-            if (ev < 1) {
-                throw new BusinessException("完成节点必须上传至少 1 个证据文件（完成证据标准）");
-            }
+    /**
+     * 完成硬标准（事实层，内存可判定）：DONE 必须 实际日期 + 证据>=1。
+     * 与 {@link #validateGate} 一起构成唯一的完成判定链，表单与内联编辑共用。
+     */
+    private void validateFacts(ProjectNode node) {
+        if (!DONE_LIKE.contains(node.getStatus())) return;
+        if (node.getActualDate() == null) {
+            throw new BusinessException("完成节点必须填写「实际完成日期」");
         }
+        int ev = node.getEvidenceCount() == null ? 0 : node.getEvidenceCount();
+        if (ev < 1) {
+            throw new BusinessException("完成节点必须上传至少 1 个证据文件（完成证据标准）");
+        }
+    }
+
+    /**
+     * 放行判定（统一 Gate）：关键节点「进入」DONE 时，必须通过 GATE_NODE_KEY_DONE
+     * —— 该门包含双级审批（研发主管 → 总经理）与证据规则（F07/F08）。
+     *
+     * <p>只在状态由非 DONE 变为 DONE 的那一刻判定：已经放行的节点再次编辑（改备注等）
+     * 不重复判门，避免历史已完成节点因缺少审批记录而无法修改。
+     *
+     * <p>必须在节点事实入库之后调用 —— 门的 NODE 规则读取的是库里的实际完成日期。
+     * 判定不通过时抛出异常，所在事务整体回滚，节点不会停在「未审批的 DONE」。
+     */
+    private void validateGate(ProjectNode node, String oldStatus) {
+        if (!DONE_LIKE.contains(node.getStatus()) || DONE_LIKE.contains(oldStatus)) return;
+        if (node.getIsKey() == null || node.getIsKey() != 1) return;
+        gateService.assertPassed(GateService.GATE_NODE_KEY_DONE, "node", String.valueOf(node.getId()));
     }
 
     /** 上传节点证据文件。 */
@@ -280,10 +314,37 @@ public class ProjectProgressService {
         ev.setUploadedBy(safeUser());
         ev.setUploadedAt(LocalDateTime.now());
         evidenceMapper.insert(ev);
+        registerUnifiedEvidence(node, ev, "file", pf.getId() == null ? null : String.valueOf(pf.getId()));
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
         return ev;
+    }
+
+    /**
+     * 节点证据同时登记进统一证据底座 {@code plm_evidence}（F09 / ISS-005）。
+     *
+     * <p>旧证据表继续作为业务明细使用（兼容既有页面），统一底座只保存引用：
+     * {@code source_record_id} 指向原始记录（上传件指向 {@code plm_file.id}），
+     * {@code legacy_ref_*} 回指旧表行，两者共同构成「管理结果 → 证据 → 原始记录」的穿透链。
+     *
+     * <p>登记失败不阻断证据上传（登记只是补链），但会记录告警——失败时该条证据
+     * 会在穿透查询里表现为断点，由自检暴露，而不是被静默忽略。
+     */
+    private void registerUnifiedEvidence(ProjectNode node, ProjectNodeEvidence ev,
+                                         String evidenceType, String sourceRecordId) {
+        try {
+            evidenceService.register(new com.hjgd.plm.evidence.service.EvidenceService.RegisterCommand(
+                    "node", String.valueOf(node.getId()), evidenceType,
+                    "PLM2", StringUtils.hasText(sourceRecordId) ? sourceRecordId : String.valueOf(ev.getId()),
+                    null, null,
+                    StringUtils.hasText(ev.getVersionNo()) ? ev.getVersionNo() : "V1",
+                    java.math.BigDecimal.ONE,
+                    null, null, node.getProjectNo(),
+                    "plm_project_node_evidence", String.valueOf(ev.getId())));
+        } catch (Exception e) {
+            log.warn("[进度] 统一证据登记失败 node={} evidence={}: {}", node.getId(), ev.getId(), e.getMessage());
+        }
     }
 
     public List<ProjectNodeEvidence> listEvidence(Long nodeId) {
@@ -330,6 +391,7 @@ public class ProjectProgressService {
         ev.setUploadedBy(safeUser());
         ev.setUploadedAt(LocalDateTime.now());
         evidenceMapper.insert(ev);
+        registerUnifiedEvidence(node, ev, "record", String.valueOf(ev.getId()));
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
@@ -467,20 +529,30 @@ public class ProjectProgressService {
         int keyDone = (int) sum.get("keyDone");
         int overdue = (int) sum.get("overdue");
         int planSet = 0, onTime = 0, doneWithDate = 0;
+        long requiredFields = 0, satisfiedFields = 0;
         for (ProjectNode n : nodes) {
             if (n.getPlanDate() != null) planSet++;
-            if (DONE_LIKE.contains(n.getStatus())) {
+            boolean isDone = DONE_LIKE.contains(n.getStatus());
+            if (isDone) {
                 if (n.getActualDate() != null) doneWithDate++;
                 if (n.getActualDate() != null && n.getPlanDate() != null && !n.getActualDate().isAfter(n.getPlanDate())) onTime++;
             }
+            boolean isKeyNode = n.getIsKey() != null && n.getIsKey() == 1;
+            requiredFields += HealthScoreDef.requiredFieldCount(isKeyNode, isDone);
+            satisfiedFields += satisfiedFieldCount(n, isKeyNode, isDone);
         }
-        double ncr = total == 0 ? 0 : (double) done / total;
-        double kcr = keyTotal == 0 ? 0 : (double) keyDone / keyTotal;
-        double otr = doneWithDate == 0 ? 1.0 : (double) onTime / doneWithDate;
-        double cr = total == 0 ? 0 : (double) planSet / total;
-        int editSum = (int) sum.get("editSum");
-        double cf = Math.max(0, 1 - (double) editSum / 50.0);
-        int health = (int) Math.round(100 * (0.35 * ncr + 0.25 * kcr + 0.20 * otr + 0.10 * cr + 0.10 * cf));
+        // 口径唯一来源: com.hjgd.plm.metric.domain.HealthScoreDef（F10 / ISS-002 / ISS-003）
+        // ncr/kcr/otr 与字段完整率 cr 的定义式、CF 的取数来源全部由该口径类给出，
+        // 实现侧只负责提供分子分母，不再自行定义公式。
+        double ncr = HealthScoreDef.nodeCompletionRate(done, total);
+        double kcr = HealthScoreDef.keyCompletionRate(keyDone, keyTotal);
+        double otr = HealthScoreDef.onTimeRate(onTime, doneWithDate);
+        double cr = HealthScoreDef.fieldCompleteness(satisfiedFields, requiredFields);
+        // CF 取「正式变更次数」（CREATE/UPDATE/DELETE），不再用节点编辑次数近似——
+        // 后者把系统派生的 ROLLUP/CELL 回写也算成变更，是 ISS-002 的口径错误。
+        long formalChanges = changeLogService.countFormalChanges(p.getProjectNo());
+        double cf = HealthScoreDef.changeFactor((int) Math.min(Integer.MAX_VALUE, formalChanges));
+        int health = HealthScoreDef.health(ncr, kcr, otr, cr, cf);
 
         List<Map<String, Object>> issues = new ArrayList<>();
         LocalDate today = LocalDate.now();
@@ -515,10 +587,57 @@ public class ProjectProgressService {
         out.put("totalRows", total);
         out.put("score", Math.max(0, Math.min(100, health)));
         out.put("completeness", round(cr));
-        out.put("metrics", Map.of("ncr", round(ncr), "kcr", round(kcr), "otr", round(otr), "cr", round(cr), "cf", round(cf)));
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        metrics.put("ncr", round(ncr));
+        metrics.put("kcr", round(kcr));
+        metrics.put("otr", round(otr));
+        metrics.put("cr", round(cr));
+        metrics.put("cf", round(cf));
+        // 分子分母一并给出，使口径可复核（定义式与实现值不再有偏差空间）
+        metrics.put("requiredFields", requiredFields);
+        metrics.put("satisfiedFields", satisfiedFields);
+        metrics.put("formalChanges", formalChanges);
+        metrics.put("planDateCoverage", total == 0 ? 0.0 : round((double) planSet / total));
+        out.put("metrics", metrics);
+        out.put("caliber", caliber());
         out.put("bySeverity", Map.of("HIGH", high, "MEDIUM", medium, "LOW", 0L));
         out.put("issues", issues);
         return out;
+    }
+
+    /** 该节点在当前状态下满足的必填项数（口径见 {@link HealthScoreDef.RequiredField}）。 */
+    private static long satisfiedFieldCount(ProjectNode n, boolean isKeyNode, boolean isDone) {
+        long ok = 0;
+        if (StringUtils.hasText(n.getStatus()) && !"NOT_SET".equals(n.getStatus())) ok++;
+        if (StringUtils.hasText(n.getNodeName())) ok++;
+        if (n.getSeq() != null) ok++;
+        if (isKeyNode) {
+            if (n.getPlanDate() != null) ok++;
+            if (StringUtils.hasText(n.getOwner())) ok++;
+        }
+        if (isDone) {
+            if (n.getActualDate() != null) ok++;
+            if (n.getEvidenceCount() != null && n.getEvidenceCount() >= 1) ok++;
+        }
+        return ok;
+    }
+
+    /** 健康分口径（对外暴露，供管理侧核对定义式与实现值）。 */
+    public static Map<String, Object> caliber() {
+        Map<String, Object> c = new LinkedHashMap<>();
+        c.put("metricCode", "M_PROJECT_HEALTH");
+        c.put("formula", "health = 100*(w_ncr*ncr + w_kcr*kcr + w_otr*otr + w_cr*cr + w_cf*cf)");
+        c.put("weights", Map.of(
+                "ncr", HealthScoreDef.W_NODE_COMPLETION,
+                "kcr", HealthScoreDef.W_KEY_COMPLETION,
+                "otr", HealthScoreDef.W_ON_TIME,
+                "cr", HealthScoreDef.W_FIELD_COMPLETENESS,
+                "cf", HealthScoreDef.W_CHANGE_FACTOR));
+        c.put("changeFactorCeiling", HealthScoreDef.CHANGE_FACTOR_CEILING);
+        c.put("changeCategories", HealthScoreDef.ChangeCategory.values());
+        c.put("requiredFields", HealthScoreDef.RequiredField.values());
+        c.put("collectionMethod", HealthScoreDef.COLLECTION_METHOD);
+        return c;
     }
 
     private void addIssue(List<Map<String, Object>> issues, String severity, ProjectNode n, String message) {
