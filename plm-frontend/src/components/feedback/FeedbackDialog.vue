@@ -1,72 +1,56 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="反馈"
-    width="560px"
+    title="问题反馈"
+    width="620px"
     :close-on-click-modal="false"
     @update:model-value="v => emit('update:modelValue', v)"
-    @open="syncPagePath"
+    @open="onOpen"
   >
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="提交反馈" name="submit">
-        <!-- 回执:编号来自服务端响应,重开弹窗不重新生成(AC F10) -->
-        <div v-if="receipt" class="receipt">
-          <el-icon class="receipt-icon"><CircleCheckFilled /></el-icon>
-          <div class="receipt-title">提交成功</div>
-          <div class="receipt-row">反馈编号：<b>{{ receipt.feedbackNo }}</b></div>
-          <div class="receipt-row">提交时间：{{ receipt.createdAt }}</div>
-          <el-button type="primary" plain @click="startNew">再提一条</el-button>
+    <div v-if="receipt" class="receipt">
+      <el-icon class="receipt-icon"><CircleCheckFilled /></el-icon>
+      <div class="receipt-title">提交成功</div>
+      <div class="receipt-row">反馈编号：#{{ receipt.id }}</div>
+      <div class="receipt-row">状态：待处理</div>
+      <el-button type="primary" plain @click="startNew">再提一条</el-button>
+    </div>
+
+    <el-form v-else ref="formRef" :model="form" :rules="rules" label-width="80px">
+      <el-form-item label="类型" prop="type">
+        <el-radio-group v-model="form.type">
+          <el-radio v-for="t in TYPE_OPTS" :key="t.value" :value="t.value">{{ t.label }}</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="严重度" prop="severity">
+        <el-radio-group v-model="form.severity">
+          <el-radio v-for="s in SEVERITY_OPTS" :key="s.value" :value="s.value">{{ s.label }}</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="标题" prop="title">
+        <el-input v-model="form.title" maxlength="256" show-word-limit placeholder="一句话概括问题或建议" />
+      </el-form-item>
+      <el-form-item label="描述" prop="description">
+        <el-input v-model="form.description" type="textarea" :rows="5" maxlength="2000" show-word-limit
+          placeholder="请详细描述问题现象、复现步骤或建议内容" />
+      </el-form-item>
+      <el-form-item label="附件">
+        <el-upload :show-file-list="false" :http-request="doUpload" :disabled="uploading">
+          <el-button size="small" :loading="uploading">上传附件</el-button>
+        </el-upload>
+        <div v-if="form.attachments.length" class="att-list">
+          <el-tag v-for="a in form.attachments" :key="a.key" closable @close="removeAtt(a)">
+            {{ a.name }}
+          </el-tag>
         </div>
+      </el-form-item>
+      <el-form-item label="所在页面">
+        <el-input :model-value="form.pagePath" readonly disabled />
+      </el-form-item>
+    </el-form>
 
-        <el-form v-else ref="formRef" :model="form" :rules="rules" label-width="88px">
-          <el-form-item label="反馈类型" prop="type">
-            <el-radio-group v-model="form.type">
-              <el-radio v-for="t in TYPES" :key="t.value" :value="t.value">{{ t.label }}</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item label="问题描述" prop="content">
-            <el-input v-model="form.content" type="textarea" :rows="4"
-              placeholder="请描述你遇到的问题或诉求（10-2000 字）" />
-            <span class="counter">{{ form.content.length }}/2000</span>
-          </el-form-item>
-          <el-form-item label="期望结果" prop="expectedResult">
-            <el-input v-model="form.expectedResult" type="textarea" :rows="3"
-              placeholder="期望达成的结果（选择「需求」时必填）" />
-            <span class="counter">{{ form.expectedResult.length }}/2000</span>
-          </el-form-item>
-          <el-form-item label="页面路径">
-            <el-input :model-value="form.pagePath" readonly disabled />
-          </el-form-item>
-          <el-form-item label="联系方式" prop="contact">
-            <el-input v-model="form.contact" placeholder="选填，便于回访" />
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-
-      <el-tab-pane label="进度查询" name="query">
-        <el-form :inline="true">
-          <el-form-item label="反馈编号">
-            <el-input v-model="queryNo" placeholder="如 FB-20260930-0001" clearable style="width:220px"
-              @keyup.enter="handleQuery" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="queryLoading" @click="handleQuery">查询</el-button>
-          </el-form-item>
-        </el-form>
-        <el-descriptions v-if="queryResult" :column="2" border size="small">
-          <el-descriptions-item label="反馈编号">{{ queryResult.feedbackNo }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="statusTagType(queryResult.status)" size="small">{{ statusLabel(queryResult.status) }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="类型">{{ typeLabel(queryResult.type) }}</el-descriptions-item>
-          <el-descriptions-item label="提交时间">{{ queryResult.createdAt }}</el-descriptions-item>
-        </el-descriptions>
-      </el-tab-pane>
-    </el-tabs>
-
-    <template v-if="activeTab === 'submit' && !receipt" #footer>
+    <template v-if="!receipt" #footer>
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">提交</el-button>
+      <el-button type="primary" class="submit-btn" :loading="submitting" @click="handleSubmit">提交</el-button>
     </template>
   </el-dialog>
 </template>
@@ -75,144 +59,99 @@
 import { ref, reactive, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { submitFeedback, getFeedbackByNo } from '@/api/feedback'
+import { createFeedback, uploadFeedbackFile } from '@/api/feedback'
 
 defineProps({ modelValue: { type: Boolean, default: false } })
 const emit = defineEmits(['update:modelValue'])
 
 const route = useRoute()
 const formRef = ref(null)
-const activeTab = ref('submit')
 const submitting = ref(false)
+const uploading = ref(false)
 const receipt = ref(null)
 
-const TYPES = [
-  { value: 'BUG', label: '缺陷' },
-  { value: 'SUGGEST', label: '建议' },
-  { value: 'REQUIREMENT', label: '需求' }
+const TYPE_OPTS = [
+  { value: 'issue', label: '问题' },
+  { value: 'suggestion', label: '建议' },
+  { value: 'inquiry', label: '咨询' }
 ]
-const STATUS_LABELS = {
-  PENDING: '待分析', EVALUATING: '评估中', INITIATED: '已立项', RETURNED: '已退回'
-}
-const STATUS_TAG_TYPES = {
-  PENDING: 'info', EVALUATING: 'warning', INITIATED: 'success', RETURNED: 'danger'
-}
+const SEVERITY_OPTS = [
+  { value: 'low', label: '低' },
+  { value: 'medium', label: '中' },
+  { value: 'high', label: '高' }
+]
 
-const form = reactive({ type: '', content: '', expectedResult: '', pagePath: '', contact: '' })
+const form = reactive({ type: 'issue', severity: 'low', title: '', description: '', pagePath: '', attachments: [] })
 
-function syncPagePath() {
+const rules = computed(() => ({
+  type: [{ required: true, message: '请选择类型', trigger: 'change' }],
+  severity: [{ required: true, message: '请选择严重度', trigger: 'change' }],
+  title: [{ required: true, message: '请填写标题', trigger: 'blur' }],
+  description: [{ required: true, message: '请填写描述', trigger: 'blur' }]
+}))
+
+function onOpen() {
+  receipt.value = null
   form.pagePath = route.path
 }
 
-// 校验规则一次性覆盖全部字段,配合 scrollToField 满足 AC F8(一次列出全部错误并定位首个)
-const rules = computed(() => ({
-  type: [{ required: true, message: '反馈类型必选', trigger: 'change' }],
-  content: [{ validator: validateContent, trigger: ['blur', 'change'] }],
-  expectedResult: [{ validator: validateExpected, trigger: ['blur', 'change'] }],
-  contact: [{ validator: validateContact, trigger: 'blur' }]
-}))
-
-function validateContent(rule, value, callback) {
-  const v = (value || '').trim()
-  if (!v) return callback(new Error('请填写问题描述'))
-  if (v.length < 10 || v.length > 2000) return callback(new Error('问题描述长度需为 10-2000 字'))
-  callback()
+function startNew() {
+  receipt.value = null
+  Object.assign(form, { type: 'issue', severity: 'low', title: '', description: '', pagePath: route.path, attachments: [] })
+  nextTick(() => formRef.value?.clearValidate())
 }
 
-function validateExpected(rule, value, callback) {
-  const v = (value || '').trim()
-  if (form.type === 'REQUIREMENT' && !v) {
-    return callback(new Error('反馈类型为「需求」时期望结果必填'))
+async function doUpload(opt) {
+  uploading.value = true
+  try {
+    const res = await uploadFeedbackFile(opt.file)
+    const f = res.data
+    form.attachments.push({
+      key: String(f.id),
+      url: `/file/${f.id}/download`,
+      name: f.fileName,
+      size: opt.file.size,
+      mime: opt.file.type || ''
+    })
+    ElMessage.success('附件已上传')
+    opt.onSuccess && opt.onSuccess()
+  } catch (e) {
+    opt.onError && opt.onError(e)
+  } finally {
+    uploading.value = false
   }
-  if (v.length > 2000) return callback(new Error('期望结果长度不能超过 2000 字'))
-  callback()
 }
 
-function validateContact(rule, value, callback) {
-  if ((value || '').trim().length > 100) return callback(new Error('联系方式长度不能超过 100 字'))
-  callback()
-}
-
-function firstErrors(fields) {
-  return Object.keys(fields).map(p => fields[p][0]?.message).filter(Boolean)
+function removeAtt(a) {
+  form.attachments = form.attachments.filter(x => x.key !== a.key)
 }
 
 async function handleSubmit() {
-  let invalid = null
   try {
     await formRef.value.validate()
-  } catch (fields) {
-    invalid = fields
-  }
-  if (invalid) {
-    const props = Object.keys(invalid)
-    ElMessage.error(firstErrors(invalid).join('；'))
-    formRef.value.scrollToField?.(props[0])
+  } catch (e) {
     return
   }
   submitting.value = true
   try {
-    const res = await submitFeedback({ ...form })
+    const res = await createFeedback({ ...form })
     receipt.value = res.data
-  } catch {
-    // 失败提示(含 AC F11 重复提交)由请求拦截器统一弹出,此处不展示成功回执
+  } catch (e) {
+    // 拦截器已提示
   } finally {
     submitting.value = false
   }
 }
-
-async function startNew() {
-  receipt.value = null
-  Object.assign(form, { type: '', content: '', expectedResult: '', pagePath: route.path, contact: '' })
-  await nextTick()
-  formRef.value?.clearValidate()
-}
-
-const queryNo = ref('')
-const queryLoading = ref(false)
-const queryResult = ref(null)
-
-async function handleQuery() {
-  const no = queryNo.value.trim()
-  if (!no) {
-    ElMessage.warning('请输入反馈编号')
-    return
-  }
-  queryLoading.value = true
-  try {
-    queryResult.value = (await getFeedbackByNo(no)).data
-  } catch {
-    queryResult.value = null
-  } finally {
-    queryLoading.value = false
-  }
-}
-
-function statusLabel(status) {
-  return STATUS_LABELS[status] || status
-}
-function statusTagType(status) {
-  return STATUS_TAG_TYPES[status] || 'info'
-}
-function typeLabel(type) {
-  return TYPES.find(t => t.value === type)?.label || type
-}
 </script>
 
 <style lang="scss" scoped>
-.receipt {
-  padding: 12px 8px 20px;
-  text-align: center;
+.receipt { padding: 12px 8px 20px; text-align: center;
   .receipt-icon { font-size: 44px; color: #67c23a; }
   .receipt-title { margin: 10px 0 14px; font-size: 16px; font-weight: 600; }
   .receipt-row { margin-bottom: 8px; font-size: 13px; color: #606266; }
   .el-button { margin-top: 12px; }
 }
-.counter {
-  flex: 1 0 100%;
-  text-align: right;
-  font-size: 12px;
-  line-height: 1.2;
-  color: #909399;
-}
+.att-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.submit-btn { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.submit-btn:active { transform: scale(0.95); }
 </style>

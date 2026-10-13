@@ -4,7 +4,8 @@
       <div class="legend">
         研发项目跟踪总表（一行一项目 × 22 节点）　
         <el-tag size="small" type="success" effect="plain">绿底 = 已完成(显示实际完成日期)</el-tag>
-        <el-tag size="small" type="primary" effect="plain">日期 = 计划</el-tag>
+        <el-tag size="small" type="primary" effect="plain">蓝 = 计划时间</el-tag>
+        <el-tag size="small" type="danger" effect="plain">红 = 已逾期</el-tag>
         <el-tag size="small" type="danger" effect="plain">X = 未完成</el-tag>
         <el-tag size="small" type="warning" effect="plain">进行中</el-tag>
         <el-tag size="small" type="info" effect="plain">待定</el-tag>
@@ -45,7 +46,7 @@
       </el-form>
 
       <el-table v-loading="loading" :data="tableData" border stripe size="small" height="calc(100vh - 320px)">
-        <el-table-column prop="projectNo" label="项目编号" width="150" fixed />
+        <el-table-column prop="projectNo" label="项目编号" width="150" fixed sortable />
         <el-table-column prop="projectName" label="项目名称" width="170" show-overflow-tooltip fixed />
         <el-table-column prop="owner" label="负责人" width="80" />
         <el-table-column label="状态" width="90" align="center">
@@ -65,7 +66,7 @@
               <el-option label="待定" value="待定" />
               <el-option label="待进行" value="待进行" />
             </el-select>
-            <span v-else class="cell" :class="cellClass(row, col.code)" @click="startEdit(row, col.code)">
+            <span v-else class="cell" :class="[cellClass(row, col.code), flashCells[row.id + ':' + col.code] ? 'c-flash' : '']" @click="startEdit(row, col.code)">
               {{ row.cells[col.code] || '—' }}
             </span>
           </template>
@@ -126,6 +127,7 @@ const statusTag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON
 const cellClass = (row, code) => {
   const v = row.cells[code]
   if (row.doneCells && row.doneCells[code]) return 'c-done'
+  if (row.overdueCells && row.overdueCells[code]) return 'c-overdue'
   if (v === 'X') return 'c-fail'
   if (v === '进行中') return 'c-ing'
   if (v === '待定') return 'c-hold'
@@ -153,13 +155,44 @@ function startEdit(row, code) {
 }
 function cancelEdit() { editing.rowId = null; editing.code = '' }
 
+// —— Skill 1 完成反馈：单元格保存后短暂“弹一下” ——
+const flashCells = reactive({})
+function flash(row, code) {
+  const key = row.id + ':' + code
+  flashCells[key] = true
+  setTimeout(() => { delete flashCells[key] }, 700)
+}
+
+// —— Skill 2 勾选联动：一处改动，计数与颜色两处同步 ——
+function refreshRowDone(row) {
+  let done = 0
+  for (const c of Object.keys(row.cells)) if (row.doneCells && row.doneCells[c]) done++
+  row.nodeDone = done
+}
+function applyLocalCell(row, code, val) {
+  row.cells[code] = val
+  row.doneCells = row.doneCells || {}
+  row.overdueCells = row.overdueCells || {}
+  const today = new Date().toISOString().slice(0, 10)
+  const isDate = /^\d{4}-\d{2}-\d{2}/.test(val || '')
+  if (val === 'V' || val === '√' || val === '完成') {
+    row.doneCells[code] = true
+    delete row.overdueCells[code]
+  } else {
+    delete row.doneCells[code]
+    if (isDate && (val || '') < today) row.overdueCells[code] = true
+    else delete row.overdueCells[code]
+  }
+  refreshRowDone(row)
+}
+
 async function saveCell(row, code) {
   const val = editValue.value
   if (val === (row.cells[code] || '')) { cancelEdit(); return }
   try {
     await saveTrackingCell(row.id, { nodeCode: code, value: val })
-    row.cells[code] = val
-    ElMessage.success('已保存')
+    applyLocalCell(row, code, val)
+    flash(row, code)
   } catch (e) { /* 拦截器已提示 */ }
   cancelEdit()
 }
@@ -191,12 +224,19 @@ onActivated(async () => { if (!nodeDefs.value.length) await loadDefs(); loadData
 <style scoped>
 .legend { margin-bottom: 10px; color: #666; font-size: 13px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .legend .tip { margin-left: 8px; color: #999; font-size: 12px; }
-.cell { display: inline-block; min-width: 60px; cursor: pointer; padding: 1px 4px; border-radius: 3px; }
+.filter-bar .el-button { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.filter-bar .el-button:active { transform: scale(0.95); }
+.cell { display: inline-block; min-width: 60px; cursor: pointer; padding: 1px 4px; border-radius: 3px;
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, background-color 0.2s ease; }
 .cell:hover { background: #ecf5ff; }
+.cell:active { transform: scale(0.9); }
+.c-flash { animation: cellPop 0.4s cubic-bezier(0.3, 0.7, 0.4, 1.4); }
+@keyframes cellPop { 0% { transform: scale(0.7); opacity: 0.5; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 .c-done { background: #f0f9eb; color: #67c23a; font-weight: 600; }
 .c-fail { color: #f56c6c; font-weight: 600; }
 .c-ing { color: #e6a23c; }
 .c-hold { color: #909399; }
 .c-date { color: #409eff; }
+.c-overdue { color: #f56c6c; font-weight: 600; }
 .c-empty { color: #c0c4cc; }
 </style>

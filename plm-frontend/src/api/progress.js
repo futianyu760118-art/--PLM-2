@@ -27,7 +27,7 @@ export async function fetchPreview(fileId) {
   const type = blob.type || ''
   let text = ''
   if (type.startsWith('text/')) { try { text = await blob.text() } catch (e) { /* ignore */ } }
-  return { url: window.URL.createObjectURL(blob), type, text }
+  return { blob, url: window.URL.createObjectURL(blob), type, text }
 }
 
 /** 取文本证据内容 */

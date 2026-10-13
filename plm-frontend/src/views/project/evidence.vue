@@ -61,7 +61,11 @@
           <template #default="{ row }">{{ projectName(row.projectId) }}</template>
         </el-table-column>
         <el-table-column prop="nodeCode" label="节点" width="120" />
-        <el-table-column prop="fileName" label="证据物" min-width="200" show-overflow-tooltip />
+        <el-table-column label="证据物" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-link type="primary" @click="previewEvidence(row)">{{ row.fileName }}</el-link>
+          </template>
+        </el-table-column>
         <el-table-column label="来源" width="80" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="row.source === 'TEXT' ? 'warning' : 'primary'">
@@ -95,6 +99,8 @@
         <pre v-if="preview.kind === 'text'" class="preview-text">{{ preview.text }}</pre>
         <img v-else-if="preview.kind === 'image'" :src="preview.url" class="preview-img" />
         <iframe v-else-if="preview.kind === 'pdf'" :src="preview.url" class="preview-frame"></iframe>
+        <div v-else-if="preview.kind === 'html'" class="preview-html" v-html="preview.html"></div>
+        <div v-else-if="preview.kind === 'docx'" ref="docxBox" class="preview-docx"></div>
         <el-empty v-else description="该类型暂不支持在线预览, 请下载查看" :image-size="90" />
       </template>
       <template #footer>
@@ -119,8 +125,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import * as XLSX from 'xlsx'
+import { renderAsync } from 'docx-preview'
 import { pageProject } from '@/api/project'
 import { evidenceList, evidenceStats, updateEvidence, fetchPreview, fetchTextEvidence, downloadEvidence } from '@/api/progress'
 
@@ -142,7 +150,8 @@ const nodeOptions = [
   { v: 'TECH_TRANSFER', l: '技转' }, { v: 'SHIPMENT', l: '出货' }, { v: 'REVIEW', l: '复盘' }, { v: 'OTHER', l: '其他' }
 ]
 
-const preview = reactive({ visible: false, loading: false, kind: '', url: '', text: '', name: '', fileId: null })
+const preview = reactive({ visible: false, loading: false, kind: '', url: '', text: '', html: '', name: '', fileId: null })
+const docxBox = ref(null)
 const evForm = reactive({ visible: false, saving: false, id: null, docType: '', note: '', content: '' })
 
 const projectName = (id) => projectMap.value[id] || ('#' + id)
@@ -170,7 +179,14 @@ async function resetQuery() {
 }
 
 async function previewEvidence(row) {
-  Object.assign(preview, { visible: true, loading: true, kind: '', url: '', text: '', name: row.fileName, fileId: row.fileId })
+  preview.visible = true
+  preview.loading = true
+  preview.name = row.fileName
+  preview.fileId = row.fileId
+  preview.kind = ''
+  preview.url = ''
+  preview.text = ''
+  preview.html = ''
   try {
     if (row.source === 'TEXT' || !row.fileId) {
       const d = await fetchTextEvidence(row.id)
@@ -178,12 +194,37 @@ async function previewEvidence(row) {
       preview.text = d.content || '(空)'
     } else {
       const r = await fetchPreview(row.fileId)
+      const ext = (row.fileName || '').toLowerCase().split('.').pop() || ''
       if (r.type.startsWith('image/')) { preview.kind = 'image'; preview.url = r.url }
       else if (r.type.includes('pdf')) { preview.kind = 'pdf'; preview.url = r.url }
       else if (r.type.startsWith('text/')) { preview.kind = 'text'; preview.text = r.text }
-      else { preview.kind = 'other' }
+      else if (['xlsx', 'xls', 'csv'].includes(ext)) {
+        const wb = XLSX.read(await r.blob.arrayBuffer(), { type: 'array' })
+        preview.html = wb.SheetNames.map(n =>
+          `<div class="sheet-title">${escapeHtml(n)}</div>` +
+          XLSX.utils.sheet_to_html(wb.Sheets[n], { header: '', footer: '' })
+        ).join('')
+        preview.kind = 'html'
+      } else if (ext === 'docx') {
+        preview.kind = 'docx'
+        await nextTick()
+        if (docxBox.value) {
+          docxBox.value.innerHTML = ''
+          await renderAsync(r.blob, docxBox.value)
+        }
+      } else {
+        preview.visible = false
+        await downloadEvidence(row.fileId, row.fileName)
+      }
     }
+  } catch (e) {
+    preview.visible = false
+    ElMessage.error('预览失败，请改用「下载」查看')
   } finally { preview.loading = false }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function openEdit(row) {
@@ -222,4 +263,9 @@ onMounted(async () => {
   border-radius: 6px; padding: 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.7; margin: 0; }
 .preview-img { max-width: 100%; max-height: 65vh; display: block; margin: 0 auto; }
 .preview-frame { width: 100%; height: 65vh; border: 1px solid #eee; border-radius: 6px; }
+.preview-html { max-height: 65vh; overflow: auto; border: 1px solid #eee; border-radius: 6px; padding: 8px; background: #fff; }
+.preview-html :deep(.sheet-title) { font-weight: 600; margin: 8px 0 4px; }
+.preview-html :deep(table) { border-collapse: collapse; width: 100%; font-size: 12px; }
+.preview-html :deep(td), .preview-html :deep(th) { border: 1px solid #e0e0e0; padding: 3px 6px; }
+.preview-docx { max-height: 65vh; overflow: auto; border: 1px solid #eee; border-radius: 6px; padding: 16px; background: #fff; }
 </style>

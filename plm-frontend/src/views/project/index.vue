@@ -23,7 +23,7 @@
       </div>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
-        <el-table-column prop="projectNo" label="项目编号" width="160" fixed />
+        <el-table-column prop="projectNo" label="项目编号" width="160" fixed sortable />
         <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
         <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="90" align="center">

@@ -1,23 +1,39 @@
 package com.hjgd.plm.feedback.service;
 
-import com.hjgd.plm.common.PageResult;
-import com.hjgd.plm.feedback.dto.FeedbackQueryDTO;
-import com.hjgd.plm.feedback.dto.FeedbackReceiptVO;
-import com.hjgd.plm.feedback.dto.FeedbackSubmitDTO;
-import com.hjgd.plm.feedback.dto.FeedbackTransitionDTO;
-import com.hjgd.plm.feedback.dto.FeedbackVO;
+import java.util.List;
+import java.util.Map;
 
+/**
+ * 问题反馈服务（对齐中台 SPC 反馈模块，含 AI 自动实现）。
+ */
 public interface FeedbackService {
 
-    /** 唯一提交入口:校验 → 去重 → 编号 → 落库,返回回执 */
-    FeedbackReceiptVO submit(FeedbackSubmitDTO dto);
+    Map<String, Object> page(int pageNum, int pageSize, String type, String severity,
+                             String status, String aiStatus, String keyword,
+                             String sortBy, String sortOrder, String submitterName);
 
-    /** 凭反馈编号查询状态(本人 或 总控), 返回体含完整状态变更记录(AC F16a) */
-    FeedbackVO getByNo(String feedbackNo);
+    Map<String, Object> get(Long id);
 
-    /** 总控分页查询 */
-    PageResult<FeedbackVO> page(FeedbackQueryDTO query);
+    Map<String, Object> create(Map<String, Object> body);
 
-    /** 总控状态流转(待分析→评估中→已立项/已退回) */
-    void transition(Long id, FeedbackTransitionDTO dto);
+    Map<String, Object> update(Long id, Map<String, Object> body);
+
+    Map<String, Object> reply(Long id, String reply, String status);
+
+    Map<String, Object> changeStatus(Long id, String status);
+
+    Map<String, Object> aiQueue(Long id);
+
+    Map<String, Object> aiCancel(Long id);
+
+    Map<String, Object> aiClaim(Long id);
+
+    Map<String, Object> aiProgress(Long id, String stage, List<String> actions);
+
+    Map<String, Object> aiFinish(Long id, boolean success, String branch, String summary,
+                                 String error, Map<String, Object> result);
+
+    List<Long> aiQueueWait(int timeoutSeconds);
+
+    void delete(Long id);
 }

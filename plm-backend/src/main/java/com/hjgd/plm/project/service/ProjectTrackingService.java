@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.util.*;
 
 /**
@@ -96,13 +97,18 @@ public class ProjectTrackingService {
 
             Map<String, String> cells = new LinkedHashMap<>();
             Map<String, Boolean> doneCells = new LinkedHashMap<>();
+            Map<String, Boolean> overdueCells = new LinkedHashMap<>();
             int done = 0, keyDone = 0, keyTotal = 0, inProgress = 0, notSet = 0, hasDate = 0;
+            LocalDate today = LocalDate.now();
             for (String code : ProjectProgressService.TRACKING_ORDER) {
                 ProjectNode n = byCode.get(code);
                 String v = ProjectProgressService.cellValue(n);
                 cells.put(code, v);
                 boolean nodeDone = n != null && "DONE".equals(n.getStatus());
                 if (nodeDone) doneCells.put(code, true);
+                if (n != null && !nodeDone && n.getPlanDate() != null && n.getPlanDate().isBefore(today)) {
+                    overdueCells.put(code, true);
+                }
                 if (ProjectProgressService.isKey(code)) {
                     keyTotal++;
                     if (nodeDone) keyDone++;
@@ -114,6 +120,7 @@ public class ProjectTrackingService {
             }
             row.put("cells", cells);
             row.put("doneCells", doneCells);
+            row.put("overdueCells", overdueCells);
             row.put("nodeTotal", ProjectProgressService.TRACKING_ORDER.size());
             row.put("nodeDone", done);
             row.put("keyDone", keyDone);

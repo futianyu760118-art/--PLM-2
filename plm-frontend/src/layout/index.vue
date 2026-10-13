@@ -48,7 +48,7 @@
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">工作台</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="currentStage && currentStage !== '工作台'">{{ currentStage }}</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="currentStage && currentStage !== '工作台'" :to="{ path: currentStagePath }">{{ currentStage }}</el-breadcrumb-item>
             <el-breadcrumb-item v-if="$route.meta?.title && currentStage !== '工作台'">{{ $route.meta.title }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
@@ -182,6 +182,20 @@ const currentStage = computed(() => {
     }
   }
   return ''
+})
+
+// 工序阶段的落地页(面包屑点击返回该阶段列表)
+const currentStagePath = computed(() => {
+  const s = currentStage.value
+  if (!s || s === '工作台') return '/'
+  for (const r of filteredRoutes.value) {
+    if (r.meta?.workflowStage === s) {
+      if (r.redirect) return r.redirect
+      if (r.children?.length) return fullPath(r, r.children[0])
+      return r.path
+    }
+  }
+  return '/'
 })
 
 // 路由变化/初始化时确保当前工序阶段展开

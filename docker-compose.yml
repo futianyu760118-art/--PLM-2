@@ -64,6 +64,7 @@ services:
       - ./database/41_login_log.sql:/docker-entrypoint-initdb.d/41_login_log.sql:ro
       - ./database/42_m04_autonomy_slice2.sql:/docker-entrypoint-initdb.d/42_m04_autonomy_slice2.sql:ro
       - ./database/43_m04_decision_loop.sql:/docker-entrypoint-initdb.d/43_m04_decision_loop.sql:ro
+      - ./database/44_feedback_v2.sql:/docker-entrypoint-initdb.d/44_feedback_v2.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

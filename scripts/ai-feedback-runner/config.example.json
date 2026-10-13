@@ -1,0 +1,32 @@
+{
+  "base_url": "http://192.168.0.71",
+  "username": "admin",
+  "password": "admin@123",
+  "poll_interval_seconds": 10,
+  "repo_dir": "D:/PLM-2",
+  "base_branch": "main",
+  "worktrees_dir": "D:/PLM-2-ai-worktrees",
+  "backend_python": "python",
+  "gates": {
+    "backend_command": "mvn -o -q test",
+    "frontend_command": "npm run build",
+    "timeout_minutes": 30
+  },
+  "claude": {
+    "command": "claude",
+    "dangerously_skip_permissions": false,
+    "timeout_minutes": 60,
+    "allowed_tools": [
+      "Read", "Edit", "Write", "Glob", "Grep",
+      "Bash(mvn -o -q test:*)", "Bash(mvn -o -q -DskipTests compile:*)",
+      "Bash(npm run build:*)", "Bash(npx vitest run:*)", "Bash(npx tsc:*)",
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)",
+      "Bash(git show:*)", "Bash(git rev-parse:*)", "Bash(cd:*)", "Bash(ls:*)",
+      "Bash(head:*)", "Bash(tail:*)", "Bash(cat:*)"
+    ]
+  },
+  "blocked_globs": [
+    ".env", ".env.*", "*.env", "**/.env", "**/.env.*", "**/*.env",
+    "scripts/deploy-*", "**/scripts/deploy-*", "docker-compose.yml", "docker-compose-prod.yml"
+  ]
+}

@@ -316,6 +316,11 @@ public class ProjectProgressService {
         evidenceMapper.insert(ev);
         registerUnifiedEvidence(node, ev, "file", pf.getId() == null ? null : String.valueOf(pf.getId()));
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
+        // 上传证据后自动完成(标绿): 状态置 DONE 并回填实际日期(若未填)
+        if (!DONE_LIKE.contains(node.getStatus())) {
+            node.setStatus("DONE");
+            if (node.getActualDate() == null) node.setActualDate(LocalDate.now());
+        }
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
         return ev;
