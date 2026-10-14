@@ -12,3 +12,33 @@ html, body, #app {
 .filter-bar { margin-bottom: 16px; }
 .table-toolbar { margin-bottom: 12px; }
 .pagination-wrap { margin-top: 16px; display: flex; justify-content: flex-end; }
+
+/* ============ web-advanced-interaction 全局微交互（应用于各模块） ============ */
+
+/* Skill 1 完成反馈按钮：按下回弹 + 平滑过渡 */
+.el-button {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease, background-color 0.25s ease;
+}
+.el-button:not(.is-disabled):active { transform: scale(0.95); }
+.el-button.is-link:not(.is-disabled):active,
+.el-button.is-text:not(.is-disabled):active { transform: scale(0.92); }
+
+/* 主按钮悬停轻微上浮，增强反馈 */
+.el-button--primary:not(.is-disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.32);
+}
+
+/* 交互控件过渡：输入框、下拉、日期等获得聚焦时更顺滑 */
+.el-input__wrapper,
+.el-select .el-input__wrapper,
+.el-textarea__inner {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+/* 表格行悬停高亮平滑过渡 */
+.el-table__body tr.el-table__row { transition: background-color 0.15s ease; }
+
+/* 卡片阴影过渡 */
+.el-card { transition: box-shadow 0.2s ease; }
