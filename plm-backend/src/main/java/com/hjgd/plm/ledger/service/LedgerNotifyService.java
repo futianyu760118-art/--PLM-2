@@ -25,6 +25,10 @@ public interface LedgerNotifyService {
     String TYPE_LEDGER_DELETED = "LEDGER_DELETED";
     String TYPE_LEDGER_LINK = "LEDGER_LINK";
     String TYPE_OBJ_INVALID = "OBJ_INVALID";
+    /** 能力线 B：单条资料订阅的变更推送（AC-B3-2/B3-4 复用本服务的 5 分钟聚合与按类型开关） */
+    String TYPE_SUB_ITEM = "SUB_ITEM";
+    /** 能力线 B：周期/单条订阅的报告推送（AC-B5） */
+    String TYPE_SUB_REPORT = "SUB_REPORT";
 
     /**
      * 发一条通知（按窗口聚合）。

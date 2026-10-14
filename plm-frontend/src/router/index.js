@@ -122,6 +122,25 @@ const routes = [
     ]
   },
   {
+    // ===== 工序阶段: 订阅与报告 (能力线 B: 资料分类 / 订阅 / 报告推送) =====
+    // 分类维度与订阅规则见 46_subscription.sql; 报告里的链接跳回上面的资料汇总处
+    path: '/subscription',
+    component: Layout,
+    redirect: '/subscription/category',
+    meta: { title: '订阅与报告', icon: 'Bell', permission: 'subscription', workflowStage: '订阅与报告' },
+    children: [
+      { path: 'category', name: 'SubscriptionCategory',
+        component: () => import('@/views/subscription/category.vue'),
+        meta: { title: '分类管理' } },
+      { path: 'list', name: 'SubscriptionList',
+        component: () => import('@/views/subscription/subscription.vue'),
+        meta: { title: '我的订阅' } },
+      { path: 'report', name: 'SubscriptionReport',
+        component: () => import('@/views/subscription/report.vue'),
+        meta: { title: '我的报告' } }
+    ]
+  },
+  {
     // ===== 工序阶段 4: 工程变更 =====
     path: '/ecn',
     component: Layout,

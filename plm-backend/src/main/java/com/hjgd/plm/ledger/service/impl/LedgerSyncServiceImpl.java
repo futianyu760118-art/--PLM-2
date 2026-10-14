@@ -9,6 +9,8 @@ import com.hjgd.plm.ledger.mapper.PlmLedgerMapper;
 import com.hjgd.plm.ledger.service.LedgerAuditService;
 import com.hjgd.plm.ledger.service.LedgerNotifyService;
 import com.hjgd.plm.ledger.service.LedgerSyncService;
+import com.hjgd.plm.ledger.spi.LedgerChangeEvent;
+import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,17 +49,21 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
     private final LedgerNotifyService notifyService;
     private final LedgerProperties properties;
     private final TransactionTemplate txTemplate;
+    /** 模块侧回写也属于「资料发生变更」，同样要广播给单条订阅方（AC-B3-2） */
+    private final List<LedgerChangeListener> changeListeners;
 
     public LedgerSyncServiceImpl(PlmLedgerMapper ledgerMapper,
                                  LedgerAuditService auditService,
                                  LedgerNotifyService notifyService,
                                  LedgerProperties properties,
-                                 PlatformTransactionManager transactionManager) {
+                                 PlatformTransactionManager transactionManager,
+                                 List<LedgerChangeListener> changeListeners) {
         this.ledgerMapper = ledgerMapper;
         this.auditService = auditService;
         this.notifyService = notifyService;
         this.properties = properties;
         this.txTemplate = new TransactionTemplate(transactionManager);
+        this.changeListeners = changeListeners;
     }
 
     @Override
@@ -155,6 +161,7 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
             }
             result = new SyncResult(ledger.getId(), ledger.getLedgerNo(),
                     appliedFields.size(), appliedFields, conflict);
+            emitSync(ledger, rows, sourceSystem, operator);
         }
         return result;
     }
@@ -172,6 +179,35 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
         }
         Duration age = Duration.between(ledger.getLastModifiedAt(), LocalDateTime.now());
         return age.toMinutes() < Math.max(1, properties.getNotifyAggregateMinutes());
+    }
+
+    /** 广播模块侧回写引起的台账变更；监听方异常就地吞掉，不牵连同步事务（同 LedgerServiceImpl#emit） */
+    private void emitSync(PlmLedger ledger, List<Map<String, Object>> rows, String sourceSystem, String operator) {
+        if (changeListeners == null || changeListeners.isEmpty()) {
+            return;
+        }
+        LedgerChangeEvent event = LedgerChangeEvent.builder()
+                .kind(LedgerChangeEvent.Kind.UPDATED)
+                .ledgerId(ledger.getId())
+                .ledgerNo(ledger.getLedgerNo())
+                .ledgerName(ledger.getName())
+                .ledgerType(ledger.getType())
+                .status(ledger.getStatus())
+                .ownerId(ledger.getOwnerId())
+                .deptId(ledger.getDeptId())
+                .uploadedBy(ledger.getUploadedBy())
+                .operatorName(operator)
+                .occurredAt(LocalDateTime.now())
+                .changes(rows)
+                .summary("证据 " + ledger.getLedgerNo() + " 由 " + sourceSystem + " 侧同步变更")
+                .build();
+        for (LedgerChangeListener listener : changeListeners) {
+            try {
+                listener.onLedgerChange(event);
+            } catch (Exception e) {
+                log.warn("台账同步变更监听失败 ledgerNo={}: {}", ledger.getLedgerNo(), e.getMessage());
+            }
+        }
     }
 
     private Object read(PlmLedger ledger, String field) {

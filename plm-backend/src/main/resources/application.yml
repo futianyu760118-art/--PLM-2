@@ -110,6 +110,32 @@ plm:
       - .dwg
       - .dxf
 
+  # 资料分类订阅与报告推送(能力线 B)边界值, 默认即 PAND-198 的 AC 取值。
+  subscription:
+    dim-name-max: 20         # AC-B1-1 维度名称长度上限(字)
+    value-name-max: 30       # AC-B1-1 分类值长度上限(字)
+    sub-name-max: 64         # 订阅名称长度上限
+    max-dims-per-dept: 10    # AC-B1-2 单部门分类维度上限
+    max-values-per-dim: 50   # AC-B1-3 单维度分类值上限
+    max-period-per-user: 20  # AC-B4-9 周期订阅数量上限(条/人)
+    report-retain: 12        # AC-B5-7 报告保留/可回溯期数
+    report-retry: 3          # AC-B5-5 报告生成失败重试次数
+    default-push-time: "08:00"  # AC-B5-1 默认推送时点
+    link-base-url: ""        # AC-B5-2 报告内链接的前端基地址, 留空输出相对路径(由前端同源解析)
+    schedule-enabled: true   # 周期报告调度开关(关闭后不生成, 便于灰度/测试)
+    mail-enabled: false      # AC-B5 邮件渠道开关; 未配置 SMTP 时保持 false, 报告仅走站内通知
+    mail-from-name: "恒剑光电 PLM"
+# 邮件渠道启用示例(需同时把 plm.subscription.mail-enabled 置为 true):
+#spring:
+#  mail:
+#    host: smtp.exmail.qq.com
+#    port: 465
+#    username: no-reply@hjgd.local
+#    password: ${PLM_MAIL_PASSWORD:}
+#    properties:
+#      mail.smtp.auth: true
+#      mail.smtp.ssl.enable: true
+
 knife4j:
   enable: true
   setting:

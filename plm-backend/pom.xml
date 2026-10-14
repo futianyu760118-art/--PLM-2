@@ -129,6 +129,13 @@
             <version>3.3.4</version>
         </dependency>
 
+        <!-- 邮件推送(能力线 B 报告渠道之一, AC-B5); 版本随 spring-boot 父 POM 管理 -->
+        <!-- 未配置 spring.mail.host 时不装配 JavaMailSender, 报告自动降级为仅站内通知 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- iText PDF (水印/导出) -->
         <dependency>
             <groupId>com.itextpdf</groupId>

@@ -28,6 +28,8 @@ import com.hjgd.plm.ledger.service.LedgerAuditService;
 import com.hjgd.plm.ledger.service.LedgerNotifyService;
 import com.hjgd.plm.ledger.service.LedgerObjectResolver;
 import com.hjgd.plm.ledger.service.LedgerService;
+import com.hjgd.plm.ledger.spi.LedgerChangeEvent;
+import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import com.hjgd.plm.system.service.SequenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -86,6 +88,11 @@ public class LedgerServiceImpl implements LedgerService {
     private final SequenceService sequenceService;
     private final FileService fileService;
     private final JdbcTemplate jdbcTemplate;
+    /**
+     * 台账变更的扩展监听方（能力线 B 的单条订阅推送）。
+     * 集合注入：无实现方时 Spring 注入空列表，台账功能不因此不可用。
+     */
+    private final List<LedgerChangeListener> changeListeners;
 
     // ===================== 查询 =====================
 
@@ -289,6 +296,7 @@ public class LedgerServiceImpl implements LedgerService {
                         "ledgerNo", ledger.getLedgerNo(),
                         "ledgerName", nz(ledger.getName()),
                         "link", "/ledger/list?keyword=" + ledger.getLedgerNo()));
+        emit(LedgerChangeEvent.Kind.CREATED, ledger, List.of(), "新建证据 " + ledger.getLedgerNo());
         return toDetail(ledger, true);
     }
 
@@ -331,6 +339,7 @@ public class LedgerServiceImpl implements LedgerService {
         diffInto(changes, before, after);
         auditService.log("UPDATE", ledger.getLedgerNo(), before, after);
         notifyChange(ledger, changes);
+        emit(LedgerChangeEvent.Kind.UPDATED, ledger, changes, "证据 " + ledger.getLedgerNo() + " 发生变更");
         return toDetail(ledger, true);
     }
 
@@ -387,6 +396,9 @@ public class LedgerServiceImpl implements LedgerService {
         notifyService.notify(ledger.getOwnerId(), LedgerNotifyService.TYPE_LEDGER_DELETED,
                 "证据已删除 " + ledger.getLedgerNo(), null, null, List.of(),
                 Map.of("ledgerNo", ledger.getLedgerNo(), "link", "/ledger/list"));
+        emit(LedgerChangeEvent.Kind.DELETED, ledger,
+                List.of(changeRow("status", ledger.getStatus(), "DELETED")),
+                "证据 " + ledger.getLedgerNo() + " 已删除");
     }
 
     // ===================== 附件 =====================
@@ -412,6 +424,9 @@ public class LedgerServiceImpl implements LedgerService {
         Map<String, Object> before = Map.of("attachmentCount", current.size());
         Map<String, Object> after = Map.of("attachmentCount", current.size() + fileIds.size());
         auditService.log("ATTACH_ADD", ledger.getLedgerNo(), before, after);
+        emit(LedgerChangeEvent.Kind.ATTACH_ADDED, ledger,
+                List.of(changeRow("attachmentCount", current.size(), current.size() + fileIds.size())),
+                "证据 " + ledger.getLedgerNo() + " 新增 " + fileIds.size() + " 个附件");
         return toDetail(ledger, false);
     }
 
@@ -430,11 +445,19 @@ public class LedgerServiceImpl implements LedgerService {
         attachmentMapper.deleteById(attachmentId);
         auditService.log("ATTACH_REMOVE", ledger.getLedgerNo(),
                 Map.of("fileName", nz(attachment.getFileName())), Map.of("removed", true));
+        emit(LedgerChangeEvent.Kind.ATTACH_REMOVED, ledger,
+                List.of(changeRow("attachment", nz(attachment.getFileName()), null)),
+                "证据 " + ledger.getLedgerNo() + " 移除附件 " + nz(attachment.getFileName()));
     }
 
     @Override
     public void requireReadable(Long id) {
         requireReadable(require(id));
+    }
+
+    @Override
+    public void requireWritable(Long id) {
+        requireWritable(require(id));
     }
 
     // ===================== 关联 =====================
@@ -983,6 +1006,43 @@ public class LedgerServiceImpl implements LedgerService {
         extra.put("objectName", nz(link.getObjectName()));
         extra.put("link", "/ledger/list?keyword=" + ledger.getLedgerNo());
         return extra;
+    }
+
+    /**
+     * 广播台账变更（能力线 B 扩展点）。
+     *
+     * <p>监听方异常必须就地吞掉：订阅推送属于附带能力，不能因为推送侧的问题
+     * 把已经校验通过的台账写入整体回滚（AC-A1-7 要求的是写入完整性，不是推送完整性）。
+     */
+    private void emit(LedgerChangeEvent.Kind kind, PlmLedger ledger,
+                      List<Map<String, Object>> changes, String summary) {
+        if (changeListeners == null || changeListeners.isEmpty()) {
+            return;
+        }
+        LedgerChangeEvent event = LedgerChangeEvent.builder()
+                .kind(kind)
+                .ledgerId(ledger.getId())
+                .ledgerNo(ledger.getLedgerNo())
+                .ledgerName(ledger.getName())
+                .ledgerType(ledger.getType())
+                .status(ledger.getStatus())
+                .ownerId(ledger.getOwnerId())
+                .deptId(ledger.getDeptId())
+                .uploadedBy(ledger.getUploadedBy())
+                .operatorId(uid())
+                .operatorName(uname())
+                .occurredAt(LocalDateTime.now())
+                .changes(changes == null ? new ArrayList<>() : changes)
+                .summary(summary)
+                .build();
+        for (LedgerChangeListener listener : changeListeners) {
+            try {
+                listener.onLedgerChange(event);
+            } catch (Exception e) {
+                log.warn("台账变更监听失败 kind={} ledgerNo={}: {}",
+                        kind, ledger.getLedgerNo(), e.getMessage());
+            }
+        }
     }
 
     private Map<String, Object> changeRow(String field, Object before, Object after) {

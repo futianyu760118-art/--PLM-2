@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  周期报告的资料范围（AC-B4-3/4/5、AC-B6-9）。
+
+  自定义 SQL 不经过 MyBatis-Plus 的逻辑删除改写，deleted = 0 必须显式写出。
+-->
+<mapper namespace="com.hjgd.plm.subscription.mapper.ReportItemMapper">
+
+  <select id="selectPeriodItems" resultType="com.hjgd.plm.ledger.entity.PlmLedger">
+    SELECT l.*
+    FROM plm_ledger l
+    <where>
+      l.deleted = 0
+      <!-- 草稿不进报告：草稿尚未提交，对订阅人不构成「资料更新」 -->
+      AND l.status &lt;&gt; 'DRAFT'
+      <!--
+        周期区间左闭右开 [start, end)：
+        时间戳若同时落进相邻两期，一条资料会在两份报告里各出现一次（AC-B4-4 禁止重复计数）。
+        附件追加/移除不触碰台账行，只看 l.updated_at 会漏掉 AC-B3-2 意义上的附件更新，
+        故用 EXISTS 把附件更新时间一并算作「本周期内发生过变更」。
+      -->
+      AND (
+        (l.updated_at &gt;= #{start} AND l.updated_at &lt; #{end})
+        OR EXISTS (SELECT 1 FROM plm_ledger_attachment a
+                   WHERE a.ledger_id = l.id AND a.deleted = 0
+                     AND a.updated_at &gt;= #{start} AND a.updated_at &lt; #{end})
+        <!--
+          仅「附件移除」需要回查操作日志：附件行已被置 deleted=1，
+          台账行又没被动过，前两个条件都看不见这次变更。
+          操作日志是 A 侧既有的权威留痕（sys_operation_log.part_no = 证据编号），
+          不为这一种情况另建变更时间表。
+        -->
+        OR EXISTS (SELECT 1 FROM sys_operation_log o
+                   WHERE o.part_no = l.ledger_no AND o.operation = 'ATTACH_REMOVE'
+                     AND o.created_at &gt;= #{start} AND o.created_at &lt; #{end})
+      )
+      <!--
+        分类筛选：同维度取或、跨维度取与（与资料汇总处检索口径一致，AC-B6-1）。
+        只遍历 dims、空分组在 <if> 里跳过，不在 collection 里写方法调用——
+        collection 由 OGNL 求值，写方法调用会多一层「能不能求值」的不确定。
+      -->
+      <if test="filter != null and filter.dims != null">
+        <foreach collection="filter.dims" item="g">
+          <if test="g != null and g.dimId != null and g.valueIds != null and !g.valueIds.isEmpty()">
+            AND EXISTS (SELECT 1 FROM plm_ledger_category lc
+                        WHERE lc.ledger_id = l.id AND lc.deleted = 0
+                          AND lc.dim_id = #{g.dimId}
+                          AND lc.value_id IN
+                          <foreach collection="g.valueIds" item="vid" open="(" separator="," close=")">
+                            #{vid}
+                          </foreach>)
+          </if>
+        </foreach>
+      </if>
+      <!--
+        行级范围（AC-B6-9）：与资料汇总处列表同一口径（本部门 或 本人上传），
+        保证报告里出现的每一条，订阅人在汇总处都查得到；报告不会泄露列表看不到的资料。
+      -->
+      <if test="restricted">
+        AND (l.dept_id = #{scopeDeptId} OR l.uploaded_by = #{scopeUserId})
+      </if>
+    </where>
+    ORDER BY l.updated_at DESC, l.id DESC
+  </select>
+
+</mapper>

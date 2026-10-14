@@ -16,6 +16,10 @@
       <if test="q.type != null and q.type != ''">
         AND l.type = #{q.type}
       </if>
+      <!-- 精确定位单条(AC-B6-6 报告链接 → 汇总处该条); 行级范围与其余条件照旧生效 -->
+      <if test="q.ledgerId != null">
+        AND l.id = #{q.ledgerId}
+      </if>
       <if test="q.ownerId != null">
         AND l.owner_id = #{q.ownerId}
       </if>
@@ -47,6 +51,33 @@
       </if>
       <if test="q.uploadEnd != null and q.uploadEnd != ''">
         AND l.uploaded_at &lt; (CAST(#{q.uploadEnd} AS DATE) + INTERVAL '1 day')
+      </if>
+      <!-- 变更时间范围（AC-B6-1） -->
+      <if test="q.modifyStart != null and q.modifyStart != ''">
+        AND l.last_modified_at &gt;= CAST(#{q.modifyStart} AS DATE)
+      </if>
+      <if test="q.modifyEnd != null and q.modifyEnd != ''">
+        AND l.last_modified_at &lt; (CAST(#{q.modifyEnd} AS DATE) + INTERVAL '1 day')
+      </if>
+      <!--
+        分类维度筛选（AC-B6-1）：每个维度一个 EXISTS，维度之间天然是「与」；
+        同一维度内 value_id IN (...) 是「或」。一条资料在同一维度只存一个值
+        （plm_ledger_category 唯一键 (ledger_id, dim_id)），故 IN 命中即该维度成立。
+        只遍历 dims、空分组在 <if> 里跳过：collection 由 OGNL 求值，
+        不写方法调用可以少一层「能不能求值」的不确定。
+      -->
+      <if test="q.categoryFilter != null and q.categoryFilter.dims != null">
+        <foreach collection="q.categoryFilter.dims" item="g">
+          <if test="g != null and g.dimId != null and g.valueIds != null and !g.valueIds.isEmpty()">
+            AND EXISTS (SELECT 1 FROM plm_ledger_category lc
+                        WHERE lc.ledger_id = l.id AND lc.deleted = 0
+                          AND lc.dim_id = #{g.dimId}
+                          AND lc.value_id IN
+                          <foreach collection="g.valueIds" item="vid" open="(" separator="," close=")">
+                            #{vid}
+                          </foreach>)
+          </if>
+        </foreach>
       </if>
       <!-- 关联对象：命中引用表的编号/名称/业务键（AC-A5-1） -->
       <if test="q.objectType != null and q.objectType != ''">

@@ -67,7 +67,7 @@ class LedgerServiceTest {
     void setUp() {
         service = new LedgerServiceImpl(ledgerMapper, attachmentMapper, linkMapper, resolver,
                 auditService, notifyService, LedgerTestSupport.props(), sequenceService,
-                fileService, jdbcTemplate);
+                fileService, jdbcTemplate, List.of());
         LedgerTestSupport.login("ledger:view", "ledger:add", "ledger:edit", "ledger:delete");
         // 字典与存在性查询
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), any())).thenReturn(List.of());

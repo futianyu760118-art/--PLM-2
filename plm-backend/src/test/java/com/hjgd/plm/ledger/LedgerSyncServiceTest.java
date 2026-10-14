@@ -48,7 +48,7 @@ class LedgerSyncServiceTest {
         PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
         when(txManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new LedgerSyncServiceImpl(ledgerMapper, auditService, notifyService,
-                LedgerTestSupport.props(), txManager);
+                LedgerTestSupport.props(), txManager, List.of());
         LedgerTestSupport.login("ledger:edit");
     }
 

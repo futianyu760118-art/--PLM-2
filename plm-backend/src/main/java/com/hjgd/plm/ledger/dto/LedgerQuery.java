@@ -16,6 +16,8 @@ public class LedgerQuery {
 
     /** 证据类型（AC-A5-1） */
     private String type;
+    /** 按 id 精确定位单条（AC-B6-6：报告里的链接带 ledgerId 进入汇总处直接定位该条） */
+    private Long ledgerId;
     /** 责任人（AC-A5-1） */
     private Long ownerId;
     /** 来源部门（AC-A5-1） */
@@ -36,6 +38,14 @@ public class LedgerQuery {
     private String objectKeyword;
     /** 来源证据编号模糊匹配（AC-B6-1） */
     private String ledgerNoLike;
+    /** 变更时间范围，yyyy-MM-dd，含当日（AC-B6-1：时间范围可按上传时间或变更时间） */
+    private String modifyStart;
+    private String modifyEnd;
+    /**
+     * 分类维度筛选（AC-B6-1）：同维度内取或、跨维度取与。
+     * 空表示不按分类收窄，老调用方不受影响。
+     */
+    private CategoryFilter categoryFilter;
 
     private String sortBy;
     private String sortOrder;

@@ -234,7 +234,7 @@ public class LedgerNotifyServiceImpl implements LedgerNotifyService {
 
     private List<String> allTypes() {
         return List.of(TYPE_LEDGER_CREATED, TYPE_LEDGER_CHANGED, TYPE_LEDGER_DELETED,
-                TYPE_LEDGER_LINK, TYPE_OBJ_INVALID);
+                TYPE_LEDGER_LINK, TYPE_OBJ_INVALID, TYPE_SUB_ITEM, TYPE_SUB_REPORT);
     }
 
     /** agg_key = 用户|类型|对象类型|对象键|窗口起点（AC-A4-10） */

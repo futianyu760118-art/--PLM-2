@@ -166,7 +166,14 @@ class LedgerNotifyServiceTest {
 
         List<PlmNotificationSetting> list = service.settings(100L);
 
-        assertEquals(5, list.size());
+        // 取值域就是接口上公开的类型常量，按 allTypes() 的顺序全量列出。
+        // 不写死条数：新增能力点向取值域里加类型时，这里应同步补上常量而不是改一个数字。
+        List<String> expected = List.of(
+                LedgerNotifyService.TYPE_LEDGER_CREATED, LedgerNotifyService.TYPE_LEDGER_CHANGED,
+                LedgerNotifyService.TYPE_LEDGER_DELETED, LedgerNotifyService.TYPE_LEDGER_LINK,
+                LedgerNotifyService.TYPE_OBJ_INVALID,
+                LedgerNotifyService.TYPE_SUB_ITEM, LedgerNotifyService.TYPE_SUB_REPORT);
+        assertEquals(expected, list.stream().map(PlmNotificationSetting::getNotifyType).toList());
         for (PlmNotificationSetting s : list) {
             assertEquals(1, s.getEnabled());
             assertEquals(100L, s.getUserId());
