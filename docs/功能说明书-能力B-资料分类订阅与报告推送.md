@@ -114,7 +114,7 @@ AC-B2-1/B2-2/B2-6 因此不是三条分散的 if，而是**同一个判定**：`
 | B1-3 | 单维度值上限 50，第 51 个被拦截 | `maxValuesPerDim=50`；`addValue` 计数校验 |
 | B1-4 | 维度值支持新增、改名、停用；停用后不出现在新选择项，历史标签保留且可查询 | `POST/PUT /category/dim/{id}/value[/{valueId}]` 支持 `valueName` 与 `status`；**刻意不提供删除值接口**——删除会让历史标签指向空值；`select` 只下发 `ENABLED` 值，`CategoryService.labelsOf` 不按值状态过滤，历史标签照常回显 |
 | B1-5 | 维度名称在本部门内唯一，重复时报「维度名称已存在」 | `uk_cat_dim_dept_name` 唯一索引 + 服务层预检（先给出可读提示，唯一索引兜住并发） |
-| B1-6 | 一条资料可同时打多个维度的标签，两条标签均保存并在详情可见 | `uk_ledger_cat (ledger_id, dim_id)`；`assign` 覆盖式提交（`items:[{dimId,valueId}]`），本期改为**先整批校验同维度重复再落库**（`CategoryServiceImpl.java:266`），保证「同一维度只能写一个分类值」是入参校验的结果而不是靠事务回滚 |
+| B1-6 | 一条资料可同时打多个维度的标签，两条标签均保存并在详情可见 | `uk_ledger_cat (ledger_id, dim_id)`；`assign` 覆盖式提交（`items:[{dimId,valueId}]`），本期改为**先整批校验同维度重复再落库**（`CategoryServiceImpl.java:268-275`），保证「同一维度只能写一个分类值」是入参校验的结果而不是靠事务回滚 |
 | B1-7 | 删除维度需二次确认；已被资料使用时提示影响条数，确认后标签从资料上移除 | 两段式：`GET /category/dim/{id}/usage` 回「N 个维度值 / 影响 M 条资料」→ 前端 `ElMessageBox.confirm` → `DELETE /category/dim/{id}?confirm=true`；删除级联清理 `plm_ledger_category` 标签并记 `CATEGORY_DIM_DELETE` 日志 |
 
 ### B2 分类的部门隔离与权限
