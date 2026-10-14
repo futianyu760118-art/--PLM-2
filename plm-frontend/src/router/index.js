@@ -106,6 +106,22 @@ const routes = [
     ]
   },
   {
+    // ===== 工序阶段: 证据台账 (能力线 A: 统一上传 + 双向同步) =====
+    // 台账页与资料汇总处是同一行 plm_ledger 数据的两个视图, 不落副本(AC-A3-3)
+    path: '/ledger',
+    component: Layout,
+    redirect: '/ledger/list',
+    meta: { title: '证据台账', icon: 'Document', permission: 'ledger', workflowStage: '证据台账' },
+    children: [
+      { path: 'list', name: 'LedgerList', component: () => import('@/views/ledger/index.vue'),
+        meta: { title: '证据台账录入' } },
+      { path: 'repository', name: 'LedgerRepository', component: () => import('@/views/ledger/repository.vue'),
+        meta: { title: '资料汇总处' } },
+      { path: 'notification', name: 'LedgerNotification', component: () => import('@/views/ledger/notification.vue'),
+        meta: { title: '变更通知' } }
+    ]
+  },
+  {
     // ===== 工序阶段 4: 工程变更 =====
     path: '/ecn',
     component: Layout,

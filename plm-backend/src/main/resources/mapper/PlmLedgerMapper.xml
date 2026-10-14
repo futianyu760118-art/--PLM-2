@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  证据台账 / 资料汇总处 组合筛选（AC-A5-1~A5-5、AC-B6-1/6-8）。
+
+  注意：自定义 SQL 不经过 MyBatis-Plus 的逻辑删除改写，deleted = 0 必须显式写出，
+  否则软删行会重新出现在列表里。
+-->
+<mapper namespace="com.hjgd.plm.ledger.mapper.PlmLedgerMapper">
+
+  <select id="pageLedger" resultType="com.hjgd.plm.ledger.entity.PlmLedger">
+    SELECT l.*
+    FROM plm_ledger l
+    <where>
+      l.deleted = 0
+      <if test="q.type != null and q.type != ''">
+        AND l.type = #{q.type}
+      </if>
+      <if test="q.ownerId != null">
+        AND l.owner_id = #{q.ownerId}
+      </if>
+      <if test="q.deptId != null">
+        AND l.dept_id = #{q.deptId}
+      </if>
+      <if test="q.status != null and q.status != ''">
+        AND l.status = #{q.status}
+      </if>
+      <!-- 关键字命中 证据名称 / 证据编号 / 备注 任一（AC-A5-4） -->
+      <if test="q.keyword != null and q.keyword != ''">
+        AND (l.name LIKE CONCAT('%', #{q.keyword}, '%')
+             OR l.ledger_no LIKE CONCAT('%', #{q.keyword}, '%')
+             OR l.remark LIKE CONCAT('%', #{q.keyword}, '%'))
+      </if>
+      <!-- 来源证据编号（AC-B6-1） -->
+      <if test="q.ledgerNoLike != null and q.ledgerNoLike != ''">
+        AND l.ledger_no LIKE CONCAT('%', #{q.ledgerNoLike}, '%')
+      </if>
+      <!-- 时间范围按日闭合（AC-A5-3：起止同日可查；起 > 止 由服务层拦截） -->
+      <if test="q.occurStart != null and q.occurStart != ''">
+        AND l.occur_date &gt;= CAST(#{q.occurStart} AS DATE)
+      </if>
+      <if test="q.occurEnd != null and q.occurEnd != ''">
+        AND l.occur_date &lt;= CAST(#{q.occurEnd} AS DATE)
+      </if>
+      <if test="q.uploadStart != null and q.uploadStart != ''">
+        AND l.uploaded_at &gt;= CAST(#{q.uploadStart} AS DATE)
+      </if>
+      <if test="q.uploadEnd != null and q.uploadEnd != ''">
+        AND l.uploaded_at &lt; (CAST(#{q.uploadEnd} AS DATE) + INTERVAL '1 day')
+      </if>
+      <!-- 关联对象：命中引用表的编号/名称/业务键（AC-A5-1） -->
+      <if test="q.objectType != null and q.objectType != ''">
+        <if test="q.objectKeyword != null and q.objectKeyword != ''">
+          AND EXISTS (SELECT 1 FROM plm_ledger_link k
+                      WHERE k.ledger_id = l.id AND k.deleted = 0
+                        AND k.object_type = #{q.objectType}
+                        AND (k.object_no LIKE CONCAT('%', #{q.objectKeyword}, '%')
+                             OR k.object_name LIKE CONCAT('%', #{q.objectKeyword}, '%')
+                             OR k.object_id LIKE CONCAT('%', #{q.objectKeyword}, '%')))
+        </if>
+        <if test="q.objectKeyword == null or q.objectKeyword == ''">
+          AND EXISTS (SELECT 1 FROM plm_ledger_link k
+                      WHERE k.ledger_id = l.id AND k.deleted = 0
+                        AND k.object_type = #{q.objectType})
+        </if>
+      </if>
+      <!-- 行级范围：非台账管理员只能看到本部门或本人上传的证据（AC-A6 角色表） -->
+      <if test="q.scopeDeptId != null">
+        AND (l.dept_id = #{q.scopeDeptId} OR l.uploaded_by = #{q.scopeUserId})
+      </if>
+    </where>
+    ORDER BY
+    <choose>
+      <when test="q.sortBy == 'name'">l.name</when>
+      <when test="q.sortBy == 'occurDate'">l.occur_date</when>
+      <when test="q.sortBy == 'uploadedAt'">l.uploaded_at</when>
+      <when test="q.sortBy == 'status'">l.status</when>
+      <otherwise>l.id</otherwise>
+    </choose>
+    <choose>
+      <when test="q.sortOrder == 'asc'">ASC</when>
+      <otherwise>DESC</otherwise>
+    </choose>
+  </select>
+
+</mapper>

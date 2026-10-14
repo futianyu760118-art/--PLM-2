@@ -217,6 +217,10 @@
           </el-timeline>
           <el-empty v-if="!historyList.length" description="暂无变更记录" />
         </el-tab-pane>
+        <!-- 证据区: 与证据台账读同一行数据, 模块侧只做引用展示(AC-A3-1/A3-5) -->
+        <el-tab-pane label="关联证据" name="ledger">
+          <LedgerEvidencePanel object-type="MATERIAL" :object-id="detailsDrawer.partNo" />
+        </el-tab-pane>
       </el-tabs>
     </el-drawer>
 
@@ -237,6 +241,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import {
@@ -246,7 +251,9 @@ import {
 import { createExport } from '@/api/exportx'
 import { dqScores } from '@/api/metric'
 import { listSuppliers, listHistory, uploadDrawing } from '@/api/ux'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
+const route = useRoute()
 const userStore = useUserStore()
 const importVisible = ref(false)
 const loading = ref(false)
@@ -455,5 +462,10 @@ async function handleExport() {
   } catch {}
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 由证据台账「前往」跳入时按料号预置筛选(AC-A4-2)
+  const kw = route.query.keyword
+  if (kw) query.partNo = String(kw)
+  loadData()
+})
 </script>

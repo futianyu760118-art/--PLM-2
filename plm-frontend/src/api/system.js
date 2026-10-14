@@ -68,3 +68,8 @@ export function deleteDict(id) {
 export function pageLog(params) {
   return request({ url: '/system/log/page', method: 'get', params })
 }
+
+/** 部门树(供「来源部门」下拉, AC-A2 来源部门单选) */
+export function getDepartmentTree() {
+  return request({ url: '/system/department/tree', method: 'get' })
+}

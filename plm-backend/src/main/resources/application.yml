@@ -83,6 +83,32 @@ plm:
     ecn-cycle-window-days: 30
   webhook:
     enabled: ${WEBHOOK_ENABLED:false}
+  # 证据台账(能力线 A)边界值, 默认即 PAND-198 的 AC 取值; 部署侧可覆盖调整上限。
+  ledger:
+    max-attachments: 20          # AC-A1-4 单条证据附件数上限(批量上传单次文件数同此值 AC-A5-6)
+    max-file-size-mb: 200        # AC-A1-5 单文件大小上限 MB(等于上限可通过)
+    max-links: 20                # AC-A4-1 单条证据关联对象数上限
+    batch-link-max: 100          # AC-A5-7 批量关联单次可选证据条数上限
+    name-max: 100                # AC-A2-3 证据名称最大长度
+    remark-max: 500              # AC-A2-3 备注最大长度
+    version-max: 20              # AC-A2-3 版本最大长度
+    notify-aggregate-minutes: 5  # AC-A4-10 变更通知聚合窗口(分钟)
+    log-retain-days: 1095        # AC-A6-6 操作日志保留天数(3 年)
+    allow-exts:                  # AC-A1-6 附件格式白名单
+      - .pdf
+      - .doc
+      - .docx
+      - .xls
+      - .xlsx
+      - .ppt
+      - .pptx
+      - .jpg
+      - .jpeg
+      - .png
+      - .zip
+      - .rar
+      - .dwg
+      - .dxf
 
 knife4j:
   enable: true

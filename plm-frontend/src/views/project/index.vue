@@ -109,14 +109,21 @@
           <p style="color:#999;font-size:12px">{{ log.operator }} · {{ log.actualDate }}</p>
         </el-timeline-item>
       </el-timeline>
+
+      <!-- 证据区: 项目侧引用台账证据(AC-A3-1/A3-5) -->
+      <LedgerEvidencePanel object-type="PROJECT" :object-id="gateDrawer.project?.projectNo" />
     </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProject, createProject, updateProject, deleteProject, getGateLogs, passGate, getGateDefs } from '@/api/project'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
+
+const route = useRoute()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -197,5 +204,10 @@ async function handlePassNext() {
   gateDrawer.nextGate = idx < gateList.length - 1 ? gateList[idx + 1].code : ''
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 由证据台账「前往」跳入时按项目编号预置筛选(AC-A4-2 可跳转到该对象)
+  const kw = route.query.keyword
+  if (kw) query.keyword = String(kw)
+  loadData()
+})
 </script>

@@ -150,16 +150,22 @@
         </el-table-column>
         <el-table-column prop="handledAt" label="处理时间" width="160" />
       </el-table>
+
+      <!-- 证据区: 与证据台账同源, 模块侧只做引用展示(AC-A3-1/A3-5) -->
+      <LedgerEvidencePanel object-type="ECN" :object-id="detail.data?.ecnNo" />
     </el-drawer>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { pageEcn, addEcn, updateEcn, submitEcn, reviewL1Approve, reviewL1Reject, reviewL2Approve, reviewL2Reject, effectEcn, getEcn, getEcnLogs, getEcnImpacts, saveEcnImpacts } from '@/api/ecn'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
+const route = useRoute()
 const userStore = useUserStore()
 const loading = ref(false)
 const submitting = ref(false)
@@ -270,5 +276,10 @@ function actionLabel(log) {
   return { submit: '提交审批', approve: '审批通过', reject: '审批驳回', effect: 'ECN生效(版本升级)', void: '作废' }[log.action] || log.action
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 由证据台账「前往」跳入时按 ECN 单号预置筛选(AC-A4-2)
+  const kw = route.query.keyword
+  if (kw) query.ecnNo = String(kw)
+  loadData()
+})
 </script>

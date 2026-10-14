@@ -44,6 +44,7 @@
             <el-button link type="info" size="small" v-if="row.status==='RELEASED'" @click="handleBuildSbom(row)">构建SBOM</el-button>
             <el-button link size="small" @click="openWhereUsed(row.rootPartNo)">反查</el-button>
             <el-button link size="small" type="primary" @click="openCbom(row.rootPartNo)">CBOM</el-button>
+            <el-button link size="small" @click="openLedger(row)">证据</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -129,6 +130,11 @@
       </template>
     </el-dialog>
 
+    <!-- 证据区: BOM 侧引用台账证据(AC-A3-1/A3-5) -->
+    <el-drawer v-model="ledgerDrawer.visible" :title="'关联证据 - ' + (ledgerDrawer.bomNo || '')" size="820px">
+      <LedgerEvidencePanel object-type="BOM" :object-id="ledgerDrawer.bomNo" />
+    </el-drawer>
+
     <el-drawer v-model="whereUsedDrawer.visible" title="Where-Used 反查" size="600px">
       <el-table :data="whereUsedDrawer.list" border size="small">
         <el-table-column prop="bomNo" label="BOM编号" width="160" />
@@ -178,6 +184,7 @@ import { useUserStore } from '@/stores/user'
 import { pageBom, createBom, releaseBom, buildMbom, buildSbom, whereUsed, cbomExpand } from '@/api/bom'
 import { listTemplates, createFromTemplates, exportBom } from '@/api/bomTpl'
 import request from '@/utils/request'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -196,6 +203,12 @@ const typeTag = (t) => ({ EBOM: 'info', MBOM: 'success', SBOM: 'warning' }[t] ||
 const query = reactive({ pageNum: 1, pageSize: 10, rootPartNo: '', status: '' })
 const whereUsedDrawer = reactive({ visible: false, list: [] })
 const cbomDrawer = reactive({ visible: false, partNo: '', list: [], totalCost: null })
+const ledgerDrawer = reactive({ visible: false, bomNo: '' })
+
+function openLedger(row) {
+  ledgerDrawer.bomNo = row.bomNo
+  ledgerDrawer.visible = true
+}
 
 // 模板创建
 const tplDialog = reactive({ visible: false, rootPartNo: '', codes: [], includeOptional: true, templates: [], preview: null, submitting: false })

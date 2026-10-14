@@ -115,6 +115,10 @@
           <el-button type="primary" @click="submitAction">添加</el-button>
         </template>
       </el-dialog>
+
+      <!-- 证据区: 问题单(需求)侧引用台账证据(AC-A3-1/A3-5) -->
+      <LedgerEvidencePanel object-type="REQUIREMENT" :object-id="detailDrawer.issue?.issueNo"
+        title="关联证据资料" />
     </el-drawer>
   </div>
 </template>
@@ -127,6 +131,7 @@ import {
   listInsights, convertInsight as convertInsightApi, dismissInsight as dismissInsightApi,
   completeAction as completeActionApi, qaPatrol
 } from '@/api/issue'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const activeTab = ref('issues')
 const issueLoading = ref(false)

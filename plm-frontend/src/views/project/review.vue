@@ -59,8 +59,11 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageReviews, createReview, updateReview, deleteReview } from '@/api/project'
+
+const route = useRoute()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -104,5 +107,10 @@ async function handleDelete(row) {
   loadData()
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 由证据台账「前往」跳入时按关键字预置筛选(AC-A4-2)
+  const kw = route.query.keyword
+  if (kw) query.keyword = String(kw)
+  loadData()
+})
 </script>

@@ -70,6 +70,7 @@
           <div v-for="wi in workItems" :key="wi.id" style="padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:6px">
             <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="wi.title">{{ wi.title }}</span>
             <el-tag :type="workItemTag(wi.status)" size="small">{{ wi.status }}</el-tag>
+            <el-button link type="primary" size="small" @click="openWorkItemLedger(wi)">证据</el-button>
             <el-button v-if="wi.status !== 'DONE'" link type="success" size="small" @click="handleCompleteWork(wi)">完成</el-button>
           </div>
           <el-empty v-if="!workItems.length" description="暂无待办" :image-size="60" />
@@ -89,6 +90,11 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 待办(工作项)侧的引用证据区: 与证据台账同源(AC-A3-1/A3-5) -->
+    <el-drawer v-model="ledgerDrawer.visible" :title="'关联证据 - ' + (ledgerDrawer.title || '')" size="820px">
+      <LedgerEvidencePanel object-type="TASK" :object-id="ledgerDrawer.id" />
+    </el-drawer>
   </div>
 </template>
 
@@ -101,6 +107,7 @@ import { getStats, materialTypeDist, materialStatusDist, ecnTrend } from '@/api/
 import { kpiValues } from '@/api/metric'
 import { listInsights } from '@/api/issue'
 import { myWorkItems, completeWorkItem } from '@/api/workitem'
+import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const userStore = useUserStore()
 const typeChartRef = ref(null)
@@ -114,6 +121,13 @@ const kpiList = ref([])
 const kpiLoading = ref(false)
 const insights = ref([])
 const workItems = ref([])
+const ledgerDrawer = reactive({ visible: false, id: '', title: '' })
+
+function openWorkItemLedger(wi) {
+  ledgerDrawer.id = String(wi.id)
+  ledgerDrawer.title = wi.title || wi.itemNo || ''
+  ledgerDrawer.visible = true
+}
 const kpiTag = (s) => ({ GREEN: 'success', YELLOW: 'warning', RED: 'danger', GRAY: 'info' }[s] || 'info')
 const workItemTag = (s) => ({ OPEN: 'warning', ESCALATED: 'danger', DONE: 'success' }[s] || 'info')
 

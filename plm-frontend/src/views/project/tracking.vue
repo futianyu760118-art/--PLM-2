@@ -106,10 +106,11 @@
 
 <script setup>
 import { ref, reactive, onActivated } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll } from '@/api/project'
 
+const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const tableData = ref([])
@@ -218,7 +219,13 @@ async function openMap() {
   }
 }
 
-onActivated(async () => { if (!nodeDefs.value.length) await loadDefs(); loadData() })
+onActivated(async () => {
+  // 由证据台账「前往」跳入时按关键字预置筛选(AC-A4-2)
+  const kw = route.query.keyword
+  if (kw) query.keyword = String(kw)
+  if (!nodeDefs.value.length) await loadDefs()
+  loadData()
+})
 </script>
 
 <style scoped>
