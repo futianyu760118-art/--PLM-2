@@ -19,6 +19,8 @@ import com.hjgd.plm.ledger.service.LedgerAuditService;
 import com.hjgd.plm.ledger.service.LedgerNotifyService;
 import com.hjgd.plm.ledger.service.LedgerObjectResolver;
 import com.hjgd.plm.ledger.service.impl.LedgerServiceImpl;
+import com.hjgd.plm.ledger.spi.LedgerChangeEvent;
+import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import com.hjgd.plm.system.service.SequenceService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -37,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -60,14 +64,17 @@ class LedgerServiceTest {
     @Mock private SequenceService sequenceService;
     @Mock private FileService fileService;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private ObjectProvider<LedgerChangeListener> changeListeners;
 
     private LedgerServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        // 监听方经 ObjectProvider 惰性获取（PAND-216 D1）；默认无实现方
+        when(changeListeners.orderedStream()).thenReturn(Stream.empty());
         service = new LedgerServiceImpl(ledgerMapper, attachmentMapper, linkMapper, resolver,
                 auditService, notifyService, LedgerTestSupport.props(), sequenceService,
-                fileService, jdbcTemplate, List.of());
+                fileService, jdbcTemplate, changeListeners);
         LedgerTestSupport.login("ledger:view", "ledger:add", "ledger:edit", "ledger:delete");
         // 字典与存在性查询
         when(jdbcTemplate.queryForList(anyString(), eq(String.class), any())).thenReturn(List.of());
@@ -113,6 +120,23 @@ class LedgerServiceTest {
         verify(attachmentMapper).insert(any(PlmLedgerAttachment.class));
         verify(linkMapper).insert(any(PlmLedgerLink.class));
         verify(auditService).log(eq("CREATE"), eq("EV-20261014-0001"), isNull(), any());
+    }
+
+    @Test
+    @DisplayName("AC-A4-7 变更监听方经 ObjectProvider 惰性取得并收到事件（PAND-216 D1 后行为不变）")
+    void notifiesChangeListenersResolvedLazily() {
+        LedgerChangeListener listener = mock(LedgerChangeListener.class);
+        when(changeListeners.orderedStream()).thenReturn(Stream.of(listener));
+        when(fileService.getById(101L)).thenReturn(file(101L, ".pdf", 1024L));
+        when(attachmentMapper.selectList(any())).thenReturn(List.of());
+        when(linkMapper.selectList(any())).thenReturn(List.of());
+
+        service.create(LedgerTestSupport.submitRequest(101L));
+
+        ArgumentCaptor<LedgerChangeEvent> event = ArgumentCaptor.forClass(LedgerChangeEvent.class);
+        verify(listener).onLedgerChange(event.capture());
+        assertEquals(LedgerChangeEvent.Kind.CREATED, event.getValue().getKind());
+        assertEquals("EV-20261014-0001", event.getValue().getLedgerNo());
     }
 
     @Test
@@ -177,7 +201,8 @@ class LedgerServiceTest {
         req.setFileIds(List.of(1L, 2L, 3L)); // 上限 2
 
         BusinessException e = assertThrows(BusinessException.class, () -> service.create(req));
-        assertTrue(e.getMessage().contains("附件数"));
+        // 文案按 AC-A1-4 定死，与前端 validateForm 一致（PAND-216 D3）
+        assertEquals("单条证据附件最多 2 个", e.getMessage());
     }
 
     @Test
@@ -240,13 +265,26 @@ class LedgerServiceTest {
     // ---------- AC-A5 筛选 ----------
 
     @Test
-    @DisplayName("AC-A5-3 发生时间起 > 止 → 拒绝")
+    @DisplayName("AC-A5-3 发生时间起 > 止 → 拒绝（文案与 AC 一致，PAND-216 D3）")
     void occurRangeReversedRejected() {
         LedgerQuery q = new LedgerQuery();
         q.setOccurStart("2026-10-10");
         q.setOccurEnd("2026-10-01");
 
-        assertThrows(BusinessException.class, () -> service.page(q));
+        BusinessException e = assertThrows(BusinessException.class, () -> service.page(q));
+        assertEquals("起始时间不能大于结束时间", e.getMessage());
+        verify(ledgerMapper, never()).pageLedger(any(), any());
+    }
+
+    @Test
+    @DisplayName("AC-A5-3 上传时间起 > 止 → 拒绝（文案与 AC 一致，PAND-216 D3）")
+    void uploadRangeReversedRejected() {
+        LedgerQuery q = new LedgerQuery();
+        q.setUploadStart("2026-10-10");
+        q.setUploadEnd("2026-10-01");
+
+        BusinessException e = assertThrows(BusinessException.class, () -> service.page(q));
+        assertEquals("起始时间不能大于结束时间", e.getMessage());
         verify(ledgerMapper, never()).pageLedger(any(), any());
     }
 

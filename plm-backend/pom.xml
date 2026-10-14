@@ -173,6 +173,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          全上下文启动测试（PlmApplicationContextTest）用的内存库：该测试只验证 Bean 图能否装配，
+          不跑业务 SQL，所以不依赖真实 PostgreSQL。版本由 spring-boot-starter-parent 管理。
+        -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -33,6 +33,7 @@ import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import com.hjgd.plm.system.service.SequenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,9 +91,14 @@ public class LedgerServiceImpl implements LedgerService {
     private final JdbcTemplate jdbcTemplate;
     /**
      * 台账变更的扩展监听方（能力线 B 的单条订阅推送）。
-     * 集合注入：无实现方时 Spring 注入空列表，台账功能不因此不可用。
+     *
+     * <p>用 {@link ObjectProvider} 而不是集合注入：监听方实现（ItemSubscriptionNotifier）在资料订阅模块，
+     * 而订阅模块又反向依赖本类（SubscriptionServiceImpl → LedgerService）。集合注入会在装配本类时
+     * 立即实例化监听方，与订阅模块成环，Spring Boot 3 默认拒绝循环依赖，应用直接起不来（PAND-202 D1）。
+     * 监听方只在台账写事件发生时用得到，改为按需获取即在装配期不解引用，循环随之打断；
+     * 语义不变——没有实现方时流为空，台账功能不因此不可用。
      */
-    private final List<LedgerChangeListener> changeListeners;
+    private final ObjectProvider<LedgerChangeListener> changeListeners;
 
     // ===================== 查询 =====================
 
@@ -100,11 +106,12 @@ public class LedgerServiceImpl implements LedgerService {
     public PageResult<PlmLedger> page(LedgerQuery query) {
         if (StringUtils.hasText(query.getOccurStart()) && StringUtils.hasText(query.getOccurEnd())
                 && query.getOccurStart().compareTo(query.getOccurEnd()) > 0) {
-            throw new BusinessException(ResultCode.PARAM_ERROR, "发生时间起始不得晚于结束");
+            // 文案与 AC-A5-3 及前端 validateRange 一致
+            throw new BusinessException(ResultCode.PARAM_ERROR, "起始时间不能大于结束时间");
         }
         if (StringUtils.hasText(query.getUploadStart()) && StringUtils.hasText(query.getUploadEnd())
                 && query.getUploadStart().compareTo(query.getUploadEnd()) > 0) {
-            throw new BusinessException(ResultCode.PARAM_ERROR, "上传时间起始不得晚于结束");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "起始时间不能大于结束时间");
         }
         int pageSize = PAGE_SIZES.contains(query.getPageSize()) ? query.getPageSize() : 20;
         int pageNum = query.getPageNum() == null || query.getPageNum() < 1 ? 1 : query.getPageNum();
@@ -781,8 +788,9 @@ public class LedgerServiceImpl implements LedgerService {
             return;
         }
         if (count > properties.getMaxAttachments()) {
+            // 文案与 AC-A1-4 及前端 validateForm 一致
             throw new BusinessException(ResultCode.PARAM_ERROR,
-                    "附件数不得超过 " + properties.getMaxAttachments() + " 个");
+                    "单条证据附件最多 " + properties.getMaxAttachments() + " 个");
         }
         long maxBytes = properties.getMaxFileSizeMb() * 1024 * 1024;
         for (Long fileId : fileIds) {
@@ -1016,7 +1024,9 @@ public class LedgerServiceImpl implements LedgerService {
      */
     private void emit(LedgerChangeEvent.Kind kind, PlmLedger ledger,
                       List<Map<String, Object>> changes, String summary) {
-        if (changeListeners == null || changeListeners.isEmpty()) {
+        // 惰性解析监听方（见 changeListeners 字段注释）：写事件发生时容器早已就绪
+        List<LedgerChangeListener> listeners = changeListeners.orderedStream().toList();
+        if (listeners.isEmpty()) {
             return;
         }
         LedgerChangeEvent event = LedgerChangeEvent.builder()
@@ -1035,7 +1045,7 @@ public class LedgerServiceImpl implements LedgerService {
                 .changes(changes == null ? new ArrayList<>() : changes)
                 .summary(summary)
                 .build();
-        for (LedgerChangeListener listener : changeListeners) {
+        for (LedgerChangeListener listener : listeners) {
             try {
                 listener.onLedgerChange(event);
             } catch (Exception e) {

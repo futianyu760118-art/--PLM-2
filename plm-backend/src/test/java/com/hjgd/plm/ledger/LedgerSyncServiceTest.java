@@ -7,6 +7,7 @@ import com.hjgd.plm.ledger.service.LedgerAuditService;
 import com.hjgd.plm.ledger.service.LedgerNotifyService;
 import com.hjgd.plm.ledger.service.LedgerSyncService;
 import com.hjgd.plm.ledger.service.impl.LedgerSyncServiceImpl;
+import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,12 +18,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -37,9 +41,14 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class LedgerSyncServiceTest {
 
+    /** 「李四」在 sys_user 里的 userId，与被覆盖方 realName 的解析结果对应 */
+    private static final Long OVERWRITTEN_USER_ID = 42L;
+
     @Mock private PlmLedgerMapper ledgerMapper;
     @Mock private LedgerAuditService auditService;
     @Mock private LedgerNotifyService notifyService;
+    @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private ObjectProvider<LedgerChangeListener> changeListeners;
 
     private LedgerSyncServiceImpl service;
 
@@ -47,8 +56,9 @@ class LedgerSyncServiceTest {
     void setUp() {
         PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
         when(txManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(changeListeners.orderedStream()).thenReturn(Stream.empty());
         service = new LedgerSyncServiceImpl(ledgerMapper, auditService, notifyService,
-                LedgerTestSupport.props(), txManager, List.of());
+                LedgerTestSupport.props(), txManager, jdbcTemplate, changeListeners);
         LedgerTestSupport.login("ledger:edit");
     }
 
@@ -80,23 +90,64 @@ class LedgerSyncServiceTest {
     }
 
     @Test
-    @DisplayName("AC-A3-7 覆盖另一方刚写入的值 → 标记冲突并通知被覆盖方")
+    @DisplayName("AC-A3-7 覆盖另一方刚写入的值 → 通知发给被覆盖的最后修改人（不是上传人）")
     void lastWriteWinsAndNotifiesOverwrittenSide() {
         PlmLedger ledger = LedgerTestSupport.ledger(1L, "SUBMITTED");
         ledger.setName("台账侧刚改的名");
-        ledger.setLastModifiedBy("李四");           // 另一方
+        ledger.setUploadedBy(LedgerTestSupport.USER_ID);   // 上传人：本用例里不是被覆盖方
+        ledger.setLastModifiedBy("李四");                   // 被覆盖方（最后修改人）
         ledger.setLastModifiedAt(LocalDateTime.now().minusMinutes(1)); // 窗口内
         when(ledgerMapper.selectByObject("PROJECT", "PJ-001")).thenReturn(List.of(ledger));
+        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), eq("李四")))
+                .thenReturn(List.of(OVERWRITTEN_USER_ID));
 
         LedgerSyncService.SyncResult result = service.applyFromModule("PROJECT", "PJ-001",
                 Map.of("name", "模块侧新值"), "BOM");
 
         assertTrue(result.conflict());
         ArgumentCaptor<Map<String, Object>> extra = ArgumentCaptor.forClass(Map.class);
-        verify(notifyService).notify(eq(LedgerTestSupport.USER_ID),
+        verify(notifyService).notify(eq(OVERWRITTEN_USER_ID),
                 eq(LedgerNotifyService.TYPE_LEDGER_CHANGED), contains("覆盖"), eq("PROJECT"), eq("PJ-001"),
                 anyList(), extra.capture());
         assertEquals(Boolean.TRUE, extra.getValue().get("overwritten"));
+        // PAND-202 D2：真正被覆盖的最后修改人收到，上传人不得收到
+        verify(notifyService, never()).notify(eq(LedgerTestSupport.USER_ID),
+                anyString(), anyString(), any(), any(), anyList(), any());
+    }
+
+    @Test
+    @DisplayName("AC-A3-7 从未被他人改过的行：最后写入人就是上传人")
+    void notifiesUploaderWhenRowNeverModified() {
+        PlmLedger ledger = LedgerTestSupport.ledger(1L, "SUBMITTED");
+        ledger.setName("上传时的名");
+        ledger.setLastModifiedBy(null);
+        ledger.setLastModifiedAt(LocalDateTime.now().minusMinutes(1));
+        when(ledgerMapper.selectByObject("PROJECT", "PJ-001")).thenReturn(List.of(ledger));
+
+        LedgerSyncService.SyncResult result = service.applyFromModule("PROJECT", "PJ-001",
+                Map.of("name", "模块侧新值"), "BOM");
+
+        assertTrue(result.conflict());
+        verify(notifyService).notify(eq(LedgerTestSupport.USER_ID), anyString(), anyString(),
+                any(), any(), anyList(), any());
+        verify(jdbcTemplate, never()).queryForList(anyString(), eq(Long.class), any());
+    }
+
+    @Test
+    @DisplayName("AC-A3-7 被覆盖方无法定位 userId → 宁可不发，也不误发给上传人")
+    void skipsNotifyWhenOverwrittenUserUnresolved() {
+        PlmLedger ledger = LedgerTestSupport.ledger(1L, "SUBMITTED");
+        ledger.setName("台账侧刚改的名");
+        ledger.setLastModifiedBy("已注销账号");
+        ledger.setLastModifiedAt(LocalDateTime.now().minusMinutes(1));
+        when(ledgerMapper.selectByObject("PROJECT", "PJ-001")).thenReturn(List.of(ledger));
+        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), any())).thenReturn(List.of());
+
+        LedgerSyncService.SyncResult result = service.applyFromModule("PROJECT", "PJ-001",
+                Map.of("name", "模块侧新值"), "BOM");
+
+        assertTrue(result.conflict());
+        verify(notifyService, never()).notify(any(), anyString(), anyString(), any(), any(), anyList(), any());
     }
 
     @Test

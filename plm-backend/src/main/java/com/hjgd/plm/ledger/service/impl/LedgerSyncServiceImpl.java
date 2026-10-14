@@ -12,6 +12,8 @@ import com.hjgd.plm.ledger.service.LedgerSyncService;
 import com.hjgd.plm.ledger.spi.LedgerChangeEvent;
 import com.hjgd.plm.ledger.spi.LedgerChangeListener;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -49,20 +51,27 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
     private final LedgerNotifyService notifyService;
     private final LedgerProperties properties;
     private final TransactionTemplate txTemplate;
-    /** 模块侧回写也属于「资料发生变更」，同样要广播给单条订阅方（AC-B3-2） */
-    private final List<LedgerChangeListener> changeListeners;
+    private final JdbcTemplate jdbcTemplate;
+    /**
+     * 模块侧回写也属于「资料发生变更」，同样要广播给单条订阅方（AC-B3-2）。
+     *
+     * <p>同 {@code LedgerServiceImpl#changeListeners}：必须惰性获取，集合注入会与订阅模块成环（PAND-202 D1）。
+     */
+    private final ObjectProvider<LedgerChangeListener> changeListeners;
 
     public LedgerSyncServiceImpl(PlmLedgerMapper ledgerMapper,
                                  LedgerAuditService auditService,
                                  LedgerNotifyService notifyService,
                                  LedgerProperties properties,
                                  PlatformTransactionManager transactionManager,
-                                 List<LedgerChangeListener> changeListeners) {
+                                 JdbcTemplate jdbcTemplate,
+                                 ObjectProvider<LedgerChangeListener> changeListeners) {
         this.ledgerMapper = ledgerMapper;
         this.auditService = auditService;
         this.notifyService = notifyService;
         this.properties = properties;
         this.txTemplate = new TransactionTemplate(transactionManager);
+        this.jdbcTemplate = jdbcTemplate;
         this.changeListeners = changeListeners;
     }
 
@@ -137,9 +146,10 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
             if (appliedFields.isEmpty()) {
                 continue;
             }
-            // 后写优先（LWW）：本次写入生效，之前写入方成为「被覆盖方」
+            // 后写优先（LWW）：本次写入生效，之前写入方成为「被覆盖方」。
+            // 被覆盖方要在 setLastModifiedBy 覆盖之前取值——它是「最后修改人」，不是上传人
             boolean conflict = overwritesOtherSide(ledger, operator);
-            Long overwrittenUser = ledger.getUploadedBy();
+            Long overwrittenUser = conflict ? overwrittenUserOf(ledger, ledger.getLastModifiedBy()) : null;
             ledger.setLastModifiedBy(operator);
             ledger.setLastModifiedAt(LocalDateTime.now());
             ledger.setRevision((ledger.getRevision() == null ? 0 : ledger.getRevision()) + 1);
@@ -148,7 +158,7 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
             Map<String, Object> after = snapshot(ledger);
             auditService.log("SYNC_FROM_" + (sourceSystem == null ? "MODULE" : sourceSystem),
                     ledger.getLedgerNo(), before, after);
-            if (conflict) {
+            if (conflict && overwrittenUser != null) {
                 // 通知被覆盖方：内容含对象/字段/前后值/操作人/时间/链接（AC-A3-7、AC-A4-7/8）
                 Map<String, Object> extra = new LinkedHashMap<>();
                 extra.put("ledgerNo", ledger.getLedgerNo());
@@ -181,9 +191,33 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
         return age.toMinutes() < Math.max(1, properties.getNotifyAggregateMinutes());
     }
 
+    /**
+     * 解析「被覆盖方」的通知目标（AC-A3-7）。
+     *
+     * <p>被覆盖方是本次写入前最后修改该行的人，即覆盖前的 {@code lastModifiedBy}。
+     * 该字段存的是 {@code sys_user.real_name}（见 {@code LedgerServiceImpl#uname}），
+     * 台账表没有记它的 userId，故按 real_name 反查；查不到就不发——
+     * 宁可少发一条，也不能发给上传人（那正是 PAND-202 D2 的缺陷语义）。
+     * {@code lastModifiedBy} 为空说明这行从未被改过，最后写入人就是上传人。
+     */
+    private Long overwrittenUserOf(PlmLedger ledger, String previousModifier) {
+        if (!StringUtils.hasText(previousModifier)) {
+            return ledger.getUploadedBy();
+        }
+        List<Long> ids = jdbcTemplate.queryForList(
+                "SELECT id FROM sys_user WHERE real_name = ? AND deleted = 0 ORDER BY id ASC LIMIT 1",
+                Long.class, previousModifier);
+        if (ids.isEmpty()) {
+            log.warn("冲突通知无法定位被覆盖方 realName={} ledgerNo={}", previousModifier, ledger.getLedgerNo());
+            return null;
+        }
+        return ids.get(0);
+    }
+
     /** 广播模块侧回写引起的台账变更；监听方异常就地吞掉，不牵连同步事务（同 LedgerServiceImpl#emit） */
     private void emitSync(PlmLedger ledger, List<Map<String, Object>> rows, String sourceSystem, String operator) {
-        if (changeListeners == null || changeListeners.isEmpty()) {
+        List<LedgerChangeListener> listeners = changeListeners.orderedStream().toList();
+        if (listeners.isEmpty()) {
             return;
         }
         LedgerChangeEvent event = LedgerChangeEvent.builder()
@@ -201,7 +235,7 @@ public class LedgerSyncServiceImpl implements LedgerSyncService {
                 .changes(rows)
                 .summary("证据 " + ledger.getLedgerNo() + " 由 " + sourceSystem + " 侧同步变更")
                 .build();
-        for (LedgerChangeListener listener : changeListeners) {
+        for (LedgerChangeListener listener : listeners) {
             try {
                 listener.onLedgerChange(event);
             } catch (Exception e) {
