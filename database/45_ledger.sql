@@ -166,23 +166,27 @@ SELECT v.dict_type, v.dict_label, v.dict_value, v.sort_order FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM sys_dict d WHERE d.dict_type = v.dict_type AND d.dict_value = v.dict_value);
 
 -- ---------- 8. 菜单权限种子(复用 sys_permission) ----------
--- 一级菜单 109「证据台账」+ 三页: 台账录入 / 资料汇总处 / 变更通知; 按钮权限 1095..1099。
+-- 一级菜单「证据台账」+ 三页: 台账录入 / 资料汇总处 / 变更通知; 按钮权限 2105..2109。
+-- 注: 使用 2100+ 高位段。原用 id 109/1091/1092 与 03_schema_extend.sql 的
+--     archive(109)/archive:view(1091)/archive:upload(1092) 冲突, 被 DO NOTHING
+--     静默吞掉, 导致 ledger / ledger:repository / ledger:notify 未落库;
+--     冲突判据改为 perm_code。
 INSERT INTO sys_permission (id, parent_id, perm_code, perm_name, perm_type, path, component, icon, sort_order)
 VALUES
-(109,   0,   'ledger',          '证据台账',   1, '/ledger',           NULL,                    'Files',    6),
-(1090,  109, 'ledger:ledger',   '台账录入',   1, '/ledger/list',      'ledger/index',          'Document', 1),
-(1091,  109, 'ledger:repository','资料汇总处', 1, '/ledger/repository','ledger/repository',     'FolderOpened', 2),
-(1092,  109, 'ledger:notify',   '变更通知',   1, '/ledger/notification','ledger/notification','Bell',     3)
-ON CONFLICT (id) DO NOTHING;
+(2100,   0,   'ledger',          '证据台账',   1, '/ledger',           NULL,                    'Files',    6),
+(2101,  2100, 'ledger:ledger',   '台账录入',   1, '/ledger/list',      'ledger/index',          'Document', 1),
+(2102,  2100, 'ledger:repository','资料汇总处', 1, '/ledger/repository','ledger/repository',     'FolderOpened', 2),
+(2103,  2100, 'ledger:notify',   '变更通知',   1, '/ledger/notification','ledger/notification','Bell',     3)
+ON CONFLICT (perm_code) DO NOTHING;
 
 INSERT INTO sys_permission (id, parent_id, perm_code, perm_name, perm_type, sort_order)
 VALUES
-(1095, 109, 'ledger:view',     '查看证据',   2, 1),
-(1096, 109, 'ledger:add',      '新建证据',   2, 2),
-(1097, 109, 'ledger:edit',     '编辑证据',   2, 3),
-(1098, 109, 'ledger:delete',   '删除证据',   2, 4),
-(1099, 109, 'ledger:download', '下载资料',   2, 5)
-ON CONFLICT (id) DO NOTHING;
+(2105, 2100, 'ledger:view',     '查看证据',   2, 1),
+(2106, 2100, 'ledger:add',      '新建证据',   2, 2),
+(2107, 2100, 'ledger:edit',     '编辑证据',   2, 3),
+(2108, 2100, 'ledger:delete',   '删除证据',   2, 4),
+(2109, 2100, 'ledger:download', '下载资料',   2, 5)
+ON CONFLICT (perm_code) DO NOTHING;
 
 -- ---------- 9. 台账角色种子(AC-A6 角色表: 台账管理员 / 录入人 / 查看人) ----------
 -- data_scope: 1=全部 2=本部门 3=本人 (sys_role.data_scope, 见 01_schema.sql)
