@@ -226,13 +226,15 @@
 
 ## 8. 权限模型
 
-### 8.1 权限码
+### 8.1 权限码（菜单种子 `database/45_ledger.sql` §8）
 
-| 权限码 | 含义 |
-|---|---|
-| `ledger` | 分组菜单（一级菜单 109，同时作为前端路由 `meta.permission`） |
-| `ledger:ledger` / `ledger:repository` / `ledger:notify` | 三个子页面 |
-| `ledger:view` / `ledger:add` / `ledger:edit` / `ledger:delete` / `ledger:download` | 按钮/接口级 |
+| 权限码 | 类型（id） | 含义 |
+|---|---|---|
+| `ledger` | 菜单（2100） | 「证据台账」一级菜单，同时作为前端路由 `meta.permission` |
+| `ledger:ledger` / `ledger:repository` / `ledger:notify` | 子页（2101 / 2102 / 2103） | 台账录入 / 资料汇总处 / 变更通知 |
+| `ledger:view` / `ledger:add` / `ledger:edit` / `ledger:delete` / `ledger:download` | 按钮（2105–2109） | 查看 / 新建 / 编辑 / 删除 / 下载 |
+
+**id 段位与修复说明**：台账权限整体占用 **2100–2109** 高位段（2100 菜单、2101–2103 子页、2105–2109 按钮）。早期版本曾用 `109` / `1091` / `1092`，与 `database/03_schema_extend.sql` 的 `archive`(109) / `archive:view`(1091) / `archive:upload`(1092) 主键冲突，被 `ON CONFLICT (id) DO NOTHING` 静默吞掉，导致 `ledger` / `ledger:repository` / `ledger:notify` 从未落库，非 ADMIN 角色被路由守卫拦在台账页外。修复见 `database/47_permission_seed_repair.sql` §4–§6：按 `perm_code` 幂等补插上述权限码、把存量库中已落库的 `ledger:*` 行改挂回 `ledger` 菜单，并重新补授角色；该脚本对全新库（00→47）与已应用旧版 45 号的存量库均可重复执行。
 
 ### 8.2 角色矩阵（字典与菜单种子 `database/45_ledger.sql` §9）
 

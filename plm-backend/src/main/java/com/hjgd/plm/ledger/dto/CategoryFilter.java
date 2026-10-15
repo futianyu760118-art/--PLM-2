@@ -1,5 +1,6 @@
 package com.hjgd.plm.ledger.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -17,6 +18,8 @@ public class CategoryFilter {
 
     private List<CategoryFilterGroup> dims = new ArrayList<>();
 
+    /** 派生判断，不做 JSON 属性（否则会被序列化为 {@code empty} 字段） */
+    @JsonIgnore
     public boolean isEmpty() {
         if (dims == null || dims.isEmpty()) {
             return true;

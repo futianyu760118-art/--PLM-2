@@ -275,15 +275,17 @@ AC-B2-1/B2-2/B2-6 因此不是三条分散的 if，而是**同一个判定**：`
 
 ### 8.1 权限码（`database/46_subscription.sql` §10）
 
-| 权限码 | 类型 | 含义 |
+| 权限码 | 类型（id） | 含义 |
 |---|---|---|
-| `subscription` | 菜单（id 111） | 「订阅与报告」一级菜单，同时作为前端路由 `meta.permission` |
-| `subscription:category` | 子页（1110） | 分类管理页 |
-| `subscription:sub` | 子页（1111） | 我的订阅页 |
-| `subscription:report` | 子页（1112） | 我的报告页 |
-| `subscription:view` / `subscription:manage` | 按钮（1115/1116） | 查看订阅 / 管理订阅 |
-| `category:view` / `category:manage` | 按钮（1117/1118） | 查看分类维度 / 管理本部门分类 |
-| `report:view` / `report:download` | 按钮（1119/1120） | 查看报告 / 下载报告 |
+| `subscription` | 菜单（2000） | 「订阅与报告」一级菜单，同时作为前端路由 `meta.permission` |
+| `subscription:category` / `subscription:sub` / `subscription:report` | 子页（2001 / 2002 / 2003） | 分类管理 / 我的订阅 / 我的报告 |
+| `subscription:view` / `subscription:manage` | 按钮（2005 / 2006） | 查看订阅 / 管理订阅 |
+| `category:view` / `category:manage` | 按钮（2007 / 2008） | 查看分类维度 / 管理本部门分类 |
+| `report:view` / `report:download` | 按钮（**1126** / 2010） | 查看报告 / 下载报告 |
+
+**id 段位与修复说明**：订阅与报告权限占用 **2000–2010** 高位段（2000 菜单、2001–2003 子页、2005–2010 按钮）。早期版本曾用 `111` / `1110`–`1120`，其中 1110–1120 已被 `database/36_ebms_users_roles.sql` 占用——36 号未指定 id，由 `sys_permission_id_seq` 自增得到：1110=inquiry:import、1111=inquiry:export、1112=product:view、1115=product:delete、1116=customer:view、1117=customer:create、1118=customer:edit、1119=customer:delete、1120=material:view；冲突被 `ON CONFLICT (id) DO NOTHING` 静默吞掉，`category:view`/`category:manage`/`report:download`/`subscription:category`/`subscription:sub`/`subscription:report`/`subscription:view`/`subscription:manage` 均未落库，对应接口在 `@PreAuthorize` 上对全部角色（含 ADMIN）返回 403。修复见 `database/47_permission_seed_repair.sql` §1–§3：按 `perm_code` 幂等补插缺失权限码并重新补授角色。
+
+`report:view` 是其中唯一的例外：它已由 36 号脚本以 `id=1126`（`parent_id=0`）落库为同名权限码，46 号脚本因改用 `ON CONFLICT (perm_code) DO NOTHING` 而把它整行跳过，故其实际 id 仍是 **1126**，并非上表中的 2009。
 
 ### 8.2 角色矩阵
 
@@ -293,7 +295,7 @@ AC-B2-1/B2-2/B2-6 因此不是三条分散的 if，而是**同一个判定**：`
 | `LEDGER_ADMIN` | 1（全部） | 订阅与报告全量 + `category:view`（**不含** `category:manage`，分类维护归部门分类管理员） |
 | `LEDGER_EDITOR` / `LEDGER_VIEWER` / `ENGINEER` | 沿用 | 订阅与报告 + `category:view` |
 | `QUALITY` / `SALES` | 沿用 | 订阅与报告 + `category:view` |
-| `ADMIN` | 1 | 全量（种子按 `perm_code` 补授，含 111x 段） |
+| `ADMIN` | 1 | 全量（种子按 `perm_code` 补授，含 2000–2010 段） |
 
 ### 8.3 界面与行级范围
 
