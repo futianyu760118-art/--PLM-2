@@ -219,25 +219,28 @@ WHERE d.dim_name = '资料类型' AND d.dept_id IS NULL AND d.deleted = 0
       WHERE cv.dim_id = d.id AND cv.value_name = v.value_name AND cv.deleted = 0);
 
 -- ---------- 10. 菜单权限种子(复用 sys_permission) ----------
--- 一级菜单 111「订阅与报告」+ 三页: 分类管理 / 我的订阅 / 我的报告; 按钮权限 1115..1120。
--- 注: 111 及 111x 段在既有种子中未被占用(110 = 外协, 109 = 台账/档案)。
+-- 一级菜单「订阅与报告」+ 三页: 分类管理 / 我的订阅 / 我的报告; 按钮权限 2005..2010。
+-- 注: 使用 2000+ 高位段, 避开 02/03 号种子的显式 id(≤1103)以及 36 号脚本按
+--     sys_permission_id_seq 自增占用的 1104+ 段(36 号未指定 id, 落到哪一段取决于
+--     执行时的序列值, 无法用固定 id 预测); 冲突判据取 perm_code 而非 id。
+-- 注: report:view 已由 36 号脚本落库(id=1126, parent_id=0), 此处按 perm_code 跳过。
 INSERT INTO sys_permission (id, parent_id, perm_code, perm_name, perm_type, path, component, icon, sort_order)
 VALUES
-(111,   0,   'subscription',          '订阅与报告', 1, '/subscription',          NULL,                      'Bell',     7),
-(1110,  111, 'subscription:category', '分类管理',   1, '/subscription/category', 'subscription/category',   'PriceTag', 1),
-(1111,  111, 'subscription:sub',      '我的订阅',   1, '/subscription/list',     'subscription/subscription','Star',    2),
-(1112,  111, 'subscription:report',   '我的报告',   1, '/subscription/report',   'subscription/report',     'Document', 3)
-ON CONFLICT (id) DO NOTHING;
+(2000,   0,   'subscription',          '订阅与报告', 1, '/subscription',          NULL,                      'Bell',     7),
+(2001,  2000, 'subscription:category', '分类管理',   1, '/subscription/category', 'subscription/category',   'PriceTag', 1),
+(2002,  2000, 'subscription:sub',      '我的订阅',   1, '/subscription/list',     'subscription/subscription','Star',    2),
+(2003,  2000, 'subscription:report',   '我的报告',   1, '/subscription/report',   'subscription/report',     'Document', 3)
+ON CONFLICT (perm_code) DO NOTHING;
 
 INSERT INTO sys_permission (id, parent_id, perm_code, perm_name, perm_type, sort_order)
 VALUES
-(1115, 111, 'subscription:view',     '查看订阅',     2, 1),
-(1116, 111, 'subscription:manage',   '管理订阅',     2, 2),
-(1117, 111, 'category:view',         '查看分类维度', 2, 3),
-(1118, 111, 'category:manage',       '管理部门分类', 2, 4),
-(1119, 111, 'report:view',           '查看报告',     2, 5),
-(1120, 111, 'report:download',       '下载报告',     2, 6)
-ON CONFLICT (id) DO NOTHING;
+(2005, 2000, 'subscription:view',     '查看订阅',     2, 1),
+(2006, 2000, 'subscription:manage',   '管理订阅',     2, 2),
+(2007, 2000, 'category:view',         '查看分类维度', 2, 3),
+(2008, 2000, 'category:manage',       '管理部门分类', 2, 4),
+(2009, 2000, 'report:view',           '查看报告',     2, 5),
+(2010, 2000, 'report:download',       '下载报告',     2, 6)
+ON CONFLICT (perm_code) DO NOTHING;
 
 -- ---------- 11. 角色种子 ----------
 -- data_scope: 1=全部 2=本部门 3=本人 (sys_role.data_scope, 见 01_schema.sql)
