@@ -134,6 +134,28 @@ services:
     networks:
       - plm-network
 
+  # ============ AEOS 执行面智能体 (反向连接 AEOS Hub, 只读查询 PLM) ============
+  aeos-execution-agent:
+    build:
+      context: ./aeos-execution-agent
+      dockerfile: Dockerfile
+    container_name: plm2-aeos-agent
+    restart: unless-stopped
+    env_file:
+      - ./aeos-execution-agent/.env
+    environment:
+      # 容器网络内走服务名；覆盖 .env 中的宿主机地址
+      TARGET_QUERY_BASE_URL: http://backend:8080/api
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - plm-network
+
   # ============ Algorithm (Python FastAPI) ============
   algorithm:
     build:

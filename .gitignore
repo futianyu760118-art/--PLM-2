@@ -26,5 +26,12 @@ Thumbs.db
 # Temp
 *.tmp
 
+# Secrets
+aeos-execution-agent/.env
+aeos-execution-agent/.runner.lock
+
 # AEOS standard reference checkout (governance Phase 0)
 AEOS-/
+
+# Node deps (execution agent)
+aeos-execution-agent/node_modules/
