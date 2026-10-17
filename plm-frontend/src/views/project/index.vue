@@ -5,7 +5,8 @@
     <el-card>
       <el-form :inline="true" :model="query">
         <el-form-item label="搜索">
-          <el-input v-model="query.keyword" placeholder="编号/名称/料号/客户" clearable style="width:220px" />
+          <SearchHistory v-model="query.keyword" history-key="project-search" placeholder="编号/名称/料号/客户"
+            :suggestions="['进行中', '暂停', '已量产']" @search="search" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="query.status" placeholder="全部" clearable style="width:120px">
@@ -122,6 +123,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pageProject, createProject, updateProject, deleteProject, getGateLogs, passGate, getGateDefs } from '@/api/project'
 import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
+import SearchHistory from '@/components/SearchHistory.vue'
 
 const route = useRoute()
 
@@ -157,6 +159,7 @@ async function loadData() {
 }
 
 function resetQuery() { Object.assign(query, { pageNum:1, keyword:'', status:'' }); loadData() }
+function search() { query.pageNum = 1; loadData() }
 
 function openDialog(row) {
   Object.keys(form).forEach(k => delete form[k])

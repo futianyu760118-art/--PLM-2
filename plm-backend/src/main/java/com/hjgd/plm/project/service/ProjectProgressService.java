@@ -46,6 +46,8 @@ public class ProjectProgressService {
     private final GateService gateService;
     /** 统一证据底座：节点证据同时登记进 plm_evidence，形成可穿透链路（F09）。 */
     private final com.hjgd.plm.evidence.service.EvidenceService evidenceService;
+    /** 阶段门自动进阶：节点达成后自动推进当前门。 */
+    private final GateAdvanceService gateAdvanceService;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
@@ -155,6 +157,7 @@ public class ProjectProgressService {
         publishNodeEvent(node);
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
                 node.getNodeCode(), "CELL", "status", oldStatus, node.getStatus(), "UI");
+        gateAdvanceService.autoAdvance(projectId);
         return node;
     }
 
@@ -263,6 +266,7 @@ public class ProjectProgressService {
         // 变更列表留痕
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
                 node.getNodeCode(), "UPDATE", "status", oldStatus, node.getStatus(), "UI");
+        gateAdvanceService.autoAdvance(projectId);
         return node;
     }
 
@@ -323,6 +327,7 @@ public class ProjectProgressService {
         }
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
+        gateAdvanceService.autoAdvance(node.getProjectId());
         return ev;
     }
 
@@ -429,6 +434,12 @@ public class ProjectProgressService {
         w.eq(StringUtils.hasText(nodeCode), ProjectNodeEvidence::getNodeCode, nodeCode);
         w.eq(StringUtils.hasText(docType), ProjectNodeEvidence::getDocType, docType);
         w.eq(StringUtils.hasText(source), ProjectNodeEvidence::getSource, source);
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            w.eq(ProjectNodeEvidence::getUploadedBy, com.hjgd.plm.common.DataScope.name());
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            w.ne(ProjectNodeEvidence::getUploadedBy, com.hjgd.plm.common.DataScope.name());
+        }
         if (StringUtils.hasText(keyword)) {
             w.and(q -> q.like(ProjectNodeEvidence::getFileName, keyword)
                     .or().like(ProjectNodeEvidence::getNote, keyword)
@@ -440,8 +451,15 @@ public class ProjectProgressService {
 
     /** 证据分析: 总量/来源/按节点/按类型/按上传人/节点覆盖率/无证据节点。 */
     public Map<String, Object> evidenceStats(Long projectId) {
-        List<ProjectNodeEvidence> all = evidenceMapper.selectList(new LambdaQueryWrapper<ProjectNodeEvidence>()
-                .eq(projectId != null, ProjectNodeEvidence::getProjectId, projectId));
+        LambdaQueryWrapper<ProjectNodeEvidence> qw = new LambdaQueryWrapper<ProjectNodeEvidence>()
+                .eq(projectId != null, ProjectNodeEvidence::getProjectId, projectId);
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            qw.eq(ProjectNodeEvidence::getUploadedBy, com.hjgd.plm.common.DataScope.name());
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            qw.ne(ProjectNodeEvidence::getUploadedBy, com.hjgd.plm.common.DataScope.name());
+        }
+        List<ProjectNodeEvidence> all = evidenceMapper.selectList(qw);
         Map<String, Long> bySource = new LinkedHashMap<>();
         Map<String, Long> byDocType = new LinkedHashMap<>();
         Map<String, Long> byUploader = new LinkedHashMap<>();

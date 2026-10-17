@@ -3,13 +3,14 @@
     <el-card>
       <div class="head">
         <h3>产品工作空间</h3>
-        <el-select v-model="projectKey" filterable placeholder="选择产品/项目" style="width: 340px" @change="loadFacts">
-          <el-option v-for="p in projects" :key="p.id" :value="p.id" :label="`${p.projectNo || ''} ${p.projectName}`" />
+        <el-select v-model="projectKey" filterable placeholder="选择产品/项目" style="width: 360px" @change="loadFacts">
+          <el-option v-for="p in projects" :key="p.id" :value="p.id"
+            :label="`${p.projectNo || ''} ${p.projectName}【${statusLabel(p.status)}】`" />
         </el-select>
         <el-button icon="Refresh" :disabled="!projectId" @click="loadFacts">刷新</el-button>
       </div>
 
-      <el-empty v-if="!projectId" description="选择一个项目/产品，聚合展示其研发上下文" :image-size="80" />
+      <el-empty v-if="!projectId" :description="emptyDesc" :image-size="80" />
 
       <template v-if="project">
         <el-descriptions :column="4" border size="small" class="facts">
@@ -32,6 +33,7 @@
               <span class="t">{{ s.label }}</span>
             </router-link>
           </div>
+          <p v-if="sheetTotal === 0" class="hint">该项目暂未录入工作表（可到「项目工作表」补录）；{{ sheetHint }}</p>
 
           <el-row :gutter="16">
             <el-col :xs="24" :md="12">
@@ -90,6 +92,16 @@ const SHEET_DEFS = [
   { type: 'test', label: '测试报告' }, { type: 'trial', label: '试产报告' }, { type: 'shipment', label: '出货' }
 ]
 
+const statusLabel = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停', CANCELLED: '取消' }[s] || s)
+const STATUS_ORDER = { ACTIVE: 0, ON_HOLD: 1, MP: 2, CLOSED: 3, CANCELLED: 4 }
+const emptyDesc = '没有可查看的项目/产品（非管理员只显示本人负责的项目）'
+const sheetTotal = computed(() => card.value ? Object.values(card.value.sheets || {}).reduce((a, b) => a + (b || 0), 0) : 0)
+const sheetHint = computed(() => {
+  if (!card.value) return ''
+  // 找出工作表数据最多的项目提示（仅当当前项目为空时提示用户可切换）
+  return '可切换其它项目查看'
+})
+
 const QUICK = [
   { label: '项目明细表', to: '/project/progress' },
   { label: '研发项目跟踪', to: '/project/tracking' },
@@ -104,6 +116,8 @@ async function init() {
   let list = res.data.records || []
   // 非管理员：产品空间只显示登录者负责的项目
   if (!isAdmin.value && userStore.realName) list = list.filter((p) => p.owner === userStore.realName)
+  // 进行中/暂停优先，已关闭置后（默认选中更有意义的进行中项目）
+  list.sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9))
   projects.value = list
   if (projects.value.length) {
     projectId.value = projectKey.value = projects.value[0].id
@@ -149,6 +163,7 @@ init()
 .mini .t { font-size: 12px; color: #909399; }
 .gates { padding: 4px 0 0 4px; }
 .gates .op { color: #909399; font-size: 12px; }
+.hint { margin: 8px 0 0; font-size: 12px; color: #e6a23c; }
 .muted { color: #c0c4cc; font-size: 13px; }
 .quick { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .note { margin: 10px 0 0; font-size: 12px; color: #909399; }

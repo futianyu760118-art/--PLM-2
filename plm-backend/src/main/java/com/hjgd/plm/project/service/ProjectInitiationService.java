@@ -73,6 +73,15 @@ public class ProjectInitiationService {
         LambdaQueryWrapper<ProjectInitiation> w = new LambdaQueryWrapper<>();
         w.eq(StringUtils.hasText(status), ProjectInitiation::getApprovalStatus, status);
         w.eq(StringUtils.hasText(stage), ProjectInitiation::getWorkflowStage, stage);
+        // 数据可见性：1=全部, 2=仅他人, 3=仅本人（applicant/owner）
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            String me = com.hjgd.plm.common.DataScope.name();
+            w.and(q -> q.eq(ProjectInitiation::getApplicant, me).or().eq(ProjectInitiation::getOwner, me));
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            String me = com.hjgd.plm.common.DataScope.name();
+            w.and(q -> q.ne(ProjectInitiation::getApplicant, me).ne(ProjectInitiation::getOwner, me));
+        }
         if (StringUtils.hasText(keyword)) {
             w.and(q -> q.like(ProjectInitiation::getProjectName, keyword)
                     .or().like(ProjectInitiation::getProjectNo, keyword)

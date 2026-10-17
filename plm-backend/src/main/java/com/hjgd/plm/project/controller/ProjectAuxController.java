@@ -197,9 +197,17 @@ public class ProjectAuxController {
     @Operation(summary = "逾期项目")
     @GetMapping("/analysis/delay")
     public Result<List<Map<String, Object>>> analysisDelay() {
+        // 数据可见性：1=全部, 2=仅他人, 3=仅本人
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        String scope = "1=1";
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            scope = "owner='" + com.hjgd.plm.common.DataScope.name().replace("'", "''") + "'";
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            scope = "owner IS DISTINCT FROM '" + com.hjgd.plm.common.DataScope.name().replace("'", "''") + "'";
+        }
         return Result.success(jdbcTemplate.queryForList(
                 "SELECT project_no, project_name, target_date, current_gate, status " +
                         "FROM plm_project WHERE target_date IS NOT NULL AND target_date < CURRENT_DATE " +
-                        "AND status NOT IN ('CLOSED','CANCELLED') ORDER BY target_date"));
+                        "AND status NOT IN ('CLOSED','CANCELLED') AND " + scope + " ORDER BY target_date"));
     }
 }

@@ -112,14 +112,26 @@
       </el-col>
       <el-col :span="8">
         <el-card>
-          <template #header><span>我的待办(待审批/待整改)</span></template>
-          <div v-for="wi in workItems" :key="wi.id" style="padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:6px">
-            <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" :title="wi.title">{{ wi.title }}</span>
-            <el-tag :type="workItemTag(wi.status)" size="small">{{ wi.status }}</el-tag>
-            <el-button link type="primary" size="small" @click="openWorkItemLedger(wi)">证据</el-button>
-            <el-button v-if="wi.status !== 'DONE'" link type="success" size="small" @click="handleCompleteWork(wi)">完成</el-button>
+          <template #header>
+            <span>我的待办（项目未完成节点：待办 {{ todos.todoCount }} · 逾期 {{ todos.overdueCount }}）</span>
+          </template>
+          <div v-if="todos.overdue && todos.overdue.length" class="todos-sec">
+            <div class="todos-sec-head od">逾期</div>
+            <div v-for="t in todos.overdue" :key="t.project_no + t.node_code" class="todo-line">
+              <span class="tl">{{ t.project_no }} · {{ t.node_name }}</span>
+              <span class="od">{{ (t.plan_date || '').slice(0, 10) }}</span>
+            </div>
           </div>
-          <el-empty v-if="!workItems.length" description="暂无待办" :image-size="60" />
+          <div v-if="todos.todo && todos.todo.length" class="todos-sec">
+            <div class="todos-sec-head">待办</div>
+            <div v-for="t in todos.todo" :key="t.project_no + t.node_code" class="todo-line">
+              <span class="tl">{{ t.project_no }} · {{ t.node_name }}</span>
+              <span class="due">{{ t.plan_date ? t.plan_date.slice(0, 10) : '无到期' }}</span>
+            </div>
+          </div>
+          <el-empty v-if="!todos.todoCount && !todos.overdueCount" description="暂无待办" :image-size="60" />
+          <el-button v-if="todos.todoCount || todos.overdueCount" link type="primary" size="small" style="margin-top:8px"
+            @click="$router.push('/project/tasks')">查看全部 →</el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -153,7 +165,7 @@ import { getStats, materialTypeDist, materialStatusDist, ecnTrend } from '@/api/
 import { kpiValues } from '@/api/metric'
 import { listInsights } from '@/api/issue'
 import { myWorkItems, completeWorkItem } from '@/api/workitem'
-import { meOverview } from '@/api/me'
+import { meOverview, myTodos } from '@/api/me'
 import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const userStore = useUserStore()
@@ -168,6 +180,14 @@ const kpiList = ref([])
 const kpiLoading = ref(false)
 const insights = ref([])
 const workItems = ref([])
+const todos = ref({ todo: [], overdue: [], todoCount: 0, overdueCount: 0 })
+
+async function loadTodos() {
+  try {
+    const res = await myTodos()
+    todos.value = { ...todos.value, ...(res.data || {}) }
+  } catch { }
+}
 const me = ref(null)
 const meLoading = ref(false)
 
@@ -264,6 +284,7 @@ onMounted(async () => {
   loadInsightsFeed()
   loadWorkItems()
   loadMe()
+  loadTodos()
   window.addEventListener('resize', onResize)
 })
 
@@ -303,6 +324,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+.todos-sec { margin-bottom: 8px; }
+.todos-sec-head { font-size: 12px; color: #909399; font-weight: 600; margin-bottom: 4px; }
+.todos-sec-head.od { color: #f56c6c; }
+.todo-line { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+.todo-line .tl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-line .od { color: #f56c6c; font-size: 12px; }
+.todo-line .due { color: #909399; font-size: 12px; }
 .me-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .me-cell { border: 1px solid #e4e7ed; border-radius: 10px; padding: 14px; text-decoration: none;
   display: flex; flex-direction: column; gap: 2px; background: #fff;

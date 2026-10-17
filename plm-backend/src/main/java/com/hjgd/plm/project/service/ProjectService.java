@@ -46,6 +46,13 @@ public class ProjectService {
                     .or().like(Project::getCustomerName, keyword));
         }
         w.eq(StringUtils.hasText(status), Project::getStatus, status);
+        // 数据可见性：1=全部(默认), 2=仅他人, 3=仅本人
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            w.eq(Project::getOwner, com.hjgd.plm.common.DataScope.name());
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            w.ne(Project::getOwner, com.hjgd.plm.common.DataScope.name());
+        }
         w.orderByDesc(Project::getUpdatedAt);
         return PageResult.of(projectMapper.selectPage(new Page<>(pageNum, pageSize), w));
     }

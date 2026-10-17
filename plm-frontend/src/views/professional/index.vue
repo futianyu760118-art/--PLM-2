@@ -1,100 +1,73 @@
 <template>
   <div class="page-container">
-    <el-row :gutter="16">
-      <el-col :xs="24" :md="8">
-        <el-card v-loading="loading">
-          <template #header><span>岗位行动</span></template>
-          <div class="kpis">
-            <div class="kpi warn" @click="$router.push('/project/tasks')">
-              <b>{{ me?.todos?.open + me?.todos?.escalated || 0 }}</b><span>我的待办</span>
-            </div>
-            <div class="kpi danger" @click="$router.push('/project/tracking')">
-              <b>{{ me?.nodes?.overdue || 0 }}</b><span>逾期节点</span>
-            </div>
-            <div class="kpi ok" @click="$router.push('/project/evidence')">
-              <b>{{ me?.evidence || 0 }}</b><span>我的证据</span>
-            </div>
-          </div>
-          <el-divider>逾期提醒</el-divider>
-          <div v-for="o in (me?.nodes?.overdueList || [])" :key="o.project_no" class="line danger">
-            {{ o.project_no }} · {{ o.node_name }}（计划 {{ (o.plan_date || '').slice(0, 10) }}）
-          </div>
-          <p v-if="!(me?.nodes?.overdueList || []).length" class="muted">无逾期，继续保持</p>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card v-loading="loading">
-          <template #header><span>工程评审</span></template>
-          <div v-for="r in reviews" :key="r.review_no" class="line">
-            <el-tag size="small" :type="r.conclusion === '通过' ? 'success' : 'warning'">{{ r.conclusion }}</el-tag>
-            {{ r.project_no }} · {{ r.review_type }}（{{ (r.review_date || '').slice(0, 10) }}）
-          </div>
-          <p v-if="!reviews.length" class="muted">暂无评审记录</p>
-          <el-divider>最近变更</el-divider>
-          <div v-for="c in changes" :key="c.id" class="line">
-            {{ c.project_no }} · {{ c.object_type }} {{ c.action }}（{{ (c.created_at || '').slice(5, 16) }}）
-          </div>
-          <p v-if="!changes.length" class="muted">暂无变更</p>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :md="8">
-        <el-card>
-          <template #header><span>工具画廊</span></template>
-          <div class="tools">
-            <div v-for="t in TOOLS" :key="t.to" class="tool" @click="$router.push(t.to)">
-              <el-icon :size="22"><component :is="t.icon" /></el-icon>
-              <span>{{ t.label }}</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <el-card v-loading="loading">
+      <template #header><span>专业视图集 · 同一项目数据，按岗位分组呈现</span></template>
+      <div v-for="g in groups" :key="g.owner" class="pg">
+        <div class="pg-head">
+          <el-icon><User /></el-icon><b>{{ g.owner || '未分配' }}</b>
+          <span class="cnt">{{ g.items.length }} 个项目</span>
+          <span v-if="g.overdue" class="od">逾期 {{ g.overdue }}</span>
+        </div>
+        <el-table :data="g.items" border stripe size="small">
+          <el-table-column prop="projectNo" label="项目编号" width="150" />
+          <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
+          <el-table-column label="阶段" width="80" align="center">
+            <template #default="{ row }"><el-tag size="small">{{ row.currentStage }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="节点" width="90" align="center">
+            <template #default="{ row }">{{ row.nodeDone }}/{{ row.nodeTotal }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }"><el-tag size="small" :type="tag(row.status)">{{ label(row.status) }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="操作" width="90" align="center">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="open(row)">明细</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-empty v-if="!loading && !groups.length" description="暂无项目" :image-size="70" />
+    </el-card>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { meOverview } from '@/api/me'
-import request from '@/utils/request'
+import { useRouter } from 'vue-router'
+import { pageTracking } from '@/api/project'
 
-const me = ref(null)
-const reviews = ref([])
-const changes = ref([])
+const router = useRouter()
+const groups = ref([])
 const loading = ref(false)
+const label = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停' }[s] || s)
+const tag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON_HOLD: 'warning' }[s] || 'info')
 
-const TOOLS = [
-  { label: '智能体中心', to: '/agent/list', icon: 'MagicStick' },
-  { label: '数据自检', to: '/dq/debts', icon: 'DataLine' },
-  { label: '度量KPI', to: '/metric/list', icon: 'TrendCharts' },
-  { label: '分析驾驶舱', to: '/analytics/list', icon: 'DataAnalysis' },
-  { label: '证据台账', to: '/project/evidence', icon: 'Collection' },
-  { label: '帮助与学习', to: '/help', icon: 'QuestionFilled' }
-]
-
-onMounted(async () => {
+async function load() {
   loading.value = true
   try {
-    meOverview().then(r => (me.value = r.data)).catch(() => {})
-    request({ url: '/rd/sheets/review', params: { pageNum: 1, pageSize: 5 } }).then(r => (reviews.value = r.data.records || [])).catch(() => {})
-    request({ url: '/project/changes', params: { pageNum: 1, pageSize: 5 } }).then(r => (changes.value = (r.data.records || []))).catch(() => {})
+    const res = await pageTracking({ pageNum: 1, pageSize: 200 })
+    const rows = res.data.records || []
+    const map = {}
+    for (const r of rows) {
+      const key = r.owner || '未分配'
+      if (!map[key]) map[key] = []
+      map[key].push(r)
+    }
+    groups.value = Object.entries(map).map(([owner, items]) => ({
+      owner,
+      items,
+      overdue: items.filter((i) => i.overdueCells && Object.keys(i.overdueCells).length).length
+    }))
   } finally { loading.value = false }
-})
+}
+function open(row) { router.push({ path: '/project/progress', query: { project: row.id } }) }
+onMounted(load)
 </script>
 
 <style scoped>
-.kpis { display: flex; gap: 10px; }
-.kpi { flex: 1; text-align: center; border: 1px solid #e4e7ed; border-radius: 8px; padding: 10px; cursor: pointer; transition: transform .12s; }
-.kpi:active { transform: scale(.95); }
-.kpi b { display: block; font-size: 22px; }
-.kpi span { font-size: 12px; color: #909399; }
-.kpi.warn b { color: #e6a23c; } .kpi.danger b { color: #f56c6c; } .kpi.ok b { color: #67c23a; }
-.line { padding: 6px 0; border-bottom: 1px dashed #f0f0f0; font-size: 13px; }
-.line.danger { color: #f56c6c; }
-.muted { color: #c0c4cc; font-size: 13px; }
-.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.tool { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 8px;
-  border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; font-size: 12px; color: #606266;
-  transition: transform .12s cubic-bezier(.34,1.56,.64,1), box-shadow .15s; }
-.tool:hover { box-shadow: 0 2px 8px rgba(64,158,255,.15); color: var(--plm-accent, #409eff); }
-.tool:active { transform: scale(.94); }
+.pg { margin-bottom: 16px; }
+.pg-head { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-bottom: 6px; }
+.pg-head .cnt { font-size: 12px; color: #909399; }
+.pg-head .od { font-size: 12px; color: #f56c6c; }
 </style>

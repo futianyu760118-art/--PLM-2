@@ -12,6 +12,7 @@ import com.hjgd.plm.project.entity.ProjectNodeEvidence;
 import com.hjgd.plm.project.mapper.ProjectMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeEvidenceMapper;
 import com.hjgd.plm.project.mapper.ProjectNodeMapper;
+import com.hjgd.plm.project.service.GateAdvanceService;
 import com.hjgd.plm.project.service.ProjectProgressService;
 import com.hjgd.plm.rd.service.ChangeLogService;
 import org.junit.jupiter.api.DisplayName;
@@ -49,6 +50,7 @@ class ProjectProgressServiceTest {
     @Mock private ChangeLogService changeLogService;
     @Mock private GateService gateService;
     @Mock private EvidenceService evidenceService;
+    @Mock private GateAdvanceService gateAdvanceService;
     @InjectMocks private ProjectProgressService service;
 
     @Test

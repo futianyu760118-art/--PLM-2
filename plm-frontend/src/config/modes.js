@@ -63,6 +63,7 @@ export const MODES = {
       ] },
       { stage: '工具画廊', icon: 'MagicStick', items: [
         { path: '/agent/list', title: '智能体中心', icon: 'MagicStick' },
+        { path: '/improve/skills', title: '技能库', icon: 'Collection' },
         { path: '/dq/debts', title: '数据自检', icon: 'DataLine' },
         { path: '/metric/list', title: '度量KPI', icon: 'TrendCharts' },
         { path: '/analytics/list', title: '分析驾驶舱', icon: 'DataAnalysis' }
@@ -108,6 +109,7 @@ export const MODES = {
       ] },
       { stage: '配置', icon: 'Setting', items: [
         { path: '/agent/list', title: '智能体', icon: 'MagicStick' },
+        { path: '/improve/skills', title: '技能库', icon: 'Collection' },
         { path: '/help', title: '帮助与学习', icon: 'QuestionFilled' }
       ] }
     ]

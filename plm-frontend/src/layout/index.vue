@@ -78,6 +78,19 @@
               <span class="agent-entry-label">PLM智能体</span>
             </button>
           </el-tooltip>
+          <el-dropdown v-if="!isAdminRole" @command="switchScope">
+            <button class="agent-entry" aria-label="数据范围">
+              <el-icon :size="16"><View /></el-icon>
+              <span class="agent-entry-label">{{ scopeLabel }}</span>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="1" :disabled="scope === 1">看全部</el-dropdown-item>
+                <el-dropdown-item command="2" :disabled="scope === 2">只看别人</el-dropdown-item>
+                <el-dropdown-item command="3" :disabled="scope === 3">只看自己</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-dropdown @command="handleCommand">
             <span class="user-info">
               <el-avatar :size="30" :src="userStore.avatar">{{ userStore.realName?.charAt(0) }}</el-avatar>
@@ -124,6 +137,7 @@ import AgentChat from '@/components/agent/AgentChat.vue'
 import ThemePanel from '@/components/appearance/ThemePanel.vue'
 import { useAppearanceStore } from '@/stores/appearance'
 import { MODES, MODE_LIST } from '@/config/modes'
+import { myScope, setMyScope } from '@/api/me'
 import router from '@/router'
 
 const agentChatVisible = ref(false)
@@ -141,12 +155,9 @@ watch(() => route.query.mode, (m) => {
 function switchMode(key) {
   appearance.setMode(key)
   router.replace({ query: { ...route.query, mode: key } }).catch(() => {})
-  // 当前路由在新模式无对应入口时，回该模式主页
-  const mode = MODES[key]
-  if (key === 'classic') return
-  const paths = new Set(mode.groups.flatMap((g) => g.items.map((i) => i.path)))
-  paths.add('/dashboard'); paths.add('/help'); paths.add('/lifecycle')
-  if (!paths.has(route.path)) routerPush.push(mode.home)
+  // 点击模式即跳转到该模式主页(项目协同→看板, 产品空间→工作空间…)
+  const home = MODES[key]?.home || '/dashboard'
+  if (route.path !== home) routerPush.push(home)
 }
 
 const route = useRoute()
@@ -155,6 +166,17 @@ const userStore = useUserStore()
 const isCollapse = ref(false)
 const navKeyword = ref('')
 const openStages = ref([])
+
+const isAdminRole = computed(() => userStore.roles.includes('ADMIN'))
+const scope = ref(1)
+const scopeLabel = computed(() => ({ 1: '看全部', 2: '只看别人', 3: '只看自己' }[scope.value] || '看全部'))
+async function loadScope() {
+  try { const r = await myScope(); scope.value = r?.data?.dataScope ?? 1 } catch { scope.value = 1 }
+}
+async function switchScope(v) {
+  try { await setMyScope(Number(v)); scope.value = Number(v); window.location.reload() } catch { /* 忽略 */ }
+}
+loadScope()
 
 // 工序前后顺序(上游 → 下游)
 const STAGE_ORDER = [

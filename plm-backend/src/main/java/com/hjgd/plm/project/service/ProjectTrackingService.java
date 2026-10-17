@@ -62,6 +62,12 @@ public class ProjectTrackingService {
         }
         String st = mapStatus(status);
         w.eq(StringUtils.hasText(st), Project::getStatus, st);
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            w.eq(Project::getOwner, com.hjgd.plm.common.DataScope.name());
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            w.ne(Project::getOwner, com.hjgd.plm.common.DataScope.name());
+        }
         w.orderByDesc(Project::getUpdatedAt);
         List<Project> projects = projectMapper.selectList(w);
 

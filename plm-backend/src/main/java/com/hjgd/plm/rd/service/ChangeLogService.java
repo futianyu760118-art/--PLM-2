@@ -68,6 +68,18 @@ public class ChangeLogService {
         java.util.List<Object> args = new java.util.ArrayList<>();
         if (StringUtils.hasText(projectNo)) { where.append(" AND project_no=?"); args.add(projectNo); }
         if (StringUtils.hasText(objectType)) { where.append(" AND object_type=?"); args.add(objectType); }
+        // 数据可见性：1=全部, 2=仅他人, 3=仅本人（operator 或本人项目）
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds != com.hjgd.plm.common.DataScope.SCOPE_ALL) {
+            String me = com.hjgd.plm.common.DataScope.name();
+            if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+                where.append(" AND (operator=? OR project_no IN (SELECT project_no FROM plm_project WHERE owner=?))");
+            } else {
+                where.append(" AND (operator IS DISTINCT FROM ? AND project_no NOT IN (SELECT project_no FROM plm_project WHERE owner=?))");
+            }
+            args.add(me);
+            args.add(me);
+        }
         Long total = jdbc.queryForObject("SELECT count(*) FROM plm_project_change_log" + where, Long.class, args.toArray());
         List<Map<String, Object>> records = jdbc.queryForList(
                 "SELECT id, project_no AS projectNo, object_type AS objectType, object_id AS objectId, " +

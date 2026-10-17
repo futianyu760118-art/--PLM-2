@@ -85,6 +85,11 @@ public class LoginUser implements UserDetails {
         return (roles != null && !roles.isEmpty()) ? roles.get(0) : null;
     }
 
+    /** 数据可见范围: 1=全部, 3=仅本人(默认); null 视为仅本人 */
+    public int getDataScope() {
+        return user.getDataScope() == null ? 3 : user.getDataScope();
+    }
+
     /** 是否被标记为「登录后必须改密」 */
     public boolean isMustChangePassword() {
         return user.getMustChangePassword() != null && user.getMustChangePassword() == 1;

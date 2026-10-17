@@ -1,12 +1,15 @@
 package com.hjgd.plm.me.controller;
 
 import com.hjgd.plm.auth.security.SecurityUtils;
+import com.hjgd.plm.common.DataScope;
 import com.hjgd.plm.common.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -92,5 +95,58 @@ public class MeOverviewController {
         out.put("todayChanges", c("SELECT COUNT(*) FROM plm_project_change_log WHERE operator=? AND created_at::date=CURRENT_DATE", realName));
 
         return Result.success(out);
+    }
+
+    @Operation(summary = "当前用户数据范围(1=全部,2=仅他人,3=仅本人)")
+    @GetMapping("/scope")
+    public Result<Map<String, Object>> scope() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("dataScope", DataScope.scope());
+        m.put("admin", DataScope.admin());
+        return Result.success(m);
+    }
+
+    @Operation(summary = "我的待办(来自我负责项目的未完成节点): 逾期 / 待办 / 已完成")
+    @GetMapping("/todos")
+    public Result<Map<String, Object>> todos() {
+        String me = DataScope.name();
+        // 口径: 我负责的项目(project.owner=我)下的节点，或节点直接指定给我的；附带项目名称/状态
+        String scope = "(n.owner=? OR n.project_no IN (SELECT project_no FROM plm_project WHERE owner=?))";
+        String cols = "n.project_no, p.project_name, p.status AS project_status, " +
+                "n.node_code, n.node_name, n.status, n.plan_date, n.actual_date";
+        String from = " FROM plm_project_node n LEFT JOIN plm_project p ON p.project_no = n.project_no " +
+                "WHERE " + scope;
+        List<Map<String, Object>> overdue = jdbc.queryForList(
+                "SELECT " + cols + from + " AND n.status <> 'DONE' AND n.plan_date IS NOT NULL AND n.plan_date < CURRENT_DATE " +
+                        "ORDER BY n.plan_date", me, me);
+        List<Map<String, Object>> todo = jdbc.queryForList(
+                "SELECT " + cols + from + " AND n.status <> 'DONE' AND (n.plan_date IS NULL OR n.plan_date >= CURRENT_DATE) " +
+                        "ORDER BY n.plan_date NULLS LAST", me, me);
+        List<Map<String, Object>> done = jdbc.queryForList(
+                "SELECT " + cols + from + " AND n.status = 'DONE' ORDER BY n.actual_date DESC NULLS LAST LIMIT 200", me, me);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("overdue", overdue);
+        out.put("todo", todo);
+        out.put("done", done);
+        out.put("overdueCount", overdue.size());
+        out.put("todoCount", todo.size());
+        out.put("doneCount", done.size());
+        return Result.success(out);
+    }
+
+    @Operation(summary = "切换当前用户数据范围(工程师可看到/操作全部或仅本人)")
+    @PutMapping("/scope")
+    public Result<Map<String, Object>> setScope(@RequestBody Map<String, Object> body) {
+        Integer scope = body.get("dataScope") == null ? null : Integer.valueOf(String.valueOf(body.get("dataScope")));
+        if (scope == null || (scope != 1 && scope != 2 && scope != 3)) {
+            return Result.failed(400, "dataScope 仅支持 1(全部) / 2(仅他人) / 3(仅本人)");
+        }
+        Long uid = SecurityUtils.getCurrentUserId();
+        int n = jdbc.update("UPDATE sys_user SET data_scope=? WHERE id=?", scope, uid);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("dataScope", scope);
+        m.put("updated", n);
+        return Result.success(m);
     }
 }

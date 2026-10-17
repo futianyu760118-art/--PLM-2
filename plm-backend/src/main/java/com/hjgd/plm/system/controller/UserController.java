@@ -94,6 +94,10 @@ public class UserController {
         user.setPhone((String) body.get("phone"));
         user.setDeptId(body.get("deptId") == null ? null : Long.valueOf(body.get("deptId").toString()));
         user.setStatus(body.get("status") == null ? 1 : Integer.valueOf(body.get("status").toString()));
+        // 数据可见范围(管理员给其他人员设定): 1=全部, 3=仅本人
+        if (body.get("dataScope") != null) {
+            user.setDataScope(Integer.valueOf(body.get("dataScope").toString()));
+        }
         userMapper.updateById(user);
         List<String> roleCodes = (List<String>) body.get("roleCodes");
         if (roleCodes != null) {

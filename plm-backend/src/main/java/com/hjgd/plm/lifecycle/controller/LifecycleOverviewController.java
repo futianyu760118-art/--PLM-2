@@ -42,7 +42,7 @@ public class LifecycleOverviewController {
     @GetMapping("/overview")
     public Result<List<Map<String, Object>>> overview(@RequestParam(required = false, defaultValue = "false") boolean mine) {
         // 非管理员强制只看本人（登录者只显示自己拥有的相关内容）
-        boolean onlyMine = mine || !SecurityUtils.hasRole("ADMIN");
+        boolean onlyMine = mine || com.hjgd.plm.common.DataScope.scope() == com.hjgd.plm.common.DataScope.SCOPE_SELF;
         String me = onlyMine ? safeName() : null;
 
         List<Map<String, Object>> stages = new ArrayList<>();

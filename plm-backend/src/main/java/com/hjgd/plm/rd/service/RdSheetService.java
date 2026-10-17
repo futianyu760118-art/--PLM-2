@@ -118,6 +118,15 @@ public class RdSheetService {
         List<String> keys = d.cols().stream().map(RdSheetDefs.Col::key).toList();
         StringBuilder where = new StringBuilder(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
+        // 数据可见性：1=全部, 2=仅他人, 3=仅本人（按本人负责项目）
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds != com.hjgd.plm.common.DataScope.SCOPE_ALL) {
+            String me = com.hjgd.plm.common.DataScope.name();
+            where.append(ds == com.hjgd.plm.common.DataScope.SCOPE_SELF
+                    ? " AND project_no IN (SELECT project_no FROM plm_project WHERE owner=?)"
+                    : " AND project_no NOT IN (SELECT project_no FROM plm_project WHERE owner=?)");
+            args.add(me);
+        }
         if (StringUtils.hasText(projectNo)) {
             where.append(" AND project_no = ? ");
             args.add(projectNo);

@@ -48,6 +48,12 @@ public class WorkItemController {
                                             @RequestParam(required = false) String status) {
         LambdaQueryWrapper<WorkItem> w = new LambdaQueryWrapper<>();
         if (status != null) w.eq(WorkItem::getStatus, status);
+        int ds = com.hjgd.plm.common.DataScope.scope();
+        if (ds == com.hjgd.plm.common.DataScope.SCOPE_SELF) {
+            try { w.eq(WorkItem::getOwnerId, com.hjgd.plm.common.DataScope.uid()); } catch (Exception ignored) { }
+        } else if (ds == com.hjgd.plm.common.DataScope.SCOPE_OTHERS) {
+            try { w.ne(WorkItem::getOwnerId, com.hjgd.plm.common.DataScope.uid()); } catch (Exception ignored) { }
+        }
         w.orderByAsc(WorkItem::getSlaDueAt);
         return Result.success(PageResult.of(mapper.selectPage(new Page<>(pageNum, pageSize), w)));
     }

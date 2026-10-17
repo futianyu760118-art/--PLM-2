@@ -40,6 +40,7 @@ public class SysUser extends BaseEntity {
     private String source;
     /** EBMS 迁入批次号，用于精确回滚 */
     private String migrationRunId;
+    private Integer dataScope;
 
     @TableField(exist = false)
     private String deptName;
