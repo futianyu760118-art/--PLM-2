@@ -52,7 +52,32 @@
             <el-breadcrumb-item v-if="$route.meta?.title && currentStage !== '工作台'">{{ $route.meta.title }}</el-breadcrumb-item>
           </el-breadcrumb>
         </div>
+        <div class="header-modes" role="tablist" aria-label="界面模式 · 同一项目，同一份数据">
+          <span class="modes-title">界面模式<i>同一项目 · 同一份数据</i></span>
+          <el-tooltip v-for="m in MODE_LIST" :key="m.key" :content="m.desc" placement="bottom">
+            <button class="mode-btn" :class="{ on: appearance.mode === m.key }" role="tab"
+              :aria-selected="appearance.mode === m.key" @click="switchMode(m.key)">
+              <b>{{ m.label }}</b><small>{{ m.desc }}</small>
+            </button>
+          </el-tooltip>
+        </div>
         <div class="header-right">
+          <el-tooltip content="外观设置（强调色/底色/密度）" placement="bottom">
+            <button class="agent-entry" aria-label="外观设置" @click="themeVisible = true">
+              <el-icon :size="16"><Brush /></el-icon>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="帮助与学习" placement="bottom">
+            <button class="agent-entry" aria-label="帮助与学习" @click="routerPush.push('/help')">
+              <el-icon :size="16"><QuestionFilled /></el-icon>
+            </button>
+          </el-tooltip>
+          <el-tooltip content="恒剑PLM智能体" placement="bottom">
+            <button class="agent-entry" @click="agentChatVisible = true">
+              <el-icon :size="16"><ChatDotRound /></el-icon>
+              <span class="agent-entry-label">PLM智能体</span>
+            </button>
+          </el-tooltip>
           <el-dropdown @command="handleCommand">
             <span class="user-info">
               <el-avatar :size="30" :src="userStore.avatar">{{ userStore.realName?.charAt(0) }}</el-avatar>
@@ -82,6 +107,10 @@
 
     <!-- 全局反馈入口:单点注入,所有走 Layout 的页面自动覆盖(AC F1) -->
     <FeedbackFab />
+    <!-- 恒剑PLM智能体对话抽屉(右上角入口) -->
+    <AgentChat v-model="agentChatVisible" />
+    <!-- 外观设置抽屉 -->
+    <ThemePanel v-model="themeVisible" />
   </el-container>
 </template>
 
@@ -91,7 +120,34 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import FeedbackFab from '@/components/feedback/FeedbackFab.vue'
+import AgentChat from '@/components/agent/AgentChat.vue'
+import ThemePanel from '@/components/appearance/ThemePanel.vue'
+import { useAppearanceStore } from '@/stores/appearance'
+import { MODES, MODE_LIST } from '@/config/modes'
 import router from '@/router'
+
+const agentChatVisible = ref(false)
+const themeVisible = ref(false)
+const appearance = useAppearanceStore()
+
+// 其它页面（如 Multica 风格首页）请求打开总控对话
+window.addEventListener('plm-open-agent-chat', () => { agentChatVisible.value = true })
+
+// URL ?mode= 同步（白名单校验；非法参数忽略）
+watch(() => route.query.mode, (m) => {
+  if (m && MODES[m] && m !== appearance.mode) appearance.setMode(m)
+}, { immediate: true })
+
+function switchMode(key) {
+  appearance.setMode(key)
+  router.replace({ query: { ...route.query, mode: key } }).catch(() => {})
+  // 当前路由在新模式无对应入口时，回该模式主页
+  const mode = MODES[key]
+  if (key === 'classic') return
+  const paths = new Set(mode.groups.flatMap((g) => g.items.map((i) => i.path)))
+  paths.add('/dashboard'); paths.add('/help'); paths.add('/lifecycle')
+  if (!paths.has(route.path)) routerPush.push(mode.home)
+}
 
 const route = useRoute()
 const routerPush = useRouter()
@@ -156,7 +212,30 @@ const groupedMenuRoutes = computed(() => {
 
 const isSearching = computed(() => navKeyword.value.trim().length > 0)
 
+// 当前用户可访问的完整路径集合（用于模式分组过滤：只显示登录者有权限的入口）
+const accessiblePaths = computed(() => {
+  const set = new Set(['/dashboard', '/help', '/lifecycle'])
+  for (const r of filteredRoutes.value) {
+    for (const c of r.children || []) set.add(fullPath(r, c))
+  }
+  return set
+})
+
 const visibleGroups = computed(() => {
+  // 非经典模式：使用模式自带分组（仅重组导航，业务页面/权限不变；按登录者权限过滤入口）
+  const modeDef = MODES[appearance.mode]
+  if (modeDef && modeDef.groups) {
+    const groups = modeDef.groups.map((g, i) => ({
+      stage: g.stage, icon: g.icon, idx: String(i + 1).padStart(2, '0'),
+      items: g.items.map((it) => ({ ...it })).filter((it) => accessiblePaths.value.has(it.path))
+    })).filter((g) => g.items.length)
+    if (!isSearching.value) return groups
+    const kw = navKeyword.value.trim().toLowerCase()
+    return groups
+      .map((g) => ({ ...g, items: g.items.filter((i) =>
+        i.title.toLowerCase().includes(kw) || g.stage.toLowerCase().includes(kw)) }))
+      .filter((g) => g.items.length)
+  }
   const groups = groupedMenuRoutes.value
   if (!isSearching.value) return groups
   const kw = navKeyword.value.trim().toLowerCase()
@@ -339,12 +418,60 @@ async function handleCommand(cmd) {
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
   .header-left { display: flex; align-items: center; gap: 16px; }
   .header-right { display: flex; align-items: center; }
+  .agent-entry { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+    margin-right: 14px; border: 1px solid #dcdfe6; background: #f5f7ff; color: #409eff;
+    border-radius: 16px; font-size: 13px; cursor: pointer;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background-color 0.25s ease;
+    &:hover { background: #ecf5ff; box-shadow: 0 2px 8px rgba(64, 158, 255, 0.25); }
+    &:active { transform: scale(0.95); } }
   .user-info { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .username { font-size: 14px; }
 }
 
-.main-content { background: #f0f2f5; padding: 0; overflow: auto; }
+.main-content { background: var(--plm-bg, #f0f2f5); padding: 0; overflow: auto; }
 .fade-transform-enter-active, .fade-transform-leave-active { transition: all 0.3s; }
 .fade-transform-enter-from { opacity: 0; transform: translateX(-20px); }
 .fade-transform-leave-to { opacity: 0; transform: translateX(20px); }
+
+// ===== 模式条与外观（AEOS 五模式，对齐 demo V6.2） =====
+.header .header-modes { display: flex; align-items: center; gap: 6px; margin-right: auto; margin-left: 18px; flex-wrap: wrap;
+  .modes-title { font-size: 12px; color: #909399; white-space: nowrap; margin-right: 4px;
+    i { font-style: normal; color: #c0c4cc; margin-left: 4px; font-size: 11px; } }
+  .mode-btn { border: 1px solid #e4e7ed; background: #fff; color: #606266; font-size: 12px;
+    height: 34px; padding: 0 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+    display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; line-height: 1.25;
+    transition: all .18s cubic-bezier(.34,1.56,.64,1);
+    b { font-weight: 600; font-size: 12px; }
+    small { font-size: 10px; color: #a8abb2; }
+    &:hover { border-color: var(--plm-accent, #409eff); color: #303133; transform: translateY(-1px); }
+    &.on { background: var(--plm-accent, #409eff); border-color: var(--plm-accent, #409eff); color: #fff;
+      small { color: rgba(255,255,255,.75); } } } }
+
+// 侧栏变体：用户可选(跟随模式/浅色/深色)，由 html[data-sidebar] 驱动
+:global(html[data-sidebar='light']) .sidebar { background: #fff; border-right: 1px solid #e5eaf2;
+  .brand-text, .nav-item, .nav-item:hover { color: #243952; }
+  .nav-item.active { background: color-mix(in srgb, var(--plm-accent, #409eff) 12%, #fff); color: var(--plm-accent, #409eff); }
+  .nav-group-head { color: #8a94a6; .group-idx { color: #b3bccb; } }
+  .sidebar-foot { color: #b3bccb; border-color: #eef2f8; } }
+:global(html[data-sidebar='gray']) .sidebar { background: #f8f8fa; border-right: 1px solid #e9e9ee;
+  .brand-text, .nav-item, .nav-item:hover { color: #30343a; }
+  .nav-item.active { background: color-mix(in srgb, var(--plm-accent, #5867c7) 12%, #fff); color: var(--plm-accent, #5867c7); }
+  .nav-group-head { color: #878a92; .group-idx { color: #c3c5cb; } }
+  .sidebar-foot { color: #c3c5cb; border-color: #ececef; } }
+
+// 强调色令牌（主按钮/选中态/进度）
+:global(.el-button--primary) { --el-button-bg-color: var(--plm-accent, #409eff);
+  --el-button-border-color: var(--plm-accent, #409eff);
+  --el-button-hover-bg-color: var(--plm-accent, #409eff);
+  --el-button-active-bg-color: var(--plm-accent, #409eff); }
+:global(.el-menu-item.is-active), :global(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: var(--plm-accent, #409eff); }
+
+// 密度
+:global(html[data-density='compact']) .page-container { padding: 10px; }
+:global(html[data-density='compact']) .el-table--small { font-size: 12px; }
+
+// 减少动态效果
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
 </style>

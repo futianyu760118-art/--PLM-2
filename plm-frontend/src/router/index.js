@@ -25,7 +25,11 @@ const routes = [
     redirect: '/dashboard',
     children: [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/dashboard.vue'),
-        meta: { title: '工作台', icon: 'HomeFilled', workflowStage: '工作台' } }
+        meta: { title: '工作台', icon: 'HomeFilled', workflowStage: '工作台' } },
+      { path: 'lifecycle', name: 'Lifecycle', component: () => import('@/views/lifecycle/index.vue'),
+        meta: { title: '全生命周期', workflowStage: '工作台' } },
+      { path: 'help', name: 'HelpCenter', component: () => import('@/views/help/index.vue'),
+        meta: { title: '帮助与学习', workflowStage: '工作台' } }
     ]
   },
   {
@@ -56,7 +60,17 @@ const routes = [
       { path: 'analysis', name: 'ProjectAnalysis', component: () => import('@/views/project/analysis.vue'),
         meta: { title: '统计分析' } },
       { path: 'evidence', name: 'ProjectEvidence', component: () => import('@/views/project/evidence.vue'),
-        meta: { title: '证据台账' } }
+        meta: { title: '证据台账' } },
+      { path: 'tasks', name: 'CollabTasks', component: () => import('@/views/collab/tasks.vue'),
+        meta: { title: '协同任务' } },
+      { path: 'collab-home', name: 'CollabHome', component: () => import('@/views/collab/home.vue'),
+        meta: { title: '项目卡片' } },
+      { path: 'workspace', name: 'ProductWorkspace', component: () => import('@/views/workspace/index.vue'),
+        meta: { title: '产品空间' } },
+      { path: 'professional-home', name: 'ProfessionalHome', component: () => import('@/views/professional/index.vue'),
+        meta: { title: '专业视图' } },
+      { path: 'mcore-home', name: 'McoreHome', component: () => import('@/views/mcore/index.vue'),
+        meta: { title: '工作项中心' } }
     ]
   },
   {

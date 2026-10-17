@@ -51,6 +51,52 @@
       </el-table>
     </el-card>
 
+    <el-card style="margin-top:16px" v-loading="meLoading">
+      <template #header>
+        <span>我的即时数据（{{ me?.realName || userStore.realName || '' }}，跨模块按当前用户统计）</span>
+      </template>
+      <div v-if="me" class="me-grid">
+        <router-link class="me-cell" :to="{ path: '/project/list', query: { keyword: me.realName } }">
+          <span class="n">{{ me.projects.total }}</span>
+          <span class="t">我的项目</span>
+          <span class="s">进行中 {{ me.projects.active }} · 已关闭 {{ me.projects.closed }}</span>
+        </router-link>
+        <router-link class="me-cell" :to="{ path: '/project/tasks', query: {} }">
+          <span class="n">{{ me.todos.open + me.todos.escalated }}</span>
+          <span class="t">我的待办</span>
+          <span class="s">已升级 {{ me.todos.escalated }} · 已完成 {{ me.todos.done }}</span>
+        </router-link>
+        <router-link class="me-cell warn" :to="{ path: '/project/tracking', query: {} }">
+          <span class="n">{{ me.nodes.overdue }}</span>
+          <span class="t">我的逾期节点</span>
+          <span class="s">负责节点 {{ me.nodes.owned }} · 已完成 {{ me.nodes.done }}</span>
+        </router-link>
+        <router-link class="me-cell" :to="{ path: '/project/evidence', query: { keyword: me.realName } }">
+          <span class="n">{{ me.evidence }}</span>
+          <span class="t">我上传的证据</span>
+          <span class="s">计划表(我负责) {{ me.planSheets }}</span>
+        </router-link>
+        <router-link class="me-cell" :to="{ path: '/admin/feedback', query: {} }">
+          <span class="n">{{ me.feedback }}</span>
+          <span class="t">我的反馈</span>
+          <span class="s">今日操作留痕 {{ me.todayChanges }}</span>
+        </router-link>
+      </div>
+      <div v-if="me && me.nodes.overdueList && me.nodes.overdueList.length" class="me-overdue">
+        <b>逾期提醒：</b>
+        <span v-for="o in me.nodes.overdueList" :key="o.project_no + o.node_code" class="ov-item">
+          {{ o.project_no }} · {{ o.node_name }}（计划 {{ (o.plan_date || '').substring(0, 10) }}）
+        </span>
+      </div>
+      <div v-if="me && me.projects.recent && me.projects.recent.length" class="me-recent">
+        <b>我的最近项目：</b>
+        <router-link v-for="p in me.projects.recent" :key="p.id" class="rc-item"
+          :to="{ path: '/project/progress', query: { project: p.id } }">
+          {{ p.project_no }} {{ p.project_name }}（{{ p.status }}/{{ p.current_gate }}）
+        </router-link>
+      </div>
+    </el-card>
+
     <el-row :gutter="16" style="margin-top:16px">
       <el-col :span="16">
         <el-card>
@@ -107,6 +153,7 @@ import { getStats, materialTypeDist, materialStatusDist, ecnTrend } from '@/api/
 import { kpiValues } from '@/api/metric'
 import { listInsights } from '@/api/issue'
 import { myWorkItems, completeWorkItem } from '@/api/workitem'
+import { meOverview } from '@/api/me'
 import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const userStore = useUserStore()
@@ -121,6 +168,17 @@ const kpiList = ref([])
 const kpiLoading = ref(false)
 const insights = ref([])
 const workItems = ref([])
+const me = ref(null)
+const meLoading = ref(false)
+
+async function loadMe() {
+  meLoading.value = true
+  try {
+    const res = await meOverview()
+    me.value = res.data || null
+  } catch { me.value = null }
+  finally { meLoading.value = false }
+}
 const ledgerDrawer = reactive({ visible: false, id: '', title: '' })
 
 function openWorkItemLedger(wi) {
@@ -205,6 +263,7 @@ onMounted(async () => {
   loadKpis()
   loadInsightsFeed()
   loadWorkItems()
+  loadMe()
   window.addEventListener('resize', onResize)
 })
 
@@ -244,6 +303,22 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+.me-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.me-cell { border: 1px solid #e4e7ed; border-radius: 10px; padding: 14px; text-decoration: none;
+  display: flex; flex-direction: column; gap: 2px; background: #fff;
+  transition: transform .12s cubic-bezier(.34,1.56,.64,1), box-shadow .15s ease;
+  &:hover { box-shadow: 0 3px 10px rgba(64,158,255,.16); }
+  &:active { transform: scale(.96); }
+  .n { font-size: 26px; font-weight: 700; color: var(--plm-accent, #409eff); line-height: 1.15; }
+  .t { font-size: 13px; color: #303133; font-weight: 600; }
+  .s { font-size: 11px; color: #a8abb2; }
+  &.warn .n { color: #f56c6c; } }
+.me-overdue { margin-top: 12px; font-size: 12px; color: #f56c6c; display: flex; gap: 10px; flex-wrap: wrap;
+  b { color: #303133; }
+  .ov-item { background: #fef0f0; border-radius: 4px; padding: 2px 8px; } }
+.me-recent { margin-top: 10px; font-size: 12px; color: #909399; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  b { color: #303133; }
+  .rc-item { color: var(--plm-accent, #409eff); text-decoration: none; background: #f5f7fa; border-radius: 4px; padding: 2px 8px; } }
 .stat-card { display: flex; align-items: center; gap: 16px;
   .stat-info { .stat-num { font-size: 28px; font-weight: 700; color: #303133; } .stat-title { color: #909399; font-size: 13px; } .stat-sub { color:#c0c4cc; font-size:11px; margin-top:2px; } }
 }

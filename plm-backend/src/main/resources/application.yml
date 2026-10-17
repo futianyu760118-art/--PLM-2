@@ -61,6 +61,11 @@ plm:
     extranet-dir: D:/PLM-2/files/extranet
   algorithm:
     base-url: http://localhost:8001
+  # 大模型(OpenAI 兼容 /chat/completions)：智能体回复与 AEOS 执行面推理用；key 未配置时自动回落模板回复
+  llm:
+    base-url: ${PLM_LLM_BASE_URL:}
+    api-key: ${PLM_LLM_API_KEY:}
+    model: ${PLM_LLM_MODEL:}
   integration:
     erp:
       base-url: ${ERP_BASE_URL:}

@@ -9,3 +9,4 @@ export function pendingActions() { return request({ url: '/v1/agents/actions', m
 export function decideAction(id, data) { return request({ url: `/v1/agents/actions/${id}/decide`, method: 'post', data }) }
 export function coachSuggestions() { return request({ url: '/v1/agents/coach/suggestions', method: 'get' }) }
 export function agentDefs() { return request({ url: '/v1/agents/defs', method: 'get' }) }
+export function chatExecute(message, sessionId) { return request({ url: '/v1/agents/chat', method: 'post', data: { message, sessionId } }) }

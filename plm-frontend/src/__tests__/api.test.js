@@ -65,12 +65,13 @@ describe('API 路径定义', () => {
     expect(typeof api.scrapMold).toBe('function')
   })
 
-  it('feedback API 包含提交/查询/列表/流转', async () => {
+  it('feedback API 包含提交/查询/列表/回复/状态', async () => {
     const api = await import('@/api/feedback')
-    expect(typeof api.submitFeedback).toBe('function')
-    expect(typeof api.getFeedbackByNo).toBe('function')
-    expect(typeof api.pageFeedback).toBe('function')
-    expect(typeof api.transitionFeedback).toBe('function')
+    expect(typeof api.createFeedback).toBe('function')
+    expect(typeof api.getFeedback).toBe('function')
+    expect(typeof api.listFeedback).toBe('function')
+    expect(typeof api.replyFeedback).toBe('function')
+    expect(typeof api.changeFeedbackStatus).toBe('function')
   })
 })
 

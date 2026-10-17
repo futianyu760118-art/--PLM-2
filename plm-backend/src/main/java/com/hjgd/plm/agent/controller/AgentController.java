@@ -14,6 +14,7 @@ import com.hjgd.plm.improve.entity.Insight;
 import com.hjgd.plm.improve.service.ImproveService;
 import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
+import com.hjgd.plm.agent.service.LlmService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
@@ -39,6 +40,7 @@ public class AgentController {
     private final MaterialService materialService;
     private final ImproveService improveService;
     private final JdbcTemplate jdbcTemplate;
+    private final LlmService llmService;
 
     // ============ L0 只读快捷端点(保留兼容) ============
 
@@ -174,6 +176,21 @@ public class AgentController {
         if (pn != null && ("AGENT_QA".equals(session.getAgentCode()) || "AGENT_ORCH".equals(session.getAgentCode()))) {
             reply = reply + " ｜ 多步编排: 已执行DQ检查 → 生成改善建议(待决策) → 证据已登记(见下方动作)";
         }
+
+        // 大模型合成回复：以规则/工具数据为事实基础，由 LLM 生成自然语言答复（未配置或失败则回落模板回复）
+        String facts = reply;
+        String projectFacts = lookupProjectFacts(req.getContent());
+        if (projectFacts != null) facts = projectFacts + (reply == null ? "" : "\n" + reply);
+        String llmReply = llmService.chat(
+                "你是恒剑PLM智能体（" + session.getAgentCode() + "），恒剑光电产品研发管理系统的助手。"
+                        + "下面给出系统工具/规则产生的数据，请基于这些数据用中文简洁回答用户问题；"
+                        + "数据不足时如实说明缺什么。不要编造数据。"
+                        + "你的结论仅供参考，不构成权威结论；涉及金额、对外承诺、质量判定、法律事项的判断必须提示用户人工确认。",
+                "用户问题: " + req.getContent() + "\n\n系统数据: " + facts);
+        if (llmReply != null) {
+            reply = llmReply + "\n\n(参考数据: " + reply + ")";
+        }
+
         AgentMessage aiMsg = new AgentMessage();
         aiMsg.setSessionId(id);
         aiMsg.setRole("assistant");
@@ -188,11 +205,50 @@ public class AgentController {
         return Result.success(result);
     }
 
+    // ============ 大模型推理(AEOS 执行面 reason_plm 对接) ============
+
+    @Data
+    public static class LlmAnswerReq {
+        private String prompt;
+        private String taskType;
+    }
+
+    @Operation(summary = "大模型推理回答(AEOS 执行面 reason_plm 调用)")
+    @PostMapping("/llm/answer")
+    public Result<Map<String, Object>> llmAnswer(@RequestBody LlmAnswerReq req) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (!llmService.enabled()) {
+            out.put("summary", "恒剑PLM大模型未配置(需设置 PLM_LLM_BASE_URL / PLM_LLM_API_KEY / PLM_LLM_MODEL)");
+            out.put("conclusions", List.of(Map.of(
+                    "matter", "大模型未配置",
+                    "evidence_refs", List.of("plm://llm/not-configured"),
+                    "risk", "无法生成真实分析结论",
+                    "recommendation", "在 PLM 后端配置 PLM_LLM_* 环境变量后重试",
+                    "confidence", "low")));
+            out.put("data_as_of", OffsetDateTime.now().toString());
+            out.put("data_confidence", "low");
+            return Result.success(out);
+        }
+        String answer = llmService.chat(
+                "你是恒剑光电PLM系统的分析智能体。基于用户问题做简洁的中文分析回答，"
+                        + "结论需可追溯（引用所依据的事实来源），不编造数据。"
+                        + "输出仅为建议，不构成权威结论；涉及金额、对外承诺、质量判定、法律事项必须提示人工确认。",
+                "任务类型: " + (req.getTaskType() == null ? "general" : req.getTaskType())
+                        + "\n问题: " + req.getPrompt());
+        out.put("summary", answer != null ? answer : "大模型调用失败，请稍后重试");
+        out.put("conclusions", List.of(Map.of(
+                "matter", answer != null ? "大模型分析结论" : "大模型调用失败",
+                "evidence_refs", List.of("plm://llm/" + llmService.model()),
+                "confidence", answer != null ? "medium" : "low")));
+        out.put("data_as_of", OffsetDateTime.now().toString());
+        out.put("data_confidence", answer != null ? "medium" : "low");
+        return Result.success(out);
+    }
+
     @Operation(summary = "会话消息列表")
     @GetMapping("/sessions/{id}/messages")
     public Result<List<AgentMessage>> messages(@PathVariable Long id) {
-        return Result.success(messageMapper.selectList(
-                new LambdaQueryWrapper<AgentMessage>()
+        return Result.success(messageMapper.selectList(                new LambdaQueryWrapper<AgentMessage>()
                         .eq(AgentMessage::getSessionId, id)
                         .orderByAsc(AgentMessage::getCreatedAt)));
     }
@@ -322,8 +378,25 @@ public class AgentController {
         }
     }
 
-    private String findPartNo(String reqPartNo, String content) {
-        if (reqPartNo != null && materialService.getByPartNo(reqPartNo) != null) return reqPartNo;
+    /** 消息中含项目编号时, 取项目基础信息+节点进度, 作为大模型回答的事实基础 */
+    private String lookupProjectFacts(String content) {
+        try {
+            String projectNo = findProjectNo(content);
+            if (projectNo == null) return null;
+            var p = jdbcTemplate.queryForMap(
+                    "SELECT project_no, project_name, owner, status, current_gate FROM plm_project WHERE project_no=? LIMIT 1", projectNo);
+            var nodes = jdbcTemplate.queryForMap(
+                    "SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='DONE') AS done FROM plm_project_node WHERE project_no=?", projectNo);
+            return "项目事实: 编号=" + p.get("project_no") + " 名称=" + p.get("project_name")
+                    + " 负责人=" + p.get("owner") + " 项目状态=" + p.get("status")
+                    + " 当前阶段=" + p.get("current_gate")
+                    + " 节点进度=" + nodes.get("done") + "/" + nodes.get("total") + "已完成";
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String findPartNo(String reqPartNo, String content) {        if (reqPartNo != null && materialService.getByPartNo(reqPartNo) != null) return reqPartNo;
         for (String t : content.split("[^A-Za-z0-9._-]+")) {
             if (t.length() >= 4 && materialService.getByPartNo(t) != null) return t;
         }
@@ -333,8 +406,9 @@ public class AgentController {
     private String findProjectNo(String content) {
         for (String t : content.split("[^A-Za-z0-9._-]+")) {
             if (t.length() >= 6) {
-                var rows = jdbcTemplate.queryForList("SELECT 1 FROM plm_project WHERE project_no=? LIMIT 1", t);
-                if (!rows.isEmpty()) return t;
+                var rows = jdbcTemplate.queryForList(
+                        "SELECT project_no FROM plm_project WHERE project_no LIKE ? || '%' LIMIT 1", t);
+                if (!rows.isEmpty()) return (String) rows.get(0).get("project_no");
             }
         }
         return null;

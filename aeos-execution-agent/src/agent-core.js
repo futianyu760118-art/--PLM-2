@@ -79,23 +79,29 @@ export class ExecutionAgentCore {
       this.sendRunFailed(msg.runId, 'CAPABILITY_UNSUPPORTED', `不支持能力 ${capability}`);
       return;
     }
+    // 修复: handler 第二参必须是真 AbortSignal(旧版误传 ctx 对象导致 fetch 报
+    // "signal is not of type AbortSignal"); ctx 作为第三参传递, 召回时真正中断请求
+    const controller = new AbortController();
     const ctx = {
       runId: msg.runId,
       aborted: false,
+      signal: controller.signal,
+      abort: () => controller.abort(),
       sendProgress: (detail) => this.send({ type: 'run_update', runId: msg.runId, state: 'running', detail }),
       sendComplete: (result) => this.send({ type: 'run_complete', runId: msg.runId, result }),
       sendFailed: (code, message) => this.sendRunFailed(msg.runId, code, message),
     };
-    this.activeRun = { runId: msg.runId, ctx };
+    this.activeRun = { runId: msg.runId, ctx, controller };
     this.log(`[agent] 收到派单 ${msg.runId}: ${capability}`);
     Promise.resolve()
-      .then(() => handler(msg.input ?? {}, ctx))
+      .then(() => handler(msg.input ?? {}, controller.signal, ctx))
       .catch((error) => ctx.sendFailed('EXECUTION_FAILED', error?.message || String(error)));
   }
 
   handleRecall(msg) {
     if (this.activeRun && (msg.runId === undefined || this.activeRun.runId === msg.runId)) {
       this.activeRun.ctx.aborted = true;
+      try { this.activeRun.controller.abort(); } catch { /* already aborted */ }
       this.activeRun = null;
       this.log(`[agent] 收到召回 ${msg.runId ?? ''}`);
     }

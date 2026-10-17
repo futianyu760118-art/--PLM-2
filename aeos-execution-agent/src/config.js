@@ -24,5 +24,7 @@ export function loadConfig(env = process.env) {
     targetReasoningUrl: (env.TARGET_REASONING_URL ?? '').trim(),
     targetReasoningAgentId: (env.TARGET_REASONING_AGENT_ID ?? '').trim(),
     targetReasoningToken: (env.TARGET_REASONING_TOKEN ?? '').trim(),
+    // 本地文件访问白名单根目录（逗号分隔，须与容器挂载对应）
+    localFilesRoots: (env.LOCAL_FILES_ROOTS ?? '').trim() || '/local/d',
   };
 }
