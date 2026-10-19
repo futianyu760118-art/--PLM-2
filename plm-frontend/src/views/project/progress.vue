@@ -23,7 +23,8 @@
         <span class="rate">节点完成率 <b>{{ Math.round((summary.nodeRate || 0) * 100) }}%</b></span>
       </div>
 
-      <el-table v-if="nodes.length" :data="nodes" row-key="id" border
+      <el-table v-if="nodes.length" :data="nodes" row-key="id" border ref="tableRef"
+        highlight-current-row :row-class-name="rowClassName"
         v-loading="loading" @expand-change="onExpand">
         <el-table-column type="expand">
           <template #default="{ row }">
@@ -193,7 +194,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
@@ -213,6 +214,8 @@ const loading = ref(false)
 const savingId = ref(null)
 const uploadingId = ref(null)
 const evidenceMap = ref({})
+const tableRef = ref(null)
+const focusNodeCode = computed(() => route.query.node ? String(route.query.node) : '')
 
 const checkVisible = ref(false)
 const check = ref({})
@@ -251,15 +254,33 @@ function openSheet(row) {
 function syncFromRoute() {
   const wanted = route.query.project ? Number(route.query.project) : null
   const found = wanted ? projects.value.find(p => p.id === wanted) : null
+  const no = route.query.projectNo ? String(route.query.projectNo) : ''
+  const foundByNo = no ? projects.value.find(p => p.projectNo === no) : null
   if (found) projectId.value = found.id
+  else if (foundByNo) projectId.value = foundByNo.id
   else if (!projectId.value && projects.value.length) projectId.value = projects.value[0].id
 }
 
+function rowClassName({ row }) { return row.nodeCode === focusNodeCode.value ? 'focus-node' : '' }
+
+async function focusTarget() {
+  if (!focusNodeCode.value) return
+  await nextTick()
+  const row = nodes.value.find(n => n.nodeCode === focusNodeCode.value)
+  if (row && tableRef.value) {
+    tableRef.value.setCurrentRow(row)
+    tableRef.value.toggleRowExpansion(row, true)
+  }
+  await nextTick()
+  const el = document.querySelector('.el-table__row.focus-node')
+  if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
 async function loadProjects() {
-  const res = await pageProject({ pageNum: 1, pageSize: 200 })
+  const res = await pageProject({ pageNum: 1, pageSize: 1000 })
   projects.value = res.data.records || []
   syncFromRoute()
-  if (projectId.value) await load()
+  if (projectId.value) { await load(); await focusTarget() }
 }
 
 async function load() {
@@ -404,10 +425,10 @@ async function doCheck() {
   checkVisible.value = true
 }
 
-watch(() => route.query.project, async () => {
+watch(() => [route.query.project, route.query.projectNo, route.query.node], async () => {
   if (!projects.value.length) { await loadProjects(); return }
   syncFromRoute()
-  if (projectId.value) await load()
+  if (projectId.value) { await load(); await focusTarget() }
 })
 
 onMounted(loadProjects)
@@ -434,4 +455,6 @@ onMounted(loadProjects)
 .preview-html :deep(table) { border-collapse: collapse; width: 100%; font-size: 12px; }
 .preview-html :deep(td), .preview-html :deep(th) { border: 1px solid #e0e0e0; padding: 3px 6px; }
 .preview-docx { max-height: 65vh; overflow: auto; border: 1px solid #eee; border-radius: 6px; padding: 16px; background: #fff; }
+:deep(.el-table__row.focus-node) { background: #fff7e6 !important; }
+:deep(.el-table__row.focus-node:hover > td) { background: #fff1d6 !important; }
 </style>

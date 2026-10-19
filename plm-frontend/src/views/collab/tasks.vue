@@ -145,7 +145,7 @@ function chipCls(n) {
 }
 function key(t) { return t.project_no + t.node_code }
 function fmt(dt) { return dt ? String(dt).slice(0, 10) : '—' }
-function open(t) { router.push({ path: '/project/progress', query: { projectNo: t.project_no } }) }
+function open(t) { router.push({ path: '/project/progress', query: { projectNo: t.project_no, node: t.node_code } }) }
 function noop() {}
 
 async function load() {
