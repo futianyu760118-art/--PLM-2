@@ -66,38 +66,7 @@
       </div>
 
       <!-- 列表：三块纵向同页 -->
-      <template v-else>
-        <section class="sec">
-          <div class="sec-head od">逾期（{{ d.overdue.length }}）</div>
-          <el-table v-if="d.overdue.length" :data="d.overdue" size="small" border stripe>
-            <el-table-column prop="project_no" label="项目" width="160" />
-            <el-table-column prop="node_name" label="节点" width="140" />
-            <el-table-column label="计划日期" width="110"><template #default="{ row }">{{ fmt(row.plan_date) }}</template></el-table-column>
-            <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="open(row)">处理</el-button></template></el-table-column>
-          </el-table>
-          <p v-else class="muted">无逾期</p>
-        </section>
-        <section class="sec">
-          <div class="sec-head">待办（{{ d.todo.length }}）</div>
-          <el-table v-if="d.todo.length" :data="d.todo" size="small" border stripe>
-            <el-table-column prop="project_no" label="项目" width="160" />
-            <el-table-column prop="node_name" label="节点" width="140" />
-            <el-table-column label="计划日期" width="110"><template #default="{ row }">{{ row.plan_date ? fmt(row.plan_date) : '无到期' }}</template></el-table-column>
-            <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="open(row)">处理</el-button></template></el-table-column>
-          </el-table>
-          <p v-else class="muted">无待办</p>
-        </section>
-        <section class="sec">
-          <div class="sec-head">已完成（{{ d.done.length }}）</div>
-          <el-table v-if="d.done.length" :data="d.done" size="small" border stripe>
-            <el-table-column prop="project_no" label="项目" width="160" />
-            <el-table-column prop="node_name" label="节点" width="140" />
-            <el-table-column label="完成日期" width="110"><template #default="{ row }">{{ row.actual_date ? fmt(row.actual_date) : '—' }}</template></el-table-column>
-            <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="open(row)">查看</el-button></template></el-table-column>
-          </el-table>
-          <p v-else class="muted">无已完成</p>
-        </section>
-      </template>
+      <TodoSections v-else :data="d" @open="open" />
       </template>
 
       <template v-else>
@@ -120,9 +89,7 @@
                 <b>{{ m.realName }}</b>
                 <span class="cnt">逾期 {{ m.overdueCount }} · 待办 {{ m.todoCount }} · 完成 {{ m.doneCount }}</span>
               </div>
-              <div class="member-chips">
-                <span v-for="n in memberNodes(m)" :key="n.project_no + n.node_code" class="chip" :class="chipCls(n)" @click="open(n)">{{ n.node_name }}</span>
-              </div>
+              <TodoSections :data="m" @open="open" />
             </div>
             <p v-if="!d.members.length" class="muted">暂无成员</p>
           </el-collapse-item>
@@ -137,6 +104,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { myTodos, deptTodos } from '@/api/me'
+import TodoSections from '@/components/collab/TodoSections.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -186,7 +154,6 @@ function chipCls(n) {
   if (n.plan_date && n.plan_date < new Date().toISOString().slice(0, 10)) return 'od'
   return 'date'
 }
-function memberNodes(m) { return [...(m.overdue || []), ...(m.todo || []), ...(m.done || [])] }
 function key(t) { return t.project_no + t.node_code }
 function fmt(dt) { return dt ? String(dt).slice(0, 10) : '—' }
 function open(t) { router.push({ path: '/project/progress', query: { projectNo: t.project_no, node: t.node_code } }) }

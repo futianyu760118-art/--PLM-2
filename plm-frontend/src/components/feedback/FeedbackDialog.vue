@@ -1,8 +1,11 @@
 <template>
-  <el-dialog
+  <el-drawer
     :model-value="modelValue"
     title="问题反馈"
-    width="620px"
+    direction="rtl"
+    size="440px"
+    :modal="false"
+    :append-to-body="true"
     :close-on-click-modal="false"
     @update:model-value="v => emit('update:modelValue', v)"
     @open="onOpen"
@@ -49,10 +52,14 @@
     </el-form>
 
     <template v-if="!receipt" #footer>
-      <el-button @click="emit('update:modelValue', false)">取消</el-button>
-      <el-button type="primary" class="submit-btn" :loading="submitting" @click="handleSubmit">提交</el-button>
+      <div class="fd-footer">
+        <el-button link type="primary" @click="emit('minimize')">收起</el-button>
+        <span class="fd-spacer"></span>
+        <el-button @click="emit('update:modelValue', false)">取消</el-button>
+        <el-button type="primary" class="submit-btn" :loading="submitting" @click="handleSubmit">提交</el-button>
+      </div>
     </template>
-  </el-dialog>
+  </el-drawer>
 </template>
 
 <script setup>
@@ -62,7 +69,7 @@ import { ElMessage } from 'element-plus'
 import { createFeedback, uploadFeedbackFile } from '@/api/feedback'
 
 defineProps({ modelValue: { type: Boolean, default: false } })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'minimize'])
 
 const route = useRoute()
 const formRef = ref(null)
@@ -154,4 +161,6 @@ async function handleSubmit() {
 .att-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 .submit-btn { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .submit-btn:active { transform: scale(0.95); }
+.fd-footer { display: flex; align-items: center; width: 100%; }
+.fd-spacer { flex: 1; }
 </style>
