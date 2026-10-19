@@ -17,9 +17,13 @@
         <el-button :disabled="!rows.some(r => r.type === 'project')" @click="expandAll">全部展开</el-button>
         <el-button @click="collapseAll">全部收起</el-button>
         <div class="zoom">
-          <span>缩放</span>
-          <el-button size="small" :disabled="dayWidth <= 3" @click="setZoom(-3)">-</el-button>
-          <el-button size="small" :disabled="dayWidth >= 24" @click="setZoom(3)">+</el-button>
+          <el-radio-group v-model="scale" size="small" @change="onScaleChange">
+            <el-radio-button value="day">日</el-radio-button>
+            <el-radio-button value="week">周</el-radio-button>
+            <el-radio-button value="month">月</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" @click="setZoom(-1)">-</el-button>
+          <el-button size="small" @click="setZoom(1)">+</el-button>
         </div>
         <div class="legend">
           <span class="lg"><i class="dot st-ACTIVE"></i>进行中</span>
@@ -51,10 +55,10 @@
         <div class="g-right">
           <div class="gr-scroll" :style="{ width: totalWidth + 'px' }">
             <div class="gr-axis">
-              <div v-for="m in months" :key="m.key" class="gr-month" :style="{ left: m.left + 'px', width: m.width + 'px' }">{{ m.label }}</div>
+              <div v-for="t in scaleTicks" :key="t.left" class="gr-tick-label" :class="{ major: t.major }" :style="{ left: t.left + 'px' }">{{ t.label }}</div>
             </div>
             <div class="gr-grid">
-              <div v-for="t in weekTicks" :key="t.left" class="gr-tick" :style="{ left: t.left + 'px' }"></div>
+              <div v-for="t in gridTicks" :key="t.left" class="gr-tick" :style="{ left: t.left + 'px' }"></div>
             </div>
             <div v-if="todayLeft != null" class="gr-today" :style="{ left: todayLeft + 'px' }"></div>
             <div v-for="r in rows" :key="r.id" class="gr-row">
@@ -87,7 +91,8 @@ const projects = ref([])
 const statusFilter = ref('')
 const selectedIds = ref([])
 const expandedIds = ref([])
-const dayWidth = ref(8)
+const dayWidth = ref(3)
+const scale = ref('week')
 
 const displayProjects = computed(() => {
   if (!selectedIds.value.length) return projects.value
@@ -170,33 +175,54 @@ const todayLeft = computed(() => {
   return x(new Date().toISOString().slice(0, 10)) + 'px'
 })
 
-const months = computed(() => {
+const scaleTicks = computed(() => {
   const arr = []
-  const cur = new Date(range.value.start * 86400000)
-  const end = new Date(range.value.end * 86400000)
-  let m = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth(), 1))
-  while (m <= end) {
-    const next = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1))
-    const startDay = Math.floor(m.getTime() / 86400000)
-    const endDay = Math.floor(next.getTime() / 86400000)
-    const left = Math.max(0, (startDay - range.value.start) * dayWidth.value)
-    const width = Math.max((Math.min(endDay, range.value.end) - Math.max(startDay, range.value.start)) * dayWidth.value, 1)
-    arr.push({ key: m.toISOString().slice(0, 7), label: `${m.getUTCFullYear()}-${String(m.getUTCMonth() + 1).padStart(2, '0')}`, left, width })
-    m = next
+  const s = range.value.start, e = range.value.end
+  if (scale.value === 'day') {
+    for (let d = s; d <= e; d++) {
+      const dt = new Date(d * 86400000)
+      arr.push({ left: (d - s) * dayWidth.value, label: String(dt.getUTCDate()), major: dt.getUTCDate() === 1 })
+    }
+  } else if (scale.value === 'week') {
+    for (let d = s; d <= e; d++) {
+      const dt = new Date(d * 86400000)
+      if (dt.getUTCDay() === 1) arr.push({ left: (d - s) * dayWidth.value, label: `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`, major: true })
+    }
+  } else {
+    let cur = new Date(new Date(s * 86400000).getUTCFullYear(), new Date(s * 86400000).getUTCMonth(), 1)
+    while (Math.floor(cur.getTime() / 86400000) <= e) {
+      const d = Math.floor(cur.getTime() / 86400000)
+      arr.push({ left: (d - s) * dayWidth.value, label: `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, '0')}`, major: true })
+      cur = new Date(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1)
+    }
   }
   return arr
 })
 
-const weekTicks = computed(() => {
+const gridTicks = computed(() => {
   const arr = []
-  for (let d = range.value.start; d <= range.value.end; d++) {
-    const dt = new Date(d * 86400000)
-    if (dt.getUTCDay() === 1) arr.push({ left: (d - range.value.start) * dayWidth.value })
+  const s = range.value.start, e = range.value.end
+  if (scale.value === 'month') {
+    let cur = new Date(new Date(s * 86400000).getUTCFullYear(), new Date(s * 86400000).getUTCMonth(), 1)
+    while (Math.floor(cur.getTime() / 86400000) <= e) {
+      const d = Math.floor(cur.getTime() / 86400000)
+      arr.push({ left: (d - s) * dayWidth.value })
+      cur = new Date(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1)
+    }
+  } else if (scale.value === 'week') {
+    for (let d = s; d <= e; d++) {
+      const dt = new Date(d * 86400000)
+      if (dt.getUTCDay() === 1) arr.push({ left: (d - s) * dayWidth.value })
+    }
+  } else {
+    for (let d = s; d <= e; d++) arr.push({ left: (d - s) * dayWidth.value })
   }
   return arr
 })
 
-function setZoom(d) { dayWidth.value = Math.min(24, Math.max(3, dayWidth.value + d)) }
+const SCALE_WIDTH = { day: 8, week: 3, month: 1 }
+function onScaleChange(s) { dayWidth.value = SCALE_WIDTH[s] || 3 }
+function setZoom(d) { dayWidth.value = Math.max(0.3, Math.min(24, dayWidth.value + d)) }
 
 async function load() {
   loading.value = true
@@ -219,7 +245,7 @@ onMounted(load)
     .ms { width: 8px; height: 8px; transform: rotate(45deg); background: #f56c6c; display: inline-block; } }
 }
 .gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
-.g-left { flex: 0 0 260px; border-right: 1px solid #e4e7ed; background: #fafbfc; }
+.g-left { flex: 0 0 min(260px, 34vw); border-right: 1px solid #e4e7ed; background: #fafbfc; }
 .gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 34px; box-sizing: border-box; }
 .gl-row { padding: 8px 12px; border-bottom: 1px solid #f0f2f5; height: 44px; box-sizing: border-box; overflow: hidden; }
 .gl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
@@ -231,7 +257,8 @@ onMounted(load)
 .g-right { flex: 1; overflow-x: auto; }
 .gr-scroll { position: relative; }
 .gr-axis { position: sticky; top: 0; z-index: 3; height: 34px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
-.gr-month { position: absolute; top: 0; height: 34px; line-height: 34px; font-size: 12px; color: #606266; border-left: 1px solid #e4e7ed; padding-left: 6px; white-space: nowrap; }
+.gr-tick-label { position: absolute; top: 0; height: 34px; line-height: 34px; font-size: 11px; color: #606266; border-left: 1px solid #e4e7ed; padding-left: 4px; white-space: nowrap; }
+.gr-tick-label.major { font-weight: 600; color: #303133; }
 .gr-grid { position: absolute; top: 34px; bottom: 0; width: 100%; z-index: 0; }
 .gr-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #f0f2f5; }
 .gr-today { position: absolute; top: 34px; bottom: 0; width: 2px; background: #f56c6c; z-index: 2; }
