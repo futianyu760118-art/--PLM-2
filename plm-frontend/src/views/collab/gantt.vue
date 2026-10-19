@@ -3,6 +3,10 @@
     <el-card>
       <div class="g-head">
         <h3>项目甘特图</h3>
+        <el-select v-model="selectedIds" multiple filterable collapse-tags collapse-tags-tooltip clearable
+          placeholder="选择项目（可单选/多选，不选显示全部）" style="width:340px" @change="noop">
+          <el-option v-for="p in projects" :key="p.id" :label="`${p.project_no} ${p.project_name}`" :value="String(p.id)" />
+        </el-select>
         <el-select v-model="statusFilter" clearable placeholder="全部状态" style="width:130px" @change="load">
           <el-option label="进行中" value="ACTIVE" />
           <el-option label="已量产" value="MP" />
@@ -27,11 +31,11 @@
       <div v-loading="loading" class="gantt">
         <div class="g-left">
           <div class="gl-head">项目</div>
-          <div v-for="p in projects" :key="p.id" class="gl-row" :class="'st-' + p.status">
-            <div class="gl-name">{{ p.projectName || p.projectNo }}</div>
-            <div class="gl-meta">{{ p.projectNo }} · {{ p.owner }}</div>
+          <div v-for="p in displayProjects" :key="p.id" class="gl-row" :class="'st-' + p.status">
+            <div class="gl-name">{{ p.project_name || p.project_no }}</div>
+            <div class="gl-meta">{{ p.project_no }} · {{ p.owner }}</div>
           </div>
-          <el-empty v-if="!projects.length" description="暂无项目" :image-size="60" />
+          <el-empty v-if="!displayProjects.length" description="暂无项目" :image-size="60" />
         </div>
 
         <div class="g-right">
@@ -43,9 +47,9 @@
               <div v-for="t in weekTicks" :key="t.left" class="gr-tick" :style="{ left: t.left + 'px' }"></div>
             </div>
             <div v-if="todayLeft != null" class="gr-today" :style="{ left: todayLeft + 'px' }"></div>
-            <div v-for="p in projects" :key="p.id" class="gr-row">
+            <div v-for="p in displayProjects" :key="p.id" class="gr-row">
               <div class="gr-bar" :class="'st-' + p.status" :style="barStyle(p)"
-                :title="`${p.projectNo} ${p.projectName}\n${d2d(p.start_date)} ~ ${d2d(p.end_date)}`">
+                :title="`${p.project_no} ${p.project_name}\n${d2d(p.start_date)} ~ ${d2d(p.end_date)}`">
                 <span class="bar-label">{{ d2d(p.start_date) }} ~ {{ d2d(p.end_date) }}</span>
               </div>
               <div v-for="m in p.milestones" :key="m.nodeCode" class="gr-ms" :class="{ done: m.status === 'DONE' }"
@@ -65,14 +69,22 @@ import { getGantt } from '@/api/project'
 const loading = ref(false)
 const projects = ref([])
 const statusFilter = ref('')
+const selectedIds = ref([])
 const dayWidth = ref(8)
 
+const displayProjects = computed(() => {
+  if (!selectedIds.value.length) return projects.value
+  const set = new Set(selectedIds.value)
+  return projects.value.filter(p => set.has(String(p.id)))
+})
+
+function noop() {}
 function d2d(v) { return v ? String(v).slice(0, 10) : '' }
 function day(d) { const s = d2d(d); return s ? Math.floor(new Date(s + 'T00:00:00Z').getTime() / 86400000) : 0 }
 
 const range = computed(() => {
   let min = Infinity, max = -Infinity
-  for (const p of projects.value) {
+  for (const p of displayProjects.value) {
     const s = day(p.start_date), e = day(p.end_date)
     if (s && e) { if (s < min) min = s; if (e > max) max = e }
   }
