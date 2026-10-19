@@ -61,3 +61,11 @@ export function getVersions(id) {
 export function importParts(products) {
   return request({ url: '/v1/parts/import', method: 'post', data: { products } })
 }
+
+/** 上传物料附件(附图等)，partNo 可选，用于建档后把图纸挂到料号上 */
+export function uploadMaterialFile(file, partNo) {
+  const fd = new FormData()
+  fd.append('file', file)
+  if (partNo) fd.append('partNo', partNo)
+  return request({ url: '/file/upload', method: 'post', data: fd, headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 })
+}

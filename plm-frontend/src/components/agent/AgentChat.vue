@@ -42,11 +42,12 @@
 
 <script setup>
 import { ref, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { chatExecute } from '@/api/agent'
 
 const visible = defineModel({ type: Boolean, default: false })
 const router = useRouter()
+const route = useRoute()
 
 const QUICK = ['HJ.26042 进度怎样', '我的待办', '我的逾期节点', '打开研发项目跟踪', '生命周期总览']
 
@@ -67,7 +68,7 @@ async function send(text, optionMsg) {
   scrollBottom()
   sending.value = true
   try {
-    const res = await chatExecute(content, sessionId.value)
+    const res = await chatExecute(content, sessionId.value, { path: route.path, title: route.meta?.title || '' })
     const d = res.data || {}
     sessionId.value = d.sessionId
     messages.value.push({

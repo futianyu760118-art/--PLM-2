@@ -72,6 +72,23 @@
             <el-col :span="24">
               <el-form-item label="规格"><el-input v-model="form.specification" /></el-form-item>
             </el-col>
+            <el-col :span="12">
+              <el-form-item label="图纸编号"><el-input v-model="form.drawingNo" placeholder="图纸编号" /></el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="图纸版本"><el-input v-model="form.drawingRevision" placeholder="如 A / 01" /></el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item label="附图">
+                <el-upload :show-file-list="true" :limit="1" :auto-upload="false" accept=".dwg,.dxf,.pdf,.png,.jpg,.jpeg,.zip,.rar"
+                  :on-change="onDrawingChange" :on-remove="onDrawingRemove" :file-list="drawingList">
+                  <el-button size="small" icon="Upload">上传图纸</el-button>
+                </el-upload>
+                <el-tooltip content="请确认图纸版本，当前统一为 CAD2007 版本吗？" placement="top">
+                  <span class="drawing-hint">⚠ 图纸版本请确认（CAD2007版本吗）</span>
+                </el-tooltip>
+              </el-form-item>
+            </el-col>
           </el-row>
         </el-form>
       </div>
@@ -151,7 +168,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { addMaterial, saveMaterialParams, dqCheck } from '@/api/material'
+import { addMaterial, saveMaterialParams, dqCheck, uploadMaterialFile } from '@/api/material'
 import { resolveArchiveTree, resolveParamTpl } from '@/api/template'
 import { codegenPreview } from '@/api/metric'
 
@@ -176,8 +193,13 @@ const matchedParamTpl = ref('')
 
 const form = reactive({
   materialType: 'FINISHED', productType: '', materialName: '', nameEn: '',
-  productSeries: '', projectNo: '', specification: '', unit: 'PCS', makeType: 0, remark: '', partNo: ''
+  productSeries: '', projectNo: '', specification: '', unit: 'PCS', makeType: 0, remark: '', partNo: '',
+  drawingNo: '', drawingRevision: ''
 })
+const drawingFile = ref(null)
+const drawingList = ref([])
+function onDrawingChange(file) { drawingFile.value = file.raw; drawingList.value = [file] }
+function onDrawingRemove() { drawingFile.value = null; drawingList.value = [] }
 const basicRules = { materialName: [{ required: true, message: '请输入物料名称', trigger: 'blur' }] }
 
 // 物料类型 → part_category(与后端 resolveCategory 一致)
@@ -273,6 +295,10 @@ async function submit() {
     const partNo = createRes.data.partNo
     const id = createRes.data.id
 
+    if (drawingFile.value) {
+      try { await uploadMaterialFile(drawingFile.value, partNo) } catch (e) { /* 图纸上传失败不阻断建档 */ }
+    }
+
     const filled = {}
     Object.keys(paramValues).forEach(k => {
       if (paramValues[k] !== undefined && paramValues[k] !== '' && paramValues[k] !== null) filled[k] = String(paramValues[k])
@@ -292,7 +318,9 @@ async function submit() {
 
 function resetAll() {
   active.value = 0
-  Object.assign(form, { materialType: 'FINISHED', productType: '', materialName: '', nameEn: '', productSeries: '', projectNo: '', specification: '', unit: 'PCS', makeType: 0, remark: '', partNo: '' })
+  Object.assign(form, { materialType: 'FINISHED', productType: '', materialName: '', nameEn: '', productSeries: '', projectNo: '', specification: '', unit: 'PCS', makeType: 0, remark: '', partNo: '', drawingNo: '', drawingRevision: '' })
+  drawingFile.value = null
+  drawingList.value = []
   paramItems.value = []
   Object.keys(paramValues).forEach(k => delete paramValues[k])
   archiveNodes.value = []
@@ -310,6 +338,7 @@ function resetAll() {
 .wiz-footer { text-align: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
 .req-dot { color: #f56c6c; margin-right: 4px; }
 .dim { color: #c0c4cc; font-size: 12px; }
+.drawing-hint { margin-left: 10px; font-size: 12px; color: #e6a23c; cursor: help; }
 .dq-box { margin-top: 16px; }
 .dq-score { font-size: 16px; margin-bottom: 8px;
   .ok { color: #67c23a; font-size: 28px; font-weight: 700; }

@@ -41,6 +41,7 @@ public class AgentChatController {
     public static class ChatReq {
         private String message;
         private Long sessionId; // 可选，不带则新建总控会话
+        private Map<String, Object> context; // 可选，当前页面上下文 {path,title}
     }
 
     @Operation(summary = "总控对话：执行动作或返回提问选项")
@@ -71,7 +72,7 @@ public class AgentChatController {
         if (rule != null) {
             result = rule;
         } else if (llmService.enabled()) {
-            result = llmRoute(message);
+            result = llmRoute(message, req.getContext());
         } else {
             result = cannotDo("我目前只能处理这些事情，请选择：",
                     List.of("查项目进度", "我的待办", "我的逾期节点", "打开研发项目跟踪", "查看生命周期"));
@@ -156,12 +157,17 @@ public class AgentChatController {
 
     // ================= LLM 层：通俗路由（输出动作JSON或提问选项） =================
 
-    private Map<String, Object> llmRoute(String message) {
+    private Map<String, Object> llmRoute(String message, Map<String, Object> context) {
+        String who = name();
+        String page = context == null ? "" : String.valueOf(context.getOrDefault("path", ""));
         String sys = "你是恒剑PLM的总控智能体（类似multica的Mika）。用户用通俗语言提需求，你自己判断怎么做，不要让用户自己去某个功能找。"
+                + "当前用户：" + (who.isEmpty() ? "未知" : who) + "；当前页面：" + (page.isEmpty() ? "未知" : page) + "。"
+                + "系统里有这些内容：研发项目(plm_project)、项目节点(plm_project_node)、我的待办、逾期节点、物料、证据、变更、生命周期等。\n"
                 + "只能执行以下动作：\n"
                 + "查项目(需项目编号/名称关键字)、查我的待办、查我的逾期节点、生命周期总览、打开页面(项目/跟踪/明细/工作表/立项/物料/BOM/变更/档案/模型/智能体/帮助/待办/证据)\n"
                 + "若能执行：只输出JSON {\"action\":\"execute\",\"command\":\"<上面任一动作的自然语言指令>\"}\n"
-                + "若不能/歧义：只输出JSON {\"action\":\"ask\",\"question\":\"<一句通俗提问>\",\"options\":[\"选项1\",\"选项2\",\"选项3\"]}（2-4个选项）\n"
+                + "若不能执行但可以基于系统常识直接回答：只输出JSON {\"action\":\"answer\",\"text\":\"<简洁回答>\"}\n"
+                + "若不能且需要澄清：只输出JSON {\"action\":\"ask\",\"question\":\"<一句通俗提问>\",\"options\":[\"选项1\",\"选项2\",\"选项3\"]}（2-4个选项）\n"
                 + "禁止输出JSON以外的任何内容。";
         String out = llmService.chat(sys, message);
         String json = extractJson(out);
@@ -178,6 +184,11 @@ public class AgentChatController {
                 if (r != null) return r;
                 return cannotDo("我理解了但执行失败，换个说法或选择：",
                         List.of("查项目进度", "我的待办", "我的逾期节点"));
+            }
+            if ("answer".equals(action)) {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("reply", node.path("text").asText(""));
+                return r;
             }
             // ask
             List<String> options = new ArrayList<>();
