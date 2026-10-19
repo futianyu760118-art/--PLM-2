@@ -69,6 +69,8 @@ services:
       - ./database/46_subscription.sql:/docker-entrypoint-initdb.d/46_subscription.sql:ro
       - ./database/47_permission_seed_repair.sql:/docker-entrypoint-initdb.d/47_permission_seed_repair.sql:ro
       - ./database/48_data_scope.sql:/docker-entrypoint-initdb.d/48_data_scope.sql:ro
+      - ./database/49_skill.sql:/docker-entrypoint-initdb.d/49_skill.sql:ro
+      - ./database/50_org_dept_assign.sql:/docker-entrypoint-initdb.d/50_org_dept_assign.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

@@ -2,16 +2,24 @@
   <div class="page-container">
     <el-card>
       <div class="head">
-        <h3>我的待办</h3>
-        <el-checkbox v-model="onlyActive" @change="noop">仅进行中项目</el-checkbox>
-        <el-radio-group v-model="viewMode" size="small">
-          <el-radio-button value="list">列表</el-radio-button>
-          <el-radio-button value="board">看板</el-radio-button>
-          <el-radio-button value="group">按项目分组</el-radio-button>
+        <h3>{{ activeTab === 'dept' ? '部门待办' : '我的待办' }}</h3>
+        <el-radio-group v-model="activeTab" size="small">
+          <el-radio-button value="self">我的待办</el-radio-button>
+          <el-radio-button value="dept">部门待办</el-radio-button>
         </el-radio-group>
-        <el-button icon="Refresh" @click="load">刷新</el-button>
+        <template v-if="activeTab === 'self'">
+          <el-checkbox v-model="onlyActive" @change="noop">仅进行中项目</el-checkbox>
+          <el-radio-group v-model="viewMode" size="small">
+            <el-radio-button value="list">列表</el-radio-button>
+            <el-radio-button value="board">看板</el-radio-button>
+            <el-radio-button value="group">按项目分组</el-radio-button>
+          </el-radio-group>
+          <el-button icon="Refresh" @click="load">刷新</el-button>
+        </template>
+        <el-button v-else icon="Refresh" @click="loadDept">刷新</el-button>
       </div>
 
+      <template v-if="activeTab === 'self'">
       <el-alert v-if="projectNo" type="info" :closable="false" class="proj-scope">
         仅显示项目 <b>{{ projectNo }}</b>
         <el-button link type="primary" size="small" style="margin-left:10px" @click="clearProject">返回全部待办</el-button>
@@ -90,6 +98,37 @@
           <p v-else class="muted">无已完成</p>
         </section>
       </template>
+      </template>
+
+      <template v-else>
+        <el-alert v-if="scope === 'SELF'" type="info" :closable="false" style="margin-bottom:12px">
+          无管理范围，仅显示个人待办（如需查看部门，请联系管理员配置经理角色）
+        </el-alert>
+        <el-alert v-else-if="scope === 'DEPT'" type="success" :closable="false" style="margin-bottom:12px">
+          当前可查看本部门成员的待办
+        </el-alert>
+        <el-collapse v-model="openDepts">
+          <el-collapse-item v-for="d in deptList" :key="d.deptId" :name="String(d.deptId)">
+            <template #title>
+              <span class="dt-title">{{ d.deptName }}</span>
+              <el-tag type="danger" size="small">逾期 {{ d.overdueCount }}</el-tag>
+              <el-tag type="primary" size="small">待办 {{ d.todoCount }}</el-tag>
+              <el-tag type="success" size="small">完成 {{ d.doneCount }}</el-tag>
+            </template>
+            <div v-for="m in d.members" :key="m.userId" class="member">
+              <div class="member-head">
+                <b>{{ m.realName }}</b>
+                <span class="cnt">逾期 {{ m.overdueCount }} · 待办 {{ m.todoCount }} · 完成 {{ m.doneCount }}</span>
+              </div>
+              <div class="member-chips">
+                <span v-for="n in memberNodes(m)" :key="n.project_no + n.node_code" class="chip" :class="chipCls(n)" @click="open(n)">{{ n.node_name }}</span>
+              </div>
+            </div>
+            <p v-if="!d.members.length" class="muted">暂无成员</p>
+          </el-collapse-item>
+        </el-collapse>
+        <el-empty v-if="!deptList.length" description="暂无部门数据" :image-size="80" />
+      </template>
     </el-card>
   </div>
 </template>
@@ -97,7 +136,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { myTodos } from '@/api/me'
+import { myTodos, deptTodos } from '@/api/me'
 
 const router = useRouter()
 const route = useRoute()
@@ -105,6 +144,10 @@ const raw = ref({ overdue: [], todo: [], done: [] })
 const viewMode = ref('list')
 const onlyActive = ref(true)
 const projectNo = ref(route.query.projectNo ? String(route.query.projectNo) : '')
+const activeTab = ref('self')
+const deptList = ref([])
+const scope = ref('')
+const openDepts = ref([])
 
 const statusLabel = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停' }[s] || s)
 const tag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON_HOLD: 'warning' }[s] || 'info')
@@ -143,6 +186,7 @@ function chipCls(n) {
   if (n.plan_date && n.plan_date < new Date().toISOString().slice(0, 10)) return 'od'
   return 'date'
 }
+function memberNodes(m) { return [...(m.overdue || []), ...(m.todo || []), ...(m.done || [])] }
 function key(t) { return t.project_no + t.node_code }
 function fmt(dt) { return dt ? String(dt).slice(0, 10) : '—' }
 function open(t) { router.push({ path: '/project/progress', query: { projectNo: t.project_no, node: t.node_code } }) }
@@ -152,6 +196,13 @@ async function load() {
   const res = await myTodos()
   raw.value = { overdue: res.data?.overdue || [], todo: res.data?.todo || [], done: res.data?.done || [] }
 }
+async function loadDept() {
+  const res = await deptTodos()
+  deptList.value = res.data?.departments || []
+  scope.value = res.data?.scope || 'SELF'
+  openDepts.value = (res.data?.departments || []).map(d => String(d.deptId))
+}
+watch(activeTab, (v) => { if (v === 'dept') loadDept() })
 onMounted(load)
 </script>
 
@@ -182,4 +233,12 @@ onMounted(load)
 .chip.done { background: #f0f9eb; color: #67c23a; }
 .chip.od { background: #fef0f0; color: #f56c6c; }
 .chip.date { background: #ecf5ff; color: #409eff; }
+
+.dt-title { font-weight: 600; margin-right: 10px; }
+.dt-title + .el-tag { margin-right: 6px; }
+.member { padding: 8px 4px; border-bottom: 1px dashed #ebeef5; }
+.member:last-child { border-bottom: none; }
+.member-head { display: flex; align-items: center; font-size: 13px; }
+.member-head .cnt { margin-left: auto; font-size: 12px; color: #909399; }
+.member-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 </style>
