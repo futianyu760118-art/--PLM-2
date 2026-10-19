@@ -60,7 +60,10 @@
             <div class="fb-rec-head">
               <span class="fb-rec-id">#{{ r.id }}</span>
               <span class="fb-rec-title">{{ r.title }}</span>
-              <el-tag size="small" :type="statusTag(r.status)">{{ statusLabel(r.status) }}</el-tag>
+              <el-select :model-value="r.status" size="small" style="width:104px"
+                @change="v => changeStatus(r, v)">
+                <el-option v-for="(meta, k) in STATUS_META" :key="k" :label="meta[0]" :value="k" />
+              </el-select>
               <el-tag size="small" :type="aiTag(r.ai_status)">{{ aiLabel(r.ai_status) }}</el-tag>
             </div>
             <div class="fb-rec-desc">{{ r.description || '—' }}</div>
@@ -89,7 +92,7 @@
 import { ref, reactive, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createFeedback, uploadFeedbackFile, listFeedback } from '@/api/feedback'
+import { createFeedback, uploadFeedbackFile, listFeedback, changeFeedbackStatus } from '@/api/feedback'
 
 defineProps({ modelValue: { type: Boolean, default: false } })
 const emit = defineEmits(['update:modelValue', 'minimize'])
@@ -149,6 +152,16 @@ async function loadRecords() {
   }
 }
 
+async function changeStatus(r, status) {
+  try {
+    const res = await changeFeedbackStatus(r.id, status)
+    Object.assign(r, res.data)
+    ElMessage.success('状态已更新')
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
 function startNew() {
   receipt.value = null
   Object.assign(form, { type: 'issue', severity: 'low', title: '', description: '', pagePath: route.path, attachments: [] })
@@ -190,6 +203,7 @@ async function handleSubmit() {
   try {
     const res = await createFeedback({ ...form })
     receipt.value = res.data
+    loadRecords()
   } catch (e) {
     // 拦截器已提示
   } finally {
