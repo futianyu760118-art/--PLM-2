@@ -76,25 +76,8 @@
         <el-alert v-else-if="scope === 'DEPT'" type="success" :closable="false" style="margin-bottom:12px">
           当前可查看本部门成员的待办
         </el-alert>
-        <el-collapse v-model="openDepts">
-          <el-collapse-item v-for="d in deptList" :key="d.deptId" :name="String(d.deptId)">
-            <template #title>
-              <span class="dt-title">{{ d.deptName }}</span>
-              <el-tag type="danger" size="small">逾期 {{ d.overdueCount }}</el-tag>
-              <el-tag type="primary" size="small">待办 {{ d.todoCount }}</el-tag>
-              <el-tag type="success" size="small">完成 {{ d.doneCount }}</el-tag>
-            </template>
-            <div v-for="m in d.members" :key="m.userId" class="member">
-              <div class="member-head">
-                <b>{{ m.realName }}</b>
-                <span class="cnt">逾期 {{ m.overdueCount }} · 待办 {{ m.todoCount }} · 完成 {{ m.doneCount }}</span>
-              </div>
-              <TodoSections :data="m" @open="open" />
-            </div>
-            <p v-if="!d.members.length" class="muted">暂无成员</p>
-          </el-collapse-item>
-        </el-collapse>
-        <el-empty v-if="!deptList.length" description="暂无部门数据" :image-size="80" />
+        <TodoSections :data="deptFlat" show-owner @open="open" />
+        <el-empty v-if="!hasDeptData" description="暂无部门待办" :image-size="80" />
       </template>
     </el-card>
   </div>
@@ -115,7 +98,7 @@ const projectNo = ref(route.query.projectNo ? String(route.query.projectNo) : ''
 const activeTab = ref('self')
 const deptList = ref([])
 const scope = ref('')
-const openDepts = ref([])
+const selfTodo = ref({ overdue: [], todo: [], done: [], realName: '' })
 
 const statusLabel = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停' }[s] || s)
 const tag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON_HOLD: 'warning' }[s] || 'info')
@@ -167,8 +150,38 @@ async function loadDept() {
   const res = await deptTodos()
   deptList.value = res.data?.departments || []
   scope.value = res.data?.scope || 'SELF'
-  openDepts.value = (res.data?.departments || []).map(d => String(d.deptId))
+  const s = res.data?.self || {}
+  selfTodo.value = { overdue: s.overdue || [], todo: s.todo || [], done: s.done || [], realName: s.realName || '' }
 }
+
+// 部门待办：把部门内各成员待办打平成与个人待办一致的三段结构，并标注成员名
+const deptFlat = computed(() => {
+  const items = { overdue: [], todo: [], done: [] }
+  if (deptList.value.length) {
+    const seen = new Set()
+    for (const d of deptList.value) {
+      for (const m of d.members) {
+        for (const kind of ['overdue', 'todo', 'done']) {
+          for (const n of (m[kind] || [])) {
+            const key = m.userId + ':' + n.project_no + ':' + n.node_code
+            if (seen.has(key)) continue
+            seen.add(key)
+            items[kind].push({ ...n, owner_name: m.realName })
+          }
+        }
+      }
+    }
+  } else {
+    for (const kind of ['overdue', 'todo', 'done']) {
+      for (const n of (selfTodo.value[kind] || [])) {
+        items[kind].push({ ...n, owner_name: selfTodo.value.realName || '' })
+      }
+    }
+  }
+  return items
+})
+const hasDeptData = computed(() => deptFlat.value.overdue.length || deptFlat.value.todo.length || deptFlat.value.done.length)
+
 watch(activeTab, (v) => { if (v === 'dept') loadDept() })
 onMounted(load)
 </script>
@@ -200,12 +213,4 @@ onMounted(load)
 .chip.done { background: #f0f9eb; color: #67c23a; }
 .chip.od { background: #fef0f0; color: #f56c6c; }
 .chip.date { background: #ecf5ff; color: #409eff; }
-
-.dt-title { font-weight: 600; margin-right: 10px; }
-.dt-title + .el-tag { margin-right: 6px; }
-.member { padding: 8px 4px; border-bottom: 1px dashed #ebeef5; }
-.member:last-child { border-bottom: none; }
-.member-head { display: flex; align-items: center; font-size: 13px; }
-.member-head .cnt { margin-left: auto; font-size: 12px; color: #909399; }
-.member-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 </style>
