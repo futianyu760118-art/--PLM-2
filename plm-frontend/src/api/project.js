@@ -145,3 +145,7 @@ export function analysisByCategory() {
 export function analysisDelay() {
   return request({ url: '/v1/rd/analysis/delay', method: 'get' })
 }
+
+export function getGantt(status) {
+  return request({ url: '/v1/lifecycle/gantt', method: 'get', params: { status } })
+}

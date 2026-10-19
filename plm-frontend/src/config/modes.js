@@ -85,6 +85,7 @@ export const MODES = {
       { stage: '项目', icon: 'Files', items: [
         { path: '/project/list', title: '研发项目', icon: 'Files' },
         { path: '/project/tracking', title: '项目跟踪', icon: 'DataBoard' },
+        { path: '/project/gantt', title: '项目甘特图', icon: 'Histogram' },
         { path: '/project/worksheets', title: '项目工作表', icon: 'Document' },
         { path: '/project/initiation', title: '立项申请', icon: 'EditPen' }
       ] }

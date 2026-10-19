@@ -49,6 +49,8 @@ const routes = [
         meta: { title: '项目明细表' } },
       { path: 'tracking', name: 'ProjectTracking', component: () => import('@/views/project/tracking.vue'),
         meta: { title: '研发项目跟踪' } },
+      { path: 'gantt', name: 'ProjectGantt', component: () => import('@/views/collab/gantt.vue'),
+        meta: { title: '项目甘特图' } },
       { path: 'worksheets', name: 'ProjectWorksheets', component: () => import('@/views/project/worksheets.vue'),
         meta: { title: '项目工作表' } },
       { path: 'changes', name: 'ProjectChanges', component: () => import('@/views/project/changes.vue'),

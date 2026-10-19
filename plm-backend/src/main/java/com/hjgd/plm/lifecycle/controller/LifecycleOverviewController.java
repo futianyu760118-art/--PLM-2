@@ -207,6 +207,44 @@ public class LifecycleOverviewController {
         return Result.success(out);
     }
 
+    @Operation(summary = "项目甘特图(项目时间轴 + 关键节点里程碑)")
+    @GetMapping("/gantt")
+    public Result<Map<String, Object>> gantt(@RequestParam(required = false) String status) {
+        String sf = (status != null && !status.isEmpty()) ? " AND p.status='" + esc(status) + "'" : "";
+        List<Map<String, Object>> projects = jdbc.queryForList(
+                "SELECT p.id, p.project_no, p.project_name, p.owner, p.status, p.close_date, p.created_at, " +
+                        "(SELECT MIN(COALESCE(n.plan_date, n.actual_date)) FROM plm_project_node n WHERE n.project_no=p.project_no) AS start_date, " +
+                        "(SELECT MAX(COALESCE(n.plan_date, n.actual_date)) FROM plm_project_node n WHERE n.project_no=p.project_no) AS end_date " +
+                        "FROM plm_project p WHERE p.status <> 'CANCELLED'" + sf +
+                        " ORDER BY start_date NULLS LAST, p.project_no LIMIT 200");
+
+        List<Map<String, Object>> ms = jdbc.queryForList(
+                "SELECT n.project_no, n.node_code, n.node_name, COALESCE(n.plan_date, n.actual_date) AS date, n.status " +
+                        "FROM plm_project_node n WHERE n.is_key=1 ORDER BY n.project_no, n.seq");
+        Map<String, List<Map<String, Object>>> byNo = new LinkedHashMap<>();
+        for (Map<String, Object> m : ms) {
+            byNo.computeIfAbsent(String.valueOf(m.get("project_no")), k -> new ArrayList<>()).add(m);
+        }
+
+        List<Map<String, Object>> outList = new ArrayList<>();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        for (Map<String, Object> p : projects) {
+            Object sd = p.get("start_date");
+            Object ed = p.get("end_date");
+            if (sd == null) sd = p.get("created_at");
+            if (ed == null) ed = (p.get("close_date") != null) ? p.get("close_date") : today;
+            if (sd == null || ed == null) continue;
+            p.put("start_date", sd);
+            p.put("end_date", ed);
+            p.put("milestones", byNo.getOrDefault(String.valueOf(p.get("project_no")), List.of()));
+            outList.add(p);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("projects", outList);
+        return Result.success(out);
+    }
+
     private Map<String, Object> stage(String name, String scope, String link, List<Map<String, Object>> items) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("name", name); m.put("scope", scope); m.put("link", link); m.put("items", items);
