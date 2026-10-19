@@ -218,12 +218,22 @@ public class LifecycleOverviewController {
                         "FROM plm_project p WHERE p.status <> 'CANCELLED'" + sf +
                         " ORDER BY start_date NULLS LAST, p.project_no LIMIT 200");
 
-        List<Map<String, Object>> ms = jdbc.queryForList(
-                "SELECT n.project_no, n.node_code, n.node_name, COALESCE(n.plan_date, n.actual_date) AS date, n.status " +
-                        "FROM plm_project_node n WHERE n.is_key=1 ORDER BY n.project_no, n.seq");
-        Map<String, List<Map<String, Object>>> byNo = new LinkedHashMap<>();
-        for (Map<String, Object> m : ms) {
-            byNo.computeIfAbsent(String.valueOf(m.get("project_no")), k -> new ArrayList<>()).add(m);
+        List<Map<String, Object>> ns = jdbc.queryForList(
+                "SELECT n.project_no, n.node_code, n.node_name, n.plan_date, n.actual_date, n.status, n.is_key " +
+                        "FROM plm_project_node n ORDER BY n.project_no, n.seq");
+        Map<String, List<Map<String, Object>>> nodesByNo = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> msByNo = new LinkedHashMap<>();
+        for (Map<String, Object> n : ns) {
+            String no = String.valueOf(n.get("project_no"));
+            nodesByNo.computeIfAbsent(no, k -> new ArrayList<>()).add(n);
+            if (Integer.valueOf(1).equals(n.get("is_key"))) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("node_code", n.get("node_code"));
+                m.put("node_name", n.get("node_name"));
+                m.put("date", n.get("plan_date") != null ? n.get("plan_date") : n.get("actual_date"));
+                m.put("status", n.get("status"));
+                msByNo.computeIfAbsent(no, k -> new ArrayList<>()).add(m);
+            }
         }
 
         List<Map<String, Object>> outList = new ArrayList<>();
@@ -234,9 +244,11 @@ public class LifecycleOverviewController {
             if (sd == null) sd = p.get("created_at");
             if (ed == null) ed = (p.get("close_date") != null) ? p.get("close_date") : today;
             if (sd == null || ed == null) continue;
+            String no = String.valueOf(p.get("project_no"));
             p.put("start_date", sd);
             p.put("end_date", ed);
-            p.put("milestones", byNo.getOrDefault(String.valueOf(p.get("project_no")), List.of()));
+            p.put("milestones", msByNo.getOrDefault(no, List.of()));
+            p.put("nodes", nodesByNo.getOrDefault(no, List.of()));
             outList.add(p);
         }
 

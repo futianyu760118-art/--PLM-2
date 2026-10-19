@@ -14,6 +14,8 @@
           <el-option label="暂停" value="ON_HOLD" />
         </el-select>
         <el-button icon="Refresh" @click="load">刷新</el-button>
+        <el-button :disabled="!rows.some(r => r.type === 'project')" @click="expandAll">全部展开</el-button>
+        <el-button @click="collapseAll">全部收起</el-button>
         <div class="zoom">
           <span>缩放</span>
           <el-button size="small" :disabled="dayWidth <= 3" @click="setZoom(-3)">-</el-button>
@@ -30,12 +32,20 @@
 
       <div v-loading="loading" class="gantt">
         <div class="g-left">
-          <div class="gl-head">项目</div>
-          <div v-for="p in displayProjects" :key="p.id" class="gl-row" :class="'st-' + p.status">
-            <div class="gl-name">{{ p.project_name || p.project_no }}</div>
-            <div class="gl-meta">{{ p.project_no }} · {{ p.owner }}</div>
+          <div class="gl-head">项目 / 节点</div>
+          <div v-for="r in rows" :key="r.id" class="gl-row" :class="r.type === 'node' ? 'gl-node' : 'st-' + r.project.status">
+            <template v-if="r.type === 'project'">
+              <div class="gl-name" @click="toggle(r.project.id)">
+                <el-icon class="gl-exp" :class="{ open: isExpanded(r.project.id) }"><ArrowRight /></el-icon>
+                {{ r.project.project_name || r.project.project_no }}
+              </div>
+              <div class="gl-meta">{{ r.project.project_no }} · {{ r.project.owner }}</div>
+            </template>
+            <template v-else>
+              <div class="gl-node-name" :title="r.node.node_name">{{ r.node.node_name }}</div>
+            </template>
           </div>
-          <el-empty v-if="!displayProjects.length" description="暂无项目" :image-size="60" />
+          <el-empty v-if="!rows.length" description="暂无项目" :image-size="60" />
         </div>
 
         <div class="g-right">
@@ -47,13 +57,19 @@
               <div v-for="t in weekTicks" :key="t.left" class="gr-tick" :style="{ left: t.left + 'px' }"></div>
             </div>
             <div v-if="todayLeft != null" class="gr-today" :style="{ left: todayLeft + 'px' }"></div>
-            <div v-for="p in displayProjects" :key="p.id" class="gr-row">
-              <div class="gr-bar" :class="'st-' + p.status" :style="barStyle(p)"
-                :title="`${p.project_no} ${p.project_name}\n${d2d(p.start_date)} ~ ${d2d(p.end_date)}`">
-                <span class="bar-label">{{ d2d(p.start_date) }} ~ {{ d2d(p.end_date) }}</span>
-              </div>
-              <div v-for="m in p.milestones" :key="m.nodeCode" class="gr-ms" :class="{ done: m.status === 'DONE' }"
-                :style="{ left: msLeft(m.date) + 'px' }" :title="`${m.nodeName} · ${d2d(m.date)}${m.status === 'DONE' ? '（已完成）' : ''}`">◆</div>
+            <div v-for="r in rows" :key="r.id" class="gr-row">
+              <template v-if="r.type === 'project'">
+                <div class="gr-bar" :class="'st-' + r.project.status" :style="barStyle(r.project)"
+                  :title="`${r.project.project_no} ${r.project.project_name}\n${d2d(r.project.start_date)} ~ ${d2d(r.project.end_date)}`">
+                  <span class="bar-label">{{ d2d(r.project.start_date) }} ~ {{ d2d(r.project.end_date) }}</span>
+                </div>
+                <div v-for="m in r.project.milestones" :key="m.node_code" class="gr-ms" :class="{ done: m.status === 'DONE' }"
+                  :style="{ left: msLeft(m.date) + 'px' }" :title="`${m.node_name} · ${d2d(m.date)}${m.status === 'DONE' ? '（已完成）' : ''}`">◆</div>
+              </template>
+              <template v-else>
+                <div v-if="nd(r.node)" class="gr-node" :class="nodeCls(r.node)" :style="nodeStyle(r.node)"
+                  :title="`${r.node.node_name}${nd(r.node).start ? ' · ' + nd(r.node).start + (nd(r.node).end && nd(r.node).end !== nd(r.node).start ? ' ~ ' + nd(r.node).end : '') : ''}`"></div>
+              </template>
             </div>
           </div>
         </div>
@@ -70,6 +86,7 @@ const loading = ref(false)
 const projects = ref([])
 const statusFilter = ref('')
 const selectedIds = ref([])
+const expandedIds = ref([])
 const dayWidth = ref(8)
 
 const displayProjects = computed(() => {
@@ -78,7 +95,30 @@ const displayProjects = computed(() => {
   return projects.value.filter(p => set.has(String(p.id)))
 })
 
+const rows = computed(() => {
+  const out = []
+  for (const p of displayProjects.value) {
+    out.push({ type: 'project', project: p, id: 'p' + p.id })
+    if (expandedIds.value.includes(String(p.id))) {
+      for (const n of (p.nodes || [])) {
+        out.push({ type: 'node', project: p, node: n, id: 'n' + p.id + n.node_code })
+      }
+    }
+  }
+  return out
+})
+
+function isExpanded(id) { return expandedIds.value.includes(String(id)) }
+function toggle(id) {
+  const k = String(id)
+  const i = expandedIds.value.indexOf(k)
+  if (i >= 0) expandedIds.value.splice(i, 1)
+  else expandedIds.value.push(k)
+}
+function expandAll() { expandedIds.value = displayProjects.value.map(p => String(p.id)) }
+function collapseAll() { expandedIds.value = [] }
 function noop() {}
+
 function d2d(v) { return v ? String(v).slice(0, 10) : '' }
 function day(d) { const s = d2d(d); return s ? Math.floor(new Date(s + 'T00:00:00Z').getTime() / 86400000) : 0 }
 
@@ -103,6 +143,26 @@ function barStyle(p) {
   return { left: x(p.start_date) + 'px', width: Math.max((e - s + 1) * dayWidth.value, 4) + 'px' }
 }
 function msLeft(d) { return x(d) - 4 + 'px' }
+
+function nd(n) {
+  const p = d2d(n.plan_date), a = d2d(n.actual_date)
+  if (!p && !a) return null
+  const start = p || a
+  const end = a || p
+  return { start, end }
+}
+function nodeStyle(n) {
+  const d = nd(n)
+  const s = day(d.start), e = day(d.end)
+  return { left: x(d.start) + 'px', width: Math.max((e - s + 1) * dayWidth.value, 4) + 'px' }
+}
+function nodeCls(n) {
+  if (n.status === 'DONE') return 'done'
+  const p = d2d(n.plan_date)
+  const today = new Date().toISOString().slice(0, 10)
+  if (p && p < today) return 'overdue'
+  return 'planned'
+}
 
 const todayLeft = computed(() => {
   const t = day(new Date().toISOString().slice(0, 10))
@@ -159,11 +219,15 @@ onMounted(load)
     .ms { width: 8px; height: 8px; transform: rotate(45deg); background: #f56c6c; display: inline-block; } }
 }
 .gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
-.g-left { flex: 0 0 220px; border-right: 1px solid #e4e7ed; background: #fafbfc; }
+.g-left { flex: 0 0 260px; border-right: 1px solid #e4e7ed; background: #fafbfc; }
 .gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 34px; box-sizing: border-box; }
 .gl-row { padding: 8px 12px; border-bottom: 1px solid #f0f2f5; height: 44px; box-sizing: border-box; overflow: hidden; }
-.gl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
+.gl-exp { font-size: 13px; color: #909399; transition: transform .15s; flex: 0 0 auto; }
+.gl-exp.open { transform: rotate(90deg); }
 .gl-meta { font-size: 11px; color: #909399; }
+.gl-node { padding-left: 26px; height: 34px; }
+.gl-node-name { font-size: 12px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-right { flex: 1; overflow-x: auto; }
 .gr-scroll { position: relative; }
 .gr-axis { position: sticky; top: 0; z-index: 3; height: 34px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
@@ -180,4 +244,8 @@ onMounted(load)
   .bar-label { font-size: 11px; white-space: nowrap; } }
 .gr-ms { position: absolute; top: 17px; font-size: 12px; color: #909399; transform: rotate(45deg); cursor: pointer; z-index: 2;
   &.done { color: #67c23a; } }
+.gr-node { position: absolute; top: 15px; height: 14px; border-radius: 3px; cursor: pointer;
+  &.done { background: #67c23a; }
+  &.overdue { background: #f56c6c; }
+  &.planned { background: #409eff; } }
 </style>
