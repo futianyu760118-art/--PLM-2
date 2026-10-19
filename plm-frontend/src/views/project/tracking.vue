@@ -49,8 +49,12 @@
         <el-table-column prop="projectNo" label="项目编号" width="150" fixed sortable />
         <el-table-column prop="projectName" label="项目名称" width="170" show-overflow-tooltip fixed />
         <el-table-column prop="owner" label="负责人" width="80" />
-        <el-table-column label="状态" width="90" align="center">
-          <template #default="{row}"><el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
+        <el-table-column label="状态" width="110" align="center">
+          <template #default="{row}">
+            <el-select :model-value="row.status" size="small" style="width:96px" @change="v => changeStatus(row, v)">
+              <el-option v-for="o in STATUS_OPTS" :key="o.value" :label="o.label" :value="o.value" />
+            </el-select>
+          </template>
         </el-table-column>
         <el-table-column v-for="col in nodeDefs" :key="col.code" :label="col.label" width="92" align="center">
           <template #header>
@@ -108,7 +112,7 @@
 import { ref, reactive, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll } from '@/api/project'
+import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll, updateProject } from '@/api/project'
 
 const route = useRoute()
 const router = useRouter()
@@ -125,6 +129,21 @@ const syncing = ref(false)
 
 const statusLabel = (s) => ({ ACTIVE: '进行中', MP: '已量产', CLOSED: '已关闭', ON_HOLD: '暂停', CANCELLED: '取消' }[s] || s || '')
 const statusTag = (s) => ({ ACTIVE: 'primary', MP: 'success', CLOSED: 'info', ON_HOLD: 'warning', CANCELLED: 'danger' }[s] || 'info')
+const STATUS_OPTS = [
+  { value: 'ACTIVE', label: '进行中' },
+  { value: 'MP', label: '已量产' },
+  { value: 'CLOSED', label: '已关闭' },
+  { value: 'ON_HOLD', label: '暂停' },
+  { value: 'CANCELLED', label: '取消' }
+]
+
+async function changeStatus(row, status) {
+  try {
+    await updateProject({ id: row.id, status })
+    row.status = status
+    ElMessage.success('项目状态已更新')
+  } catch (e) { /* 拦截器已提示 */ }
+}
 const cellClass = (row, code) => {
   const v = row.cells[code]
   if (row.doneCells && row.doneCells[code]) return 'c-done'
