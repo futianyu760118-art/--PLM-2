@@ -71,6 +71,7 @@ services:
       - ./database/48_data_scope.sql:/docker-entrypoint-initdb.d/48_data_scope.sql:ro
       - ./database/49_skill.sql:/docker-entrypoint-initdb.d/49_skill.sql:ro
       - ./database/50_org_dept_assign.sql:/docker-entrypoint-initdb.d/50_org_dept_assign.sql:ro
+      - ./database/51_knowledge.sql:/docker-entrypoint-initdb.d/51_knowledge.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

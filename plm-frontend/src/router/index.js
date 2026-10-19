@@ -29,7 +29,11 @@ const routes = [
       { path: 'lifecycle', name: 'Lifecycle', component: () => import('@/views/lifecycle/index.vue'),
         meta: { title: '全生命周期', workflowStage: '工作台' } },
       { path: 'help', name: 'HelpCenter', component: () => import('@/views/help/index.vue'),
-        meta: { title: '帮助与学习', workflowStage: '工作台' } }
+        meta: { title: '帮助与学习', workflowStage: '工作台' } },
+      { path: 'data-entry', name: 'DataEntry', component: () => import('@/views/data-entry/index.vue'),
+        meta: { title: '统一录入', icon: 'EditPen', workflowStage: '工作台' } },
+      { path: 'knowledge', name: 'Knowledge', component: () => import('@/views/knowledge/index.vue'),
+        meta: { title: '知识库', icon: 'Reading', workflowStage: '工作台' } }
     ]
   },
   {
