@@ -30,7 +30,7 @@ public class OutboxPublisherJob {
 
     private static final int MAX_RETRIES = 5;
 
-    @Scheduled(fixedDelay = 30000)
+    @Scheduled(fixedDelay = 5000)
     public void publish() {
         List<Map<String, Object>> events;
         try {

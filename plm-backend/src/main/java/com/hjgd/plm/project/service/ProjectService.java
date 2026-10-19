@@ -6,6 +6,7 @@ import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.ResultCode;
+import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectGateLog;
 import com.hjgd.plm.project.mapper.ProjectGateLogMapper;
@@ -31,6 +32,7 @@ public class ProjectService {
     private final ProjectGateLogMapper gateLogMapper;
     private final SequenceService sequenceService;
     private final ProjectProgressService progressService;
+    private final DomainEventService domainEventService;
 
     private static final String[] GATES = {"G0","G1","G2","G3","G4","G5","G6","G7","G8"};
     private static final Map<String,String> GATE_NAMES = Map.of(
@@ -82,6 +84,7 @@ public class ProjectService {
         projectMapper.insert(p);
         // 初始化 19 个进度节点
         progressService.initNodes(p.getId(), p.getProjectNo());
+        domainEventService.publish("project.created", "PROJECT", p.getProjectNo(), projectPayload(p));
         return p;
     }
 
@@ -90,12 +93,17 @@ public class ProjectService {
         Project exist = getById(p.getId());
         p.setUpdatedAt(LocalDateTime.now());
         projectMapper.updateById(p);
-        return getById(p.getId());
+        Project after = getById(p.getId());
+        domainEventService.publish("project.updated", "PROJECT", after.getProjectNo(), projectPayload(after));
+        return after;
     }
 
     @Transactional
     public void delete(Long id) {
+        Project p = getById(id);
         projectMapper.deleteById(id);
+        domainEventService.publish("project.deleted", "PROJECT", p.getProjectNo(),
+                Map.of("projectNo", p.getProjectNo(), "projectName", p.getProjectName()));
     }
 
     public List<ProjectGateLog> getGateLogs(Long projectId) {
@@ -131,6 +139,9 @@ public class ProjectService {
         log.setEvidenceRef(evidenceRef);
         log.setCreatedAt(LocalDateTime.now());
         gateLogMapper.insert(log);
+        domainEventService.publish("project.gate_passed", "PROJECT", p.getProjectNo(),
+                Map.of("projectNo", p.getProjectNo(), "gateCode", gateCode, "gateName",
+                        GATE_NAMES.getOrDefault(gateCode, gateCode), "comment", comment == null ? "" : comment));
         return log;
     }
 
@@ -150,7 +161,33 @@ public class ProjectService {
         p.setGateStatus("BLOCKED");
         p.setUpdatedAt(LocalDateTime.now());
         projectMapper.updateById(p);
+        domainEventService.publish("project.gate_failed", "PROJECT", p.getProjectNo(),
+                Map.of("projectNo", p.getProjectNo(), "gateCode", gateCode));
         return log;
+    }
+
+    private Map<String, Object> projectPayload(Project p) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("projectNo", p.getProjectNo());
+        m.put("projectName", p.getProjectName());
+        m.put("partNo", p.getPartNo());
+        m.put("customerCode", p.getCustomerCode());
+        m.put("customerName", p.getCustomerName());
+        m.put("projectType", p.getProjectType());
+        m.put("projectLevel", p.getProjectLevel());
+        m.put("owner", p.getOwner());
+        m.put("department", p.getDepartment());
+        m.put("startDate", p.getStartDate() == null ? null : p.getStartDate().toString());
+        m.put("targetDate", p.getTargetDate() == null ? null : p.getTargetDate().toString());
+        m.put("currentGate", p.getCurrentGate());
+        m.put("gateStatus", p.getGateStatus());
+        m.put("status", p.getStatus());
+        m.put("projectAmount", p.getProjectAmount());
+        m.put("orderAmount", p.getOrderAmount());
+        m.put("investAmount", p.getInvestAmount());
+        m.put("riskLevel", p.getRiskLevel());
+        m.put("remarks", p.getRemarks());
+        return m;
     }
 
     private int indexOf(String gateCode) {

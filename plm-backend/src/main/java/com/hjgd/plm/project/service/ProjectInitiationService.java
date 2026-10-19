@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
+import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectGateLog;
 import com.hjgd.plm.project.entity.ProjectInitiation;
@@ -38,6 +39,7 @@ public class ProjectInitiationService {
     private final ProjectGateLogMapper gateLogMapper;
     private final ProjectService projectService;
     private final SequenceService sequenceService;
+    private final DomainEventService domainEventService;
 
     /** 五阶段顺序 */
     public static final String[] STAGES = {"apply", "dept", "review", "gm", "execute"};
@@ -122,6 +124,9 @@ public class ProjectInitiationService {
         r.setCreatedAt(LocalDateTime.now());
         r.setUpdatedAt(LocalDateTime.now());
         initiationMapper.insert(r);
+        domainEventService.publish("initiation.created", "INITIATION", r.getInitNo(),
+                Map.of("initNo", r.getInitNo(), "projectNo", r.getProjectNo() == null ? "" : r.getProjectNo(),
+                        "projectName", r.getProjectName(), "approvalStatus", r.getApprovalStatus()));
         return r;
     }
 
@@ -204,6 +209,9 @@ public class ProjectInitiationService {
         rec.setUpdatedAt(LocalDateTime.now());
         initiationMapper.updateById(rec);
         log.info("[立项审批] {} 推进: {} → {}", rec.getInitNo(), cur, next);
+        domainEventService.publish("initiation.stage_changed", "INITIATION", rec.getInitNo(),
+                Map.of("initNo", rec.getInitNo(), "projectName", rec.getProjectName(),
+                        "workflowStage", next, "approvalStatus", rec.getApprovalStatus()));
         return getById(id);
     }
 
@@ -300,6 +308,10 @@ public class ProjectInitiationService {
         log.setComment("立项申请书 " + rec.getInitNo() + " 批准转入");
         log.setCreatedAt(LocalDateTime.now());
         gateLogMapper.insert(log);
+
+        domainEventService.publish("initiation.approved", "INITIATION", rec.getInitNo(),
+                Map.of("initNo", rec.getInitNo(), "projectNo", created.getProjectNo(),
+                        "projectId", created.getId(), "projectName", rec.getProjectName()));
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("message", "已批准并创建研发项目");

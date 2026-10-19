@@ -41,6 +41,7 @@ class ProjectInitiationServiceTest {
     @Mock private ProjectGateLogMapper gateLogMapper;
     @Mock private ProjectService projectService;
     @Mock private SequenceService sequenceService;
+    @Mock private com.hjgd.plm.event.service.DomainEventService domainEventService;
     @InjectMocks private ProjectInitiationService service;
 
     private void loginAs(String... roles) {
@@ -157,6 +158,7 @@ class ProjectInitiationServiceTest {
         when(projectService.create(any(Project.class))).thenAnswer(inv -> {
             Project p = inv.getArgument(0);
             p.setId(88L);
+            p.setProjectNo("HJ202609180088");
             return p;
         });
 
