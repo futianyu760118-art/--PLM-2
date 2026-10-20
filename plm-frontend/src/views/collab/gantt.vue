@@ -55,7 +55,12 @@
         <div class="g-right">
           <div class="gr-scroll" :style="{ width: totalWidth + 'px' }">
             <div class="gr-axis">
-              <div v-for="t in scaleTicks" :key="t.left" class="gr-tick-label" :class="{ major: t.major }" :style="{ left: t.left + 'px' }">{{ t.label }}</div>
+              <div class="gr-month-row">
+                <div v-for="m in monthAxis" :key="m.key" class="gr-month" :style="{ left: m.left + 'px', width: m.width + 'px' }">{{ m.label }}</div>
+              </div>
+              <div v-if="scale !== 'month'" class="gr-day-row">
+                <div v-for="t in scaleTicks" :key="t.left" class="gr-day-label" :class="{ first: t.first }" :style="{ left: t.left + 'px' }">{{ t.label }}</div>
+              </div>
             </div>
             <div class="gr-grid">
               <div v-for="t in gridTicks" :key="t.left" class="gr-tick" :style="{ left: t.left + 'px' }"></div>
@@ -175,25 +180,34 @@ const todayLeft = computed(() => {
   return x(new Date().toISOString().slice(0, 10)) + 'px'
 })
 
+const monthAxis = computed(() => {
+  const arr = []
+  const s = range.value.start, e = range.value.end
+  let cur = new Date(new Date(s * 86400000).getUTCFullYear(), new Date(s * 86400000).getUTCMonth(), 1)
+  while (Math.floor(cur.getTime() / 86400000) <= e) {
+    const next = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1))
+    const startDay = Math.floor(cur.getTime() / 86400000)
+    const endDay = Math.floor(next.getTime() / 86400000)
+    const left = (startDay - s) * dayWidth.value
+    const width = Math.max((Math.min(endDay, e) - Math.max(startDay, s)) * dayWidth.value, 1)
+    arr.push({ key: `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, '0')}`, label: `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, '0')}`, left, width })
+    cur = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1))
+  }
+  return arr
+})
+
 const scaleTicks = computed(() => {
   const arr = []
   const s = range.value.start, e = range.value.end
   if (scale.value === 'day') {
     for (let d = s; d <= e; d++) {
       const dt = new Date(d * 86400000)
-      arr.push({ left: (d - s) * dayWidth.value, label: String(dt.getUTCDate()), major: dt.getUTCDate() === 1 })
+      arr.push({ left: (d - s) * dayWidth.value, label: String(dt.getUTCDate()), first: dt.getUTCDate() === 1 })
     }
   } else if (scale.value === 'week') {
     for (let d = s; d <= e; d++) {
       const dt = new Date(d * 86400000)
-      if (dt.getUTCDay() === 1) arr.push({ left: (d - s) * dayWidth.value, label: `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`, major: true })
-    }
-  } else {
-    let cur = new Date(new Date(s * 86400000).getUTCFullYear(), new Date(s * 86400000).getUTCMonth(), 1)
-    while (Math.floor(cur.getTime() / 86400000) <= e) {
-      const d = Math.floor(cur.getTime() / 86400000)
-      arr.push({ left: (d - s) * dayWidth.value, label: `${cur.getUTCFullYear()}-${String(cur.getUTCMonth() + 1).padStart(2, '0')}`, major: true })
-      cur = new Date(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1)
+      if (dt.getUTCDay() === 1) arr.push({ left: (d - s) * dayWidth.value, label: `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}`, first: false })
     }
   }
   return arr
@@ -246,7 +260,7 @@ onMounted(load)
 }
 .gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
 .g-left { flex: 0 0 min(260px, 34vw); border-right: 1px solid #e4e7ed; background: #fafbfc; }
-.gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 34px; box-sizing: border-box; }
+.gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 48px; box-sizing: border-box; line-height: 28px; }
 .gl-row { padding: 8px 12px; border-bottom: 1px solid #f0f2f5; height: 44px; box-sizing: border-box; overflow: hidden; }
 .gl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
 .gl-exp { font-size: 13px; color: #909399; transition: transform .15s; flex: 0 0 auto; }
@@ -256,12 +270,15 @@ onMounted(load)
 .gl-node-name { font-size: 12px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .g-right { flex: 1; overflow-x: auto; }
 .gr-scroll { position: relative; }
-.gr-axis { position: sticky; top: 0; z-index: 3; height: 34px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
-.gr-tick-label { position: absolute; top: 0; height: 34px; line-height: 34px; font-size: 11px; color: #606266; border-left: 1px solid #e4e7ed; padding-left: 4px; white-space: nowrap; }
-.gr-tick-label.major { font-weight: 600; color: #303133; }
-.gr-grid { position: absolute; top: 34px; bottom: 0; width: 100%; z-index: 0; }
+.gr-axis { position: sticky; top: 0; z-index: 3; height: 48px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
+.gr-month-row { position: relative; height: 24px; border-bottom: 1px solid #e4e7ed; }
+.gr-month { position: absolute; top: 0; height: 24px; line-height: 24px; font-size: 11px; color: #606266; border-left: 1px solid #e4e7ed; padding-left: 6px; white-space: nowrap; overflow: hidden; }
+.gr-day-row { position: relative; height: 24px; }
+.gr-day-label { position: absolute; top: 0; height: 24px; line-height: 24px; font-size: 11px; color: #606266; border-left: 1px solid #f0f2f5; padding-left: 3px; white-space: nowrap; }
+.gr-day-label.first { border-left: 1px solid #e4e7ed; font-weight: 600; color: #303133; }
+.gr-grid { position: absolute; top: 48px; bottom: 0; width: 100%; z-index: 0; }
 .gr-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: #f0f2f5; }
-.gr-today { position: absolute; top: 34px; bottom: 0; width: 2px; background: #f56c6c; z-index: 2; }
+.gr-today { position: absolute; top: 48px; bottom: 0; width: 2px; background: #f56c6c; z-index: 2; }
 .gr-row { position: relative; height: 44px; border-bottom: 1px solid #f0f2f5; }
 .gr-bar { position: absolute; top: 12px; height: 20px; border-radius: 4px; display: flex; align-items: center; padding: 0 6px; overflow: hidden; cursor: pointer;
   &.st-ACTIVE { background: #409eff; color: #fff; }
