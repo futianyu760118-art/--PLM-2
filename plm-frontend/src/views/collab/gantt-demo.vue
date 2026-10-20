@@ -64,9 +64,9 @@ const x = (date) => (D(date) - RANGE_START) * DAYW
 const w = (s, e) => (D(e) - D(s) + 1) * DAYW
 
 const STAGES = {
-  s1: { name: '手板阶段', color: '#409eff', range: '10/08 ~ 11/08' },
-  s2: { name: '模具阶段', color: '#e6a23c', range: '10/24 ~ 12/18' },
-  s3: { name: '生产阶段', color: '#67c23a', range: '12/17 ~ 12/25' }
+  s1: { name: '手板阶段', color: '#4472C4', range: '10/08 ~ 11/08' },
+  s2: { name: '模具阶段', color: '#ED7D31', range: '10/24 ~ 12/18' },
+  s3: { name: '生产阶段', color: '#548235', range: '12/17 ~ 12/25' }
 }
 
 const TASKS = [
@@ -145,7 +145,7 @@ const DEPS = {
 
 const ACTUAL = { 1: 1, 2: 1, 3: 0.85, 4: 0, 5: 0.4, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0, 17: 0, 18: 0, 19: 0, 20: 0, 21: 0 }
 
-const LG_STAGE = '<span><i class="lg" style="background:#409eff"></i>手板阶段</span><span><i class="lg" style="background:#e6a23c"></i>模具阶段</span><span><i class="lg" style="background:#67c23a"></i>生产阶段</span>'
+const LG_STAGE = '<span><i class="lg" style="background:#4472C4"></i>手板阶段</span><span><i class="lg" style="background:#ED7D31"></i>模具阶段</span><span><i class="lg" style="background:#548235"></i>生产阶段</span>'
 const FOOT = '<div class="foot">编制：研发中心　审核：项目负责人　批准：总经理　｜　注：本表为演示数据（demo），排期按 XM2026-001 项目主表计划周期推演。</div>'
 
 function buildRoadmap() {
@@ -219,18 +219,18 @@ function buildCritical() {
   return TASKS.map(t => {
     const dep = DEPS[t.n]
     const cp = dep.cp
-    return { label: `XM2026-001-${t.code} ${t.name}　<span style="color:#909399;font-size:11px">前置:${dep.pre} 浮动:${dep.float}${cp ? '天 ★关键' : ''}</span>`, bars: [{ s: t.s, e: t.e, cls: cp ? 'done' : t.stage, text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
+    return { label: `XM2026-001-${t.code} ${t.name}　<span style="color:#909399;font-size:11px">前置:${dep.pre} 浮动:${dep.float}${cp ? '天 ★关键' : ''}</span>`, bars: [{ s: t.s, e: t.e, cls: cp ? 'cp' : t.stage, text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
   })
 }
 
 const TYPES = [
-  { key: 'roadmap', label: '①里程碑', title: '① 里程碑路标甘特图（Roadmap·向上汇报版）', desc: '一页纸对齐管理层/跨团队；只看 12 个 Gate 关键节点，不看任务细节。', leftHead: '里程碑节点', build: buildRoadmap, legend: '<span><i class="lg" style="background:#67c23a"></i>已达成</span><span><i class="lg" style="background:#e6a23c"></i>延期达成</span><span><i class="lg" style="background:#f56c6c"></i>进行中</span><span><i class="lg" style="background:#c0c4cc"></i>未开始</span>' + LG_STAGE },
+  { key: 'roadmap', label: '①里程碑', title: '① 里程碑路标甘特图（Roadmap·向上汇报版）', desc: '一页纸对齐管理层/跨团队；只看 12 个 Gate 关键节点，不看任务细节。', leftHead: '里程碑节点', build: buildRoadmap, legend: '<span><i class="lg" style="background:#00B050"></i>已达成</span><span><i class="lg" style="background:#FFC000"></i>延期达成</span><span><i class="lg" style="background:#FFE699"></i>进行中</span><span><i class="lg" style="background:#D9D9D9"></i>未开始</span>' + LG_STAGE },
   { key: 'waterfall', label: '②瀑布', title: '② 瀑布/阶段式甘特图（串行阶段+评审关卡）', desc: '项目组排期主表，模板 8甘特表 的标准形态；阶段串行、每阶段有评审关卡。', leftHead: '任务清单（阶段/工作项目）', build: buildWaterfall, legend: LG_STAGE + '<span><i class="lg" style="background:#333"></i>阶段总条</span>' },
   { key: 'sprint', label: '③迭代', title: '③ 迭代式甘特图（Sprint/双周迭代）', desc: '需求不确定、电子/软件方案需反复验证时；每个迭代内是「设计-打样-测试」小循环。', leftHead: '迭代清单（Sprint Backlog）', build: buildSprint, legend: '<span><i class="lg" style="background:#409eff"></i>迭代区间</span>' + LG_STAGE },
   { key: 'hybrid', label: '④混合', title: '④ 混合式甘特图（外层阶段 + 内层迭代嵌套）', desc: '复杂软硬件一体项目主视图；外层管阶段关卡，内层用迭代吸收需求变更。', leftHead: '阶段 / 迭代 / 任务（三层嵌套）', build: buildHybrid, legend: '<span><i class="lg" style="background:#333"></i>阶段总条</span>' + LG_STAGE },
-  { key: 'baseline', label: '⑤基准vs跟踪', title: '⑤ 基准计划 vs 进度跟踪甘特图', desc: '周会跟进度，一眼看出谁延期、偏差几天、证据表单是否齐。', leftHead: '基准（上行）/ 实际（下行）', build: buildBaseline, legend: '<span><i class="lg" style="background:#333"></i>基准计划条</span><span><i class="lg" style="background:#67c23a"></i>实际·按时完成</span><span><i class="lg" style="background:#f56c6c"></i>实际·进行中/预警</span>' },
-  { key: 'resource', label: '⑥资源负荷', title: '⑥ 资源/负荷甘特图（按角色看人力挤占）', desc: '看谁被塞满、哪周撞车；单元格数字=该角色当日并行执行的任务数。', leftHead: '负责人/角色', build: buildResource, legend: '<span><i class="lg" style="background:#67c23a"></i>并行1项</span><span><i class="lg" style="background:#e6a23c"></i>并行2项(饱和)</span><span><i class="lg" style="background:#f56c6c"></i>并行≥3项(过载)</span>' },
-  { key: 'critical', label: '⑦依赖关键路径', title: '⑦ 依赖关系/关键路径甘特图', desc: '识别「谁卡谁」；绿色/★条=关键路径，动一天全项目动一天。', leftHead: '工作项目（前置/依赖类型/总浮动/关键路径）', build: buildCritical, legend: '<span><i class="lg" style="background:#67c23a"></i>关键路径</span>' + LG_STAGE }
+  { key: 'baseline', label: '⑤基准vs跟踪', title: '⑤ 基准计划 vs 进度跟踪甘特图', desc: '周会跟进度，一眼看出谁延期、偏差几天、证据表单是否齐。', leftHead: '基准（上行）/ 实际（下行）', build: buildBaseline, legend: '<span><i class="lg" style="background:#A6A6A6"></i>基准计划条</span><span><i class="lg" style="background:#00B050"></i>实际·按时完成</span><span><i class="lg" style="background:#F4B183"></i>实际·进行中/预警</span>' },
+  { key: 'resource', label: '⑥资源负荷', title: '⑥ 资源/负荷甘特图（按角色看人力挤占）', desc: '看谁被塞满、哪周撞车；单元格数字=该角色当日并行执行的任务数。', leftHead: '负责人/角色', build: buildResource, legend: '<span><i class="lg" style="background:#C6EFCE"></i>并行1项</span><span><i class="lg" style="background:#FFEB9C"></i>并行2项(饱和)</span><span><i class="lg" style="background:#FFC7CE"></i>并行≥3项(过载)</span>' },
+  { key: 'critical', label: '⑦依赖关键路径', title: '⑦ 依赖关系/关键路径甘特图', desc: '识别「谁卡谁」；绿色/★条=关键路径，动一天全项目动一天。', leftHead: '工作项目（前置/依赖类型/总浮动/关键路径）', build: buildCritical, legend: '<span><i class="lg" style="background:#C00000"></i>关键路径</span>' + LG_STAGE }
 ]
 
 const activeType = ref('roadmap')
@@ -303,26 +303,27 @@ function msStyle(m, i) {
 .gr-day { position: absolute; top: 0; height: 25px; line-height: 25px; font-size: 10px; color: #999; border-left: 1px solid #f0f2f5; padding-left: 3px; }
 .gr-day.first { border-left: 1px solid #e4e7ed; color: #333; font-weight: 600; }
 .gr-body { position: relative; }
-.wk { position: absolute; top: 0; background: #eaf2fb; z-index: 0; }
+.wk { position: absolute; top: 0; background: #DDEBF7; z-index: 0; }
 .today { position: absolute; top: 0; width: 2px; background: #f56c6c; z-index: 4; }
 .today span { position: absolute; top: -2px; left: 2px; background: #f56c6c; color: #fff; font-size: 10px; padding: 0 4px; border-radius: 2px; }
 .bar { position: absolute; height: 20px; border-radius: 4px; color: #fff; font-size: 10px; line-height: 20px; padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; }
-.bar.s1 { background: #409eff; }
-.bar.s2 { background: #e6a23c; }
-.bar.s3 { background: #67c23a; }
-.bar.dark { background: #333; }
-.bar.done { background: #67c23a; }
-.bar.delay { background: #e6a23c; }
-.bar.ongoing { background: #f56c6c; }
-.bar.track { background: #409eff; }
-.bar.h1 { background: #67c23a; }
-.bar.h2 { background: #e6a23c; }
-.bar.h3 { background: #f56c6c; }
-.ms { position: absolute; width: 12px; height: 12px; transform: rotate(45deg); background: #f56c6c; border-radius: 2px; cursor: pointer; z-index: 3; }
-.ms.done { background: #67c23a; }
-.ms.delay { background: #e6a23c; }
-.ms.ongoing { background: #f56c6c; }
-.ms.todo { background: #c0c4cc; }
+.bar.s1 { background: #4472C4; }
+.bar.s2 { background: #ED7D31; }
+.bar.s3 { background: #548235; }
+.bar.dark { background: #A6A6A6; }
+.bar.done { background: #00B050; }
+.bar.delay { background: #FFC000; }
+.bar.ongoing { background: #F4B183; }
+.bar.track { background: #2E75B6; }
+.bar.cp { background: #C00000; }
+.bar.h1 { background: #C6EFCE; color: #333; }
+.bar.h2 { background: #FFEB9C; color: #333; }
+.bar.h3 { background: #FFC7CE; color: #333; }
+.ms { position: absolute; width: 12px; height: 12px; transform: rotate(45deg); background: #C00000; border-radius: 2px; cursor: pointer; z-index: 3; }
+.ms.done { background: #00B050; }
+.ms.delay { background: #FFC000; }
+.ms.ongoing { background: #FFE699; }
+.ms.todo { background: #D9D9D9; }
 .foot { font-size: 12px; color: #909399; margin-top: 10px; }
 
 @media (max-width: 768px) {
