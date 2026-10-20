@@ -64,9 +64,9 @@ const x = (date) => (D(date) - RANGE_START) * DAYW
 const w = (s, e) => (D(e) - D(s) + 1) * DAYW
 
 const STAGES = {
-  s1: { name: '手板阶段', color: '#5b8ff9', range: '10/08 ~ 11/08' },
-  s2: { name: '模具阶段', color: '#9270ca', range: '10/24 ~ 12/18' },
-  s3: { name: '生产阶段', color: '#5ad8a6', range: '12/17 ~ 12/25' }
+  s1: { name: '手板阶段', color: '#409eff', range: '10/08 ~ 11/08' },
+  s2: { name: '模具阶段', color: '#e6a23c', range: '10/24 ~ 12/18' },
+  s3: { name: '生产阶段', color: '#67c23a', range: '12/17 ~ 12/25' }
 }
 
 const TASKS = [
@@ -145,7 +145,7 @@ const DEPS = {
 
 const ACTUAL = { 1: 1, 2: 1, 3: 0.85, 4: 0, 5: 0.4, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 15: 0, 16: 0, 17: 0, 18: 0, 19: 0, 20: 0, 21: 0 }
 
-const LG_STAGE = '<span><i class="lg" style="background:#5b8ff9"></i>手板阶段</span><span><i class="lg" style="background:#9270ca"></i>模具阶段</span><span><i class="lg" style="background:#5ad8a6"></i>生产阶段</span>'
+const LG_STAGE = '<span><i class="lg" style="background:#409eff"></i>手板阶段</span><span><i class="lg" style="background:#e6a23c"></i>模具阶段</span><span><i class="lg" style="background:#67c23a"></i>生产阶段</span>'
 const FOOT = '<div class="foot">编制：研发中心　审核：项目负责人　批准：总经理　｜　注：本表为演示数据（demo），排期按 XM2026-001 项目主表计划周期推演。</div>'
 
 function buildRoadmap() {
@@ -289,7 +289,7 @@ function msStyle(m, i) {
 .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .st-label { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 3px; color: #fff; margin-right: 6px; }
 .gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
-.g-left { flex: 0 0 360px; border-right: 1px solid #e4e7ed; background: #fafbfc; }
+.g-left { flex: 0 0 min(360px, 42vw); border-right: 1px solid #e4e7ed; background: #fafbfc; }
 .gl-head { height: 50px; line-height: 50px; padding: 0 12px; font-weight: 600; font-size: 12px; border-bottom: 1px solid #e4e7ed; }
 .gl-row { height: 34px; line-height: 34px; padding: 0 12px; border-bottom: 1px solid #f0f2f5; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gl-row.indent { padding-left: 26px; color: #606266; }
@@ -307,9 +307,9 @@ function msStyle(m, i) {
 .today { position: absolute; top: 0; width: 2px; background: #f56c6c; z-index: 4; }
 .today span { position: absolute; top: -2px; left: 2px; background: #f56c6c; color: #fff; font-size: 10px; padding: 0 4px; border-radius: 2px; }
 .bar { position: absolute; height: 20px; border-radius: 4px; color: #fff; font-size: 10px; line-height: 20px; padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: pointer; z-index: 1; }
-.bar.s1 { background: #5b8ff9; }
-.bar.s2 { background: #9270ca; }
-.bar.s3 { background: #5ad8a6; }
+.bar.s1 { background: #409eff; }
+.bar.s2 { background: #e6a23c; }
+.bar.s3 { background: #67c23a; }
 .bar.dark { background: #333; }
 .bar.done { background: #67c23a; }
 .bar.delay { background: #e6a23c; }
@@ -324,4 +324,10 @@ function msStyle(m, i) {
 .ms.ongoing { background: #f56c6c; }
 .ms.todo { background: #c0c4cc; }
 .foot { font-size: 12px; color: #909399; margin-top: 10px; }
+
+@media (max-width: 768px) {
+  .g-left { flex-basis: min(220px, 45vw); }
+  .gl-row { font-size: 11px; }
+  .hd-sub { font-size: 11px; }
+}
 </style>
