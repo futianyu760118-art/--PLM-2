@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研发项目甘特图 Demo · XM2026-001 星耀二代50W夹子灯</title>
+<style>
+  :root{
+    --border:#e4e7ed; --muted:#909399; --text:#303133;
+    --stage1:#5b8ff9; --stage2:#9270ca; --stage3:#5ad8a6;
+    --done:#67c23a; --delay:#e6a23c; --warn:#f56c6c; --planned:#333;
+    --weekend:#eaf2fb; --today:#f56c6c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Microsoft YaHei",Arial,sans-serif;color:var(--text);background:#f5f6f8}
+  .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  .hdr{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:12px}
+  .hdr h1{margin:0;font-size:18px}
+  .hdr .sub{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7}
+  .hdr .badge{display:inline-block;background:#409eff;color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;margin-right:8px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .tab{border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;white-space:nowrap}
+  .tab.on{background:#409eff;color:#fff;border-color:#409eff;font-weight:600}
+  .pane{display:none;background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px}
+  .pane.on{display:block}
+  .pane h2{margin:0 0 4px;font-size:15px}
+  .pane .desc{font-size:12px;color:var(--muted);margin-bottom:12px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:10px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .lg{width:12px;height:12px;border-radius:3px;display:inline-block}
+  /* 甘特 */
+  .gantt{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .g-left{flex:0 0 320px;border-right:1px solid var(--border);background:#fafbfc}
+  .gl-head{height:50px;line-height:50px;padding:0 12px;font-weight:600;font-size:12px;border-bottom:1px solid var(--border)}
+  .gl-row{height:34px;line-height:34px;padding:0 12px;border-bottom:1px solid #f0f2f5;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gl-row.indent{padding-left:26px;color:#606266}
+  .gl-row.stage{font-weight:700;background:#f5f7fa}
+  .g-right{flex:1;overflow-x:auto}
+  .gr{position:relative}
+  .gr-axis{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--border)}
+  .gr-month{position:absolute;top:0;height:25px;line-height:25px;font-size:11px;border-left:1px solid var(--border);padding-left:5px;color:#606266;white-space:nowrap}
+  .gr-day{position:absolute;top:25px;height:25px;line-height:25px;font-size:10px;color:#999;border-left:1px solid #f0f2f5;padding-left:3px}
+  .gr-day.first{border-left:1px solid var(--border);color:#333;font-weight:600}
+  .gr-body{position:relative}
+  .gr-row{position:relative;height:34px;border-bottom:1px solid #f0f2f5}
+  .gr-row.weekend{background:var(--weekend)}
+  .bar{position:absolute;top:7px;height:20px;border-radius:4px;color:#fff;font-size:10px;line-height:20px;padding:0 5px;overflow:hidden;white-space:nowrap;cursor:pointer}
+  .bar.s1{background:var(--stage1)} .bar.s2{background:var(--stage2)} .bar.s3{background:var(--stage3)}
+  .bar.dark{background:#333} .bar.done{background:var(--done)} .bar.delay{background:var(--delay)} .bar.ongoing{background:var(--warn)}
+  .bar.track{background:#409eff}
+  .ms{position:absolute;top:7px;width:12px;height:12px;transform:rotate(45deg);background:#f56c6c;border-radius:2px;cursor:pointer;z-index:3}
+  .ms.done{background:var(--done)} .ms.delay{background:var(--delay)} .ms.ongoing{background:var(--warn)} .ms.todo{background:#c0c4cc}
+  .today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:4}
+  .today-tag{position:absolute;top:-2px;left:2px;background:var(--today);color:#fff;font-size:10px;padding:0 4px;border-radius:2px}
+  .heat{position:absolute;top:7px;height:20px;border-radius:4px;font-size:10px;line-height:20px;text-align:center;color:#fff}
+  .h1{background:#67c23a}.h2{background:#e6a23c}.h3{background:#f56c6c}
+  .foot{font-size:12px;color:var(--muted);margin-top:10px}
+  .st-label{display:inline-block;font-size:11px;padding:0 6px;border-radius:3px;color:#fff;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1><span class="badge">DEMO</span>研发项目甘特图 Demo 套装 · 宁波恒剑光电科技有限公司</h1>
+    <div class="sub">
+      表格编号：HJ/ED/R-04-DEMO ｜ 项目编号：<b>XM2026-001</b>　项目名称：<b>星耀二代50W夹子灯</b>　产品型号：JWA21-B1WA50C-001<br>
+      项目经理：张工　计划周期：2026-10-08 ~ 2026-12-25　数据截止：2026-10-20（手板阶段·进行中）｜ 基于「项目模版26-9-7_智能表版」8甘特表与「2表单标准」生成
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="pane on" id="pane-0"></div>
+  <div class="pane" id="pane-1"></div>
+  <div class="pane" id="pane-2"></div>
+  <div class="pane" id="pane-3"></div>
+  <div class="pane" id="pane-4"></div>
+  <div class="pane" id="pane-5"></div>
+  <div class="pane" id="pane-6"></div>
+</div>
+
+<script>
+/* ================= 演示数据（来自 Excel Demo 套装） ================= */
+const DAY = 86400000;
+const D = (s) => Math.floor(new Date(s + 'T00:00:00Z').getTime() / DAY);
+
+const STAGES = {
+  s1: { name: '手板阶段', color: 'var(--stage1)', cls: 's1', range: '10/08 ~ 11/08' },
+  s2: { name: '模具阶段', color: 'var(--stage2)', cls: 's2', range: '10/24 ~ 12/18' },
+  s3: { name: '生产阶段', color: 'var(--stage3)', cls: 's3', range: '12/17 ~ 12/25' },
+};
+// 21 项工作
+const TASKS = [
+  { n:1, code:'01', name:'立项', owner:'研发/业务', stage:'s1', s:'2026-10-08', e:'2026-10-10', ev:'《立项书》' },
+  { n:2, code:'02', name:'设计输入', owner:'项目负责人', stage:'s1', s:'2026-10-10', e:'2026-10-15', ev:'《设计开发输入清单》/《配置表》' },
+  { n:3, code:'03', name:'外观手板', owner:'结构工程师', stage:'s1', s:'2026-10-13', e:'2026-10-20', ev:'《外观评审表》' },
+  { n:4, code:'04', name:'结构评审', owner:'结构工程师', stage:'s1', s:'2026-10-21', e:'2026-10-23', ev:'《结构评审表》' },
+  { n:5, code:'05', name:'电子样品', owner:'电子工程师', stage:'s1', s:'2026-10-16', e:'2026-10-27', ev:'《成本BOM》' },
+  { n:6, code:'06', name:'手板样品', owner:'结构工程师', stage:'s1', s:'2026-10-28', e:'2026-11-03', ev:'《样机评审表》《设计验证报告》' },
+  { n:7, code:'07', name:'产品资料', owner:'项目负责人', stage:'s1', s:'2026-11-05', e:'2026-11-08', ev:'《规格书》《配置表》《成本BOM》' },
+  { n:8, code:'08', name:'模具图纸(二维图)', owner:'结构工程师', stage:'s2', s:'2026-10-24', e:'2026-11-05', ev:'《开修模评审表》、2D图纸' },
+  { n:9, code:'09', name:'模具T0', owner:'结构工程师', stage:'s2', s:'2026-11-16', e:'2026-11-22', ev:'《问题清单》' },
+  { n:10, code:'10', name:'模具T1', owner:'结构工程师', stage:'s2', s:'2026-11-25', e:'2026-12-01', ev:'《问题清单》' },
+  { n:11, code:'11', name:'模具样品', owner:'结构工程师', stage:'s2', s:'2026-12-02', e:'2026-12-06', ev:'《样品评审表》《模具验收书》' },
+  { n:12, code:'12', name:'包装设计及确认', owner:'包装工程师', stage:'s2', s:'2026-11-09', e:'2026-11-18', ev:'《包装平面图纸》' },
+  { n:13, code:'13', name:'测试报告', owner:'品质工程师', stage:'s2', s:'2026-12-07', e:'2026-12-11', ev:'《新产品测试报告》' },
+  { n:14, code:'14', name:'电子试产', owner:'电子工程师', stage:'s2', s:'2026-12-07', e:'2026-12-10', ev:'《试产报告》《预测单》《基础BOM表》' },
+  { n:15, code:'15', name:'研发试产', owner:'结构工程师', stage:'s2', s:'2026-12-07', e:'2026-12-10', ev:'《试产报告》《基础BOM表》' },
+  { n:16, code:'16', name:'技转', owner:'结构工程师', stage:'s2', s:'2026-12-14', e:'2026-12-16', ev:'《技转评审报告》《新产品测试报告》《BOM表》' },
+  { n:17, code:'17', name:'产品宣传资料', owner:'包装工程师', stage:'s2', s:'2026-11-19', e:'2026-12-03', ev:'PPT、宣传彩页' },
+  { n:18, code:'18', name:'产品发布', owner:'项目负责人', stage:'s2', s:'2026-12-17', e:'2026-12-18', ev:'/' },
+  { n:19, code:'19', name:'工程试产', owner:'工艺工程师', stage:'s3', s:'2026-12-17', e:'2026-12-21', ev:'《SOP》《客户BOM》《工程试产报告》' },
+  { n:20, code:'20', name:'生产试产', owner:'生产主管', stage:'s3', s:'2026-12-22', e:'2026-12-24', ev:'《生产试产报告》、样机10台' },
+  { n:21, code:'21', name:'复盘', owner:'项目负责人', stage:'s3', s:'2026-12-25', e:'2026-12-25', ev:'《复盘报告》' },
+];
+// 12 个里程碑
+const MILESTONES = [
+  { code:'M1', name:'立项批准', stage:'s1', d:'2026-10-10', st:'已达成', cls:'done' },
+  { code:'M2', name:'设计输入冻结', stage:'s1', d:'2026-10-15', st:'已达成·延期1天', cls:'delay' },
+  { code:'M3', name:'外观手板确认', stage:'s1', d:'2026-10-20', st:'进行中', cls:'ongoing' },
+  { code:'M4', name:'结构评审通过', stage:'s1', d:'2026-10-23', st:'未开始', cls:'todo' },
+  { code:'M5', name:'手板样品确认', stage:'s1', d:'2026-11-03', st:'未开始', cls:'todo' },
+  { code:'M6', name:'模具图纸冻结', stage:'s2', d:'2026-11-05', st:'未开始', cls:'todo' },
+  { code:'M7', name:'模具T1通过', stage:'s2', d:'2026-12-01', st:'未开始', cls:'todo' },
+  { code:'M8', name:'模具样品确认', stage:'s2', d:'2026-12-06', st:'未开始', cls:'todo' },
+  { code:'M9', name:'测试报告通过', stage:'s2', d:'2026-12-11', st:'未开始', cls:'todo' },
+  { code:'M10', name:'技转完成', stage:'s2', d:'2026-12-16', st:'未开始', cls:'todo' },
+  { code:'M11', name:'产品发布', stage:'s3', d:'2026-12-18', st:'未开始', cls:'todo' },
+  { code:'M12', name:'生产试产通过+复盘', stage:'s3', d:'2026-12-25', st:'未开始', cls:'todo' },
+];
+// 6 个双周迭代
+const SPRINTS = [
+  { code:'S1', r:'2026-10-08 ~ 10-21', s:'2026-10-08', e:'2026-10-21', goal:'需求与方案定型', tasks:[1,2] },
+  { code:'S2', r:'2026-10-22 ~ 11-04', s:'2026-10-22', e:'2026-11-04', goal:'结构与手板验证', tasks:[3,4,6] },
+  { code:'S3', r:'2026-11-05 ~ 11-18', s:'2026-11-05', e:'2026-11-18', goal:'电子与工装', tasks:[5,8,12] },
+  { code:'S4', r:'2026-11-19 ~ 12-02', s:'2026-11-19', e:'2026-12-02', goal:'模具验证', tasks:[9,10,11,17] },
+  { code:'S5', r:'2026-12-03 ~ 12-16', s:'2026-12-03', e:'2026-12-16', goal:'认证与技转', tasks:[13,14,15,16] },
+  { code:'S6', r:'2026-12-17 ~ 12-25', s:'2026-12-17', e:'2026-12-25', goal:'量产准备', tasks:[18,19,20,21] },
+];
+// 资源角色
+const ROLES = ['研发/业务','项目负责人','结构工程师','电子工程师','包装工程师','品质工程师','工艺工程师','生产主管'];
+// 依赖与关键路径（序号 -> 前置 + 浮动）
+const DEPS = {
+  1:{ pre:'—', type:'—', float:0, cp:false },
+  2:{ pre:'1(SS+2)', type:'SS', float:0, cp:false },
+  3:{ pre:'2(SS+3)', type:'SS', float:0, cp:false },
+  4:{ pre:'3(FS)', type:'FS', float:0, cp:true },
+  5:{ pre:'2(FS)', type:'FS', float:43, cp:false },
+  6:{ pre:'4(FS)、5(FS)', type:'FS', float:47, cp:false },
+  7:{ pre:'6(SS+8)', type:'SS', float:47, cp:false },
+  8:{ pre:'4(FS)', type:'FS', float:0, cp:true },
+  9:{ pre:'8(FS+10)', type:'FS', float:0, cp:true },
+  10:{ pre:'9(FS+2)', type:'FS', float:0, cp:true },
+  11:{ pre:'10(FS)', type:'FS', float:0, cp:true },
+  12:{ pre:'2(SS+30)', type:'SS', float:20, cp:false },
+  13:{ pre:'11(FS)', type:'FS', float:0, cp:true },
+  14:{ pre:'5(FS)、11(FS)', type:'FS', float:3, cp:false },
+  15:{ pre:'11(FS)', type:'FS', float:3, cp:false },
+  16:{ pre:'13(FS)', type:'FS', float:0, cp:true },
+  17:{ pre:'2(SS+50)', type:'SS', float:0, cp:false },
+  18:{ pre:'16(FS)', type:'FS', float:0, cp:true },
+  19:{ pre:'18(FS)', type:'FS', float:0, cp:true },
+  20:{ pre:'19(FS)', type:'FS', float:0, cp:20 },
+  21:{ pre:'20(FS)', type:'FS', float:0, cp:true },
+};
+// 实际执行（⑤ 基准vs跟踪）：完成度
+const ACTUAL = { 1:1, 2:1, 3:0.85, 4:0, 5:0.4, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0, 16:0, 17:0, 18:0, 19:0, 20:0, 21:0 };
+
+const TODAY = '2026-10-20';
+const RANGE_START = D('2026-09-28');
+const RANGE_END = D('2027-01-03');
+const DAYW = 7; // px/day
+
+function x(date){ return (D(date) - RANGE_START) * DAYW; }
+function w(s,e){ return (D(e) - D(s) + 1) * DAYW; }
+function isWeekend(date){ const dt = new Date(D(date)*DAY); const d = dt.getUTCDay(); return d===0 || d===6; }
+
+/* 渲染时间轴(月行+日行)，返回 HTML 字符串 */
+function axisHTML(width){
+  let html = `<div class="gr-axis" style="width:${width}px"><div style="position:relative;height:50px">`;
+  let m = new Date(Date.UTC(2026,9,1));
+  while(D(m.toISOString().slice(0,10)) <= RANGE_END){
+    const next = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth()+1, 1));
+    const s = Math.max(D(m.toISOString().slice(0,10)), RANGE_START);
+    const e = Math.min(D(next.toISOString().slice(0,10))-1, RANGE_END);
+    const left = x(m.toISOString().slice(0,10));
+    const width = (e - s + 1) * DAYW;
+    html += `<div class="gr-month" style="left:${left}px;width:${width}px">${m.getUTCFullYear()}-${String(m.getUTCMonth()+1).padStart(2,'0')}</div>`;
+    m = next;
+  }
+  for(let d=RANGE_START; d<=RANGE_END; d++){
+    const dayNum = new Date(d*DAY).getUTCDate();
+    const first = dayNum===1;
+    html += `<div class="gr-day ${first?'first':''}" style="left:${(d-RANGE_START)*DAYW}px">${first?'1':dayNum}</div>`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+/* 周末背景 + 今天线，返回 HTML 字符串 */
+function weekendTodayHTML(height){
+  let html = '';
+  for(let d=RANGE_START; d<=RANGE_END; d++){
+    const dt = new Date(d*DAY);
+    if(dt.getUTCDay()===0 || dt.getUTCDay()===6){
+      html += `<div class="gr-row weekend" style="position:absolute;top:0;left:${(d-RANGE_START)*DAYW}px;width:${DAYW}px;height:${height}px;z-index:0"></div>`;
+    }
+  }
+  html += `<div class="today-line" style="left:${x(TODAY)}px;height:${height}px"><div class="today-tag">今天</div></div>`;
+  return html;
+}
+
+/* 行内条/里程碑，返回 HTML 字符串 */
+function rowHTML(rows){
+  let html = '';
+  rows.forEach((r, i)=>{
+    const top = i*34;
+    if(r.bars) r.bars.forEach(b=>{
+      html += `<div class="bar ${b.cls||'s1'}" style="left:${x(b.s)}px;width:${Math.max(w(b.s,b.e),2)}px;top:${top+7}px" title="${(b.title||'').replace(/"/g,'&quot;')}">${b.text||''}</div>`;
+    });
+    if(r.ms) r.ms.forEach(m=>{
+      html += `<div class="ms ${m.cls||'todo'}" style="left:${x(m.d)-6}px;top:${top+11}px" title="${(m.title||'').replace(/"/g,'&quot;')}"></div>`;
+    });
+  });
+  return html;
+}
+
+/* 通用甘特画布：rows 为 {label, cls, indent, bars:[{s,e,cls,text}], ms:[{d,cls,title}]} */
+function renderGantt(pane, rows, opts){
+  const leftW = opts.leftW || 320;
+  const height = rows.length * 34;
+  const width = (RANGE_END - RANGE_START) * DAYW;
+  pane.innerHTML = `<h2>${opts.title}</h2><div class="desc">${opts.desc||''}</div>${opts.legend||''}` +
+    `<div class="gantt"><div class="g-left" style="flex-basis:${leftW}px"><div class="gl-head">${opts.leftHead||'工作项目'}</div>` +
+    rows.map(r=>`<div class="gl-row ${r.cls||''} ${r.indent?'indent':''}" title="${(r.title||'').replace(/"/g,'&quot;')}">${r.label}</div>`).join('') +
+    `</div><div class="g-right"><div class="gr" style="width:${width}px;position:relative">` +
+    axisHTML(width) +
+    `<div class="gr-body" style="position:relative;height:${height}px">` + weekendTodayHTML(height) + rowHTML(rows) + `</div>` +
+    `</div></div></div>` + (opts.foot||'');
+}
+
+/* ============ 各图 ============ */
+function pane0(el){
+  const rows = MILESTONES.map(m=>{
+    const stg = STAGES[m.stage];
+    return { label:`<span class="st-label" style="background:${stg.color}">${stg.name}</span>${m.code} ${m.name}`, ms:[{d:m.d, cls:m.cls, title:`${m.code} ${m.name} · ${m.d} · ${m.st}`}] };
+  });
+  renderGantt(el, rows, {
+    title:'① 里程碑路标甘特图（Roadmap·向上汇报版）',
+    desc:'一页纸对齐管理层/跨团队；只看 12 个 Gate 关键节点，不看任务细节。更新频率：每周例会或节点达成时。',
+    leftHead:'里程碑节点',
+    legend:'<div class="legend"><span><i class="lg" style="background:#67c23a"></i>已达成</span><span><i class="lg" style="background:#e6a23c"></i>延期达成</span><span><i class="lg" style="background:#f56c6c"></i>进行中</span><span><i class="lg" style="background:#c0c4cc"></i>未开始</span><span><i class="lg" style="background:var(--stage1)"></i>手板</span><span><i class="lg" style="background:var(--stage2)"></i>模具</span><span><i class="lg" style="background:var(--stage3)"></i>生产</span></div>',
+    foot:'<div class="foot">编制：研发中心　审核：项目负责人　批准：总经理　｜　注：本表为演示数据（demo）。</div>'
+  });
+}
+
+function pane1(el){
+  const rows = [];
+  let curStage='';
+  TASKS.forEach(t=>{
+    if(t.stage!==curStage){ rows.push({label:STAGES[t.stage].name, cls:'stage', bars:[{s:t.s,e:t.e,cls:'dark',text:STAGES[t.stage].range,title:STAGES[t.stage].name+' '+STAGES[t.stage].range}]}); curStage=t.stage; }
+    rows.push({label:`XM2026-001-${t.code} ${t.name}`, indent:true, title:t.ev, bars:[{s:t.s,e:t.e,cls:t.stage,text:`${t.s.slice(5)}~${t.e.slice(5)}`,title:`${t.name} · ${t.owner} · ${t.s}~${t.e}\n${t.ev}`}]});
+  });
+  renderGantt(el, rows, {
+    title:'② 瀑布/阶段式甘特图（串行阶段+评审关卡）',
+    desc:'项目组排期主表，模板 8甘特表 的标准形态；阶段串行、每阶段有评审关卡。1-31 日天粒度 + 阶段/责任人/确认人/表单。',
+    leftHead:'任务清单（阶段/工作项目）',
+    legend:'<div class="legend"><span><i class="lg" style="background:var(--stage1)"></i>手板阶段</span><span><i class="lg" style="background:var(--stage2)"></i>模具阶段</span><span><i class="lg" style="background:var(--stage3)"></i>生产阶段</span><span><i class="lg" style="background:#333"></i>阶段总条</span><span><i class="lg" style="background:#eaf2fb"></i>周末/假日</span><span><i class="lg" style="background:#f56c6c"></i>今天</span></div>',
+    foot:'<div class="foot">填表规则：计划时间=黑色；按时完成=绿色；延期完成=黄色；进行中预警=橙色；工作项目前加项目编号；假日列淡蓝标识。</div>'
+  });
+}
+
+function pane2(el){
+  const rows = [];
+  SPRINTS.forEach(sp=>{
+    rows.push({label:`${sp.code} ${sp.r} · ${sp.goal}`, cls:'stage', bars:[{s:sp.s,e:sp.e,cls:'track',text:sp.code,title:`${sp.code} ${sp.r} ${sp.goal}`}]});
+    sp.tasks.forEach(tn=>{
+      const t = TASKS.find(x=>x.n===tn);
+      rows.push({label:`XM2026-001-${t.code} ${t.name}`, indent:true, title:t.ev, bars:[{s:t.s,e:t.e,cls:t.stage,text:`${t.s.slice(5)}~${t.e.slice(5)}`,title:`${t.name} · ${t.owner}`}]});
+    });
+  });
+  renderGantt(el, rows, {
+    title:'③ 迭代式甘特图（Sprint/双周迭代·需求多变时用）',
+    desc:'需求不确定、电子/软件方案需反复验证时；每个迭代内是「设计-打样-测试」小循环。更新频率：每迭代站会。',
+    leftHead:'迭代清单（Sprint Backlog）',
+    legend:'<div class="legend"><span><i class="lg" style="background:#409eff"></i>迭代区间</span><span><i class="lg" style="background:var(--stage1)"></i>手板任务</span><span><i class="lg" style="background:var(--stage2)"></i>模具任务</span><span><i class="lg" style="background:var(--stage3)"></i>生产任务</span></div>',
+    foot:'<div class="foot">说明：迭代式不等于砍掉阶段——把 21 项按双周切片后，仍要对齐阶段关卡与交付表单。</div>'
+  });
+}
+
+function pane3(el){
+  const rows = [];
+  let cur='';
+  TASKS.forEach(t=>{
+    if(t.stage!==cur){
+      cur=t.stage;
+      rows.push({label:'■ '+STAGES[t.stage].name, cls:'stage', bars:[{s:t.s,e:t.e,cls:'dark',text:STAGES[t.stage].range}]});
+    }
+    const sp = SPRINTS.find(s=>s.tasks.includes(t.n));
+    rows.push({label:`${sp?sp.code:'  '}　XM2026-001-${t.code} ${t.name}`, indent:true, title:t.ev, bars:[{s:t.s,e:t.e,cls:t.stage,text:`${t.s.slice(5)}~${t.e.slice(5)}`,title:`${sp?sp.code:''} ${t.name} · ${t.owner}\n${t.ev}`}]});
+  });
+  renderGantt(el, rows, {
+    title:'④ 混合式甘特图（外层阶段 + 内层迭代嵌套）',
+    desc:'复杂软硬件一体项目的主视图；外层管阶段关卡（模具/认证不放水），内层用迭代吸收需求变更。',
+    leftHead:'阶段 / 迭代 / 任务（三层嵌套）',
+    legend:'<div class="legend"><span><i class="lg" style="background:#333"></i>阶段总条</span><span><i class="lg" style="background:var(--stage1)"></i>手板</span><span><i class="lg" style="background:var(--stage2)"></i>模具</span><span><i class="lg" style="background:var(--stage3)"></i>生产</span></div>',
+    foot:'<div class="foot">读法：先看阶段总条（能否按期出阶段成果），再看任务条（谁拖了），最后看证据列（表单齐不齐）。</div>'
+  });
+}
+
+function pane4(el){
+  const rows = [];
+  TASKS.forEach(t=>{
+    const pct = ACTUAL[t.n]||0;
+    let cls='dark', label=`基准 ${t.s.slice(5)}~${t.e.slice(5)}`;
+    rows.push({label:`XM2026-001-${t.code} ${t.name}　<span style="color:#909399">${t.owner} · ${pct===1?'已完成':pct>0?'进行中':'未开始'}</span>`, bars:[{s:t.s,e:t.e,cls:cls,text:label,title:`基准 ${t.s}~${t.e}`}]});
+    if(pct>0){
+      const done = pct===1;
+      rows.push({label:`　└ 实际执行　${Math.round(pct*100)}%`, indent:true, bars:[{s:t.s, e: done ? t.e : TODAY, cls: done?'done':'ongoing', text:`实际 ${Math.round(pct*100)}%`, title:`实际执行 ${Math.round(pct*100)}%`}]});
+    } else {
+      rows.push({label:'　└ 实际执行　0%', indent:true});
+    }
+  });
+  renderGantt(el, rows, {
+    title:'⑤ 基准计划 vs 进度跟踪甘特图（实际 vs 基准·偏差预警）',
+    desc:'周会跟进度，一眼看出谁延期、偏差几天、证据表单是否齐。更新频率：每周五下班前。',
+    leftHead:'基准（上行）/ 实际（下行）',
+    legend:'<div class="legend"><span><i class="lg" style="background:#333"></i>基准计划条</span><span><i class="lg" style="background:#67c23a"></i>实际·按时完成</span><span><i class="lg" style="background:#e6a23c"></i>实际·延期完成</span><span><i class="lg" style="background:#f56c6c"></i>实际·进行中/预警</span></div>',
+    foot:'<div class="foot">表单标准：按时完成=绿色，延期完成=黄色，计划时间=黑色。偏差(天)=实际结束-基准结束，正数即延期。</div>'
+  });
+}
+
+function pane5(el){
+  // 计算每个角色每天的并行任务数
+  const rows = ROLES.map((role, idx)=>{
+    const bars = [];
+    for(let d=RANGE_START; d<=RANGE_END; d++){
+      const iso = new Date(d*DAY).toISOString().slice(0,10);
+      const cnt = TASKS.filter(t=> t.owner===role && D(t.s)<=d && d<=D(t.e)).length;
+      if(cnt>0) bars.push({s:iso,e:iso,cls:'h'+(cnt>=3?3:cnt===2?2:1),text:cnt>1?cnt:'',title:`${role} ${iso} 并行 ${cnt} 项`});
+    }
+    return {label:`${role}`, bars};
+  });
+  // 用 bar 替代 heat 显示
+  const rows2 = rows.map(r=>({label:r.label, bars:r.bars.map(b=>({...b, cls: b.cls, text:b.text}))}));
+  renderGantt(el, rows2, {
+    title:'⑥ 资源/负荷甘特图（按角色看人力挤占）',
+    desc:'研发项目人力是瓶颈，这张图看谁被塞满、哪周撞车。单元格数字=该角色当日并行执行的任务数。',
+    leftHead:'负责人/角色',
+    legend:'<div class="legend"><span><i class="lg" style="background:#67c23a"></i>并行1项(正常)</span><span><i class="lg" style="background:#e6a23c"></i>并行2项(饱和)</span><span><i class="lg" style="background:#f56c6c"></i>并行≥3项(过载)</span></div>',
+    foot:'<div class="foot">本图暴露：结构工程师总占用 50 天、负荷率 54% 为最高；10/28-11/03 手板样品与模具图纸并行（峰值=2）是唯一撞车窗口。</div>'
+  });
+}
+
+function pane6(el){
+  const rows = TASKS.map(t=>{
+    const dep = DEPS[t.n];
+    const cp = dep.cp;
+    return {label:`XM2026-001-${t.code} ${t.name}　<span style="color:#909399;font-size:11px">前置:${dep.pre} 浮动:${dep.float}${cp?'天  ★关键':''}</span>`, bars:[{s:t.s,e:t.e,cls: cp?'done':t.stage, text:cp?'★':`${t.s.slice(5)}~${t.e.slice(5)}`, title:`${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp?' · 关键路径':''}`}]};
+  });
+  renderGantt(el, rows, {
+    title:'⑦ 依赖关系/关键路径甘特图（谁卡谁·技术风险视图）',
+    desc:'识别「谁卡谁」——前置没完成，后面全部顺延；红色/绿色条=关键路径，动一天全项目动一天。',
+    leftHead:'工作项目（前置任务/依赖类型/总浮动/关键路径）',
+    legend:'<div class="legend"><span><i class="lg" style="background:#67c23a"></i>关键路径</span><span><i class="lg" style="background:var(--stage1)"></i>非关键(手板)</span><span><i class="lg" style="background:var(--stage2)"></i>非关键(模具)</span><span><i class="lg" style="background:var(--stage3)"></i>非关键(生产)</span></div>',
+    foot:'<div class="foot">依赖类型：FS=完成-开始，SS=开始-开始+滞后天数。关键路径：01→02→03→04→08→09→10→11→13→16→18→19→20→21。</div>'
+  });
+}
+
+/* 初始化 */
+const TABS = ['①里程碑','②瀑布','③迭代','④混合','⑤基准vs跟踪','⑥资源负荷','⑦依赖关键路径'];
+const PANES = [pane0,pane1,pane2,pane3,pane4,pane5,pane6];
+const tabsEl = document.getElementById('tabs');
+TABS.forEach((t,i)=>{
+  const b = document.createElement('div');
+  b.className='tab'+(i===0?' on':'');
+  b.textContent=t;
+  b.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('pane-'+i).classList.add('on');
+  };
+  tabsEl.appendChild(b);
+});
+PANES.forEach((f,i)=>f(document.getElementById('pane-'+i)));
+</script>
+</body>
+</html>
