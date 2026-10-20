@@ -7,6 +7,13 @@
           表格编号：HJ/ED/R-04-DEMO ｜ 项目编号 <b>XM2026-001</b> 星耀二代50W夹子灯（JWA21-B1WA50C-001）｜ 项目经理 张工
           ｜ 计划周期 2026-10-08 ~ 2026-12-25 ｜ 数据截止 2026-10-20（手板阶段·进行中）
         </div>
+        <div class="proj-sel">
+          <span>数据源：</span>
+          <el-select v-model="selectedProjectId" clearable filterable placeholder="演示项目 XM2026-001（默认）" style="width:360px" :loading="loadingData" @change="onSelectProject">
+            <el-option v-for="p in projectList" :key="p.id" :label="`${p.projectNo} ${p.projectName}`" :value="String(p.id)" />
+          </el-select>
+          <span class="proj-tip">选真实项目后带入其节点数据查看</span>
+        </div>
       </div>
 
       <el-tabs v-model="activeType">
@@ -15,6 +22,18 @@
 
       <div class="g-desc">{{ curType.title }}　·　{{ curType.desc }}</div>
       <div class="legend" v-html="curType.legend"></div>
+
+      <div class="g-toolbar">
+        <span class="tb-label">日期粒度</span>
+        <el-radio-group v-model="scale" size="small" @change="onScale">
+          <el-radio-button value="day">日</el-radio-button>
+          <el-radio-button value="week">周</el-radio-button>
+          <el-radio-button value="month">月</el-radio-button>
+        </el-radio-group>
+        <el-button size="small" @click="zoom(-1)">－</el-button>
+        <el-button size="small" @click="zoom(1)">＋</el-button>
+        <span class="tb-tip">格子宽度可调，日期不再重叠</span>
+      </div>
 
       <div class="gantt">
         <div class="g-left">
@@ -32,7 +51,7 @@
               <div class="gr-month-row">
                 <div v-for="m in months" :key="m.key" class="gr-month" :style="{ left: m.left + 'px', width: m.width + 'px' }">{{ m.label }}</div>
               </div>
-              <div class="gr-day-row">
+              <div v-if="scale !== 'month'" class="gr-day-row">
                 <div v-for="d in days" :key="d.key" class="gr-day" :class="{ first: d.first }" :style="{ left: d.left + 'px' }">{{ d.label }}</div>
               </div>
             </div>
@@ -54,17 +73,20 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { pageProject } from '@/api/project'
+import { getNodeMatrix } from '@/api/progress'
 
 const ROWH = 34
-const DAYW = 7
+const dayWidth = ref(20)
+const scale = ref('day')
 const DAY = 86400000
 const D = (s) => Math.floor(new Date(s + 'T00:00:00Z').getTime() / DAY)
 const RANGE_START = D('2026-09-28')
 const RANGE_END = D('2027-01-03')
 const TODAY = '2026-10-20'
-const x = (date) => (D(date) - RANGE_START) * DAYW
-const w = (s, e) => (D(e) - D(s) + 1) * DAYW
+const x = (date) => (D(date) - RANGE_START) * dayWidth.value
+const w = (s, e) => (D(e) - D(s) + 1) * dayWidth.value
 const dur = (s, e) => D(e) - D(s) + 1
 
 const STAGES = {
@@ -73,7 +95,7 @@ const STAGES = {
   s3: { name: '生产阶段', color: '#548235', range: '12/17 ~ 12/25' }
 }
 
-const TASKS = [
+const DEMO_TASKS = [
   { n: 1, code: '01', name: '立项', owner: '研发/业务', stage: 's1', s: '2026-10-08', e: '2026-10-10', ev: '《立项书》', confirm: '研发中心、销售中心、财务部、总经理' },
   { n: 2, code: '02', name: '设计输入', owner: '项目负责人', stage: 's1', s: '2026-10-10', e: '2026-10-15', ev: '《设计开发输入清单》/《配置表》', confirm: '业务部、采购部、工程部、品质部、研发中心' },
   { n: 3, code: '03', name: '外观手板', owner: '结构工程师', stage: 's1', s: '2026-10-13', e: '2026-10-20', ev: '《外观评审表》', confirm: '部门主管知悉，业务部确认' },
@@ -97,7 +119,7 @@ const TASKS = [
   { n: 21, code: '21', name: '复盘', owner: '项目负责人', stage: 's3', s: '2026-12-25', e: '2026-12-25', ev: '《复盘报告》', confirm: '项目负责人、研发主管' }
 ]
 
-const MILESTONES = [
+const DEMO_MILESTONES = [
   { code: 'M1', name: '立项批准', stage: 's1', d: '2026-10-10', st: '已达成', cls: 'done', owner: '研发/业务', ev: '《立项书》' },
   { code: 'M2', name: '设计输入冻结', stage: 's1', d: '2026-10-15', st: '已达成·延期1天', cls: 'delay', owner: '项目负责人', ev: '《设计开发输入清单》/《配置表》' },
   { code: 'M3', name: '外观手板确认', stage: 's1', d: '2026-10-20', st: '进行中', cls: 'ongoing', owner: '结构工程师', ev: '《外观评审表》' },
@@ -160,12 +182,56 @@ const ACTUAL = { 1: 1, 2: 1, 3: 0.85, 4: 0, 5: 0.4, 6: 0, 7: 0, 8: 0, 9: 0, 10: 
 const ACT_START = { 1: '2026-10-08', 2: '2026-10-10', 3: '2026-10-14', 5: '2026-10-16' }
 const ACT_END = { 1: '2026-10-10', 2: '2026-10-16', 3: null, 5: null }
 
+/* 真实项目数据源：选择项目后带入该项目的 22 节点 */
+const NODE_STAGE = {
+  PLAN: 's1', BOM: 's1', SPEC: 's1', CONFIG: 's1', MOLD_REVIEW: 's1', HAND_SAMPLE: 's1',
+  APPEARANCE: 's1', STRUCTURE: 's1', ELECTRONICS: 's1',
+  MOLD_DRAWING: 's2', MOLD: 's2', MOLD_SAMPLE: 's2', PACKAGING: 's2',
+  ELEC_TRIAL: 's2', RD_TRIAL: 's2', ENG_TRIAL: 's2', TEST_REPORT: 's2', TECH_TRANSFER: 's2',
+  PROD_TRIAL: 's3', SHIPMENT: 's3', REVIEW: 's3', OTHER: 's3'
+}
+const projectList = ref([])
+const selectedProjectId = ref('')
+const realTasks = ref([])
+const realMilestones = ref([])
+const loadingData = ref(false)
+const isDemo = computed(() => !selectedProjectId.value)
+const TASKS = computed(() => (isDemo.value ? DEMO_TASKS : realTasks.value))
+const MILESTONES = computed(() => (isDemo.value ? DEMO_MILESTONES : realMilestones.value))
+
+async function loadProjects() {
+  const r = await pageProject({ pageNum: 1, pageSize: 1000 })
+  projectList.value = r.data.records || []
+}
+async function onSelectProject(id) {
+  selectedProjectId.value = id ? String(id) : ''
+  if (!id) return
+  loadingData.value = true
+  try {
+    const r = await getNodeMatrix(Number(id))
+    const nodes = (r.data?.nodes || []).filter(n => n.planDate || n.actualDate)
+    realTasks.value = nodes.map((n, i) => {
+      const s = (n.planDate || n.actualDate || '').slice(0, 10)
+      const e = (n.actualDate || n.planDate || '').slice(0, 10)
+      return { n: i + 1, code: n.nodeCode, name: n.nodeName, owner: n.owner || '—', stage: NODE_STAGE[n.nodeCode] || 's1', s, e, ev: n.deliveryDesc || '', confirm: '', status: n.status }
+    })
+    realMilestones.value = nodes.filter(n => n.isKey).map(n => {
+      const d = (n.planDate || n.actualDate || '').slice(0, 10)
+      return { code: n.nodeCode, name: n.nodeName, stage: NODE_STAGE[n.nodeCode] || 's1', d, st: n.status === 'DONE' ? '已完成' : '未开始', cls: n.status === 'DONE' ? 'done' : 'todo', owner: n.owner || '—', ev: n.deliveryDesc || '' }
+    })
+  } finally { loadingData.value = false }
+}
+onMounted(loadProjects)
+
 const LG_STAGE = '<span><i class="lg" style="background:#4472C4"></i>手板阶段</span><span><i class="lg" style="background:#ED7D31"></i>模具阶段</span><span><i class="lg" style="background:#548235"></i>生产阶段</span>'
 const FOOT = '<div class="foot">编制：研发中心　审核：项目负责人　批准：总经理　｜　注：本表为演示数据（demo），排期按 XM2026-001 项目主表计划周期推演。</div>'
 
 /* ============ 各图（返回 rows，每行含 cells 左表 + bars/ms 甘特） ============ */
+function taskLabel(t) { return isDemo.value ? `XM2026-001-${t.code} ${t.name}` : t.name }
+function stageBarText(st) { return isDemo.value ? STAGES[st].range : STAGES[st].name }
+
 function buildRoadmap() {
-  return MILESTONES.map(m => ({
+  return MILESTONES.value.map(m => ({
     cells: [STAGES[m.stage].name, m.code, m.name, m.d, m.owner, m.ev, m.st],
     ms: [{ d: m.d, cls: m.cls, title: `${m.code} ${m.name} · ${m.d} · ${m.st}` }]
   }))
@@ -173,53 +239,64 @@ function buildRoadmap() {
 function buildWaterfall() {
   const rows = []
   let cur = ''
-  TASKS.forEach(t => {
+  TASKS.value.forEach(t => {
     if (t.stage !== cur) {
-      rows.push({ cells: [STAGES[t.stage].name, '', '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: STAGES[t.stage].range }] })
+      rows.push({ cells: [STAGES[t.stage].name, '', '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: stageBarText(t.stage) }] })
       cur = t.stage
     }
-    rows.push({ cells: ['', t.n, `XM2026-001-${t.code} ${t.name}`, t.owner, t.s, t.e, dur(t.s, t.e), t.confirm], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}\n${t.ev}` }] })
+    rows.push({ cells: ['', t.n, taskLabel(t), t.owner, t.s, t.e, dur(t.s, t.e), t.confirm], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}\n${t.ev}` }] })
   })
   return rows
 }
 function buildSprint() {
   const rows = []
-  SPRINTS.forEach(sp => {
-    rows.push({ cells: [sp.code, sp.r, sp.goal, '', '', '', '', sp.st], cls: 'stage', bars: [{ s: sp.s, e: sp.e, cls: 'track', text: sp.code, title: `${sp.code} ${sp.r} ${sp.goal}` }] })
-    sp.tasks.forEach(tn => {
-      const t = TASKS.find(x => x.n === tn)
-      rows.push({ cells: ['', '', '', `XM2026-001-${t.code} ${t.name}`, t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}` }] })
+  if (isDemo.value) {
+    SPRINTS.forEach(sp => {
+      rows.push({ cells: [sp.code, sp.r, sp.goal, '', '', '', '', sp.st], cls: 'stage', bars: [{ s: sp.s, e: sp.e, cls: 'track', text: sp.code, title: `${sp.code} ${sp.r} ${sp.goal}` }] })
+      sp.tasks.forEach(tn => {
+        const t = TASKS.value.find(x => x.n === tn)
+        rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}` }] })
+      })
     })
-  })
+  } else {
+    let cur = ''
+    TASKS.value.forEach(t => {
+      if (t.stage !== cur) {
+        rows.push({ cells: [STAGES[t.stage].name, '', stageBarText(t.stage), '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'track', text: STAGES[t.stage].name }] })
+        cur = t.stage
+      }
+      rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}` }] })
+    })
+  }
   return rows
 }
 function buildHybrid() {
   const rows = []
   let cur = ''
-  TASKS.forEach(t => {
+  TASKS.value.forEach(t => {
     if (t.stage !== cur) {
       cur = t.stage
-      rows.push({ cells: ['■ ' + STAGES[t.stage].name, '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: STAGES[t.stage].range }] })
+      rows.push({ cells: ['■ ' + STAGES[t.stage].name, '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: stageBarText(t.stage) }] })
     }
-    const sp = SPRINTS.find(s => s.tasks.includes(t.n))
-    rows.push({ cells: ['', sp ? sp.code : '', `XM2026-001-${t.code} ${t.name}`, t.owner, t.s, t.e, t.ev], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${sp ? sp.code : ''} ${t.name} · ${t.owner}\n${t.ev}` }] })
+    const sp = isDemo.value ? SPRINTS.find(s => s.tasks.includes(t.n)) : null
+    rows.push({ cells: ['', sp ? sp.code : '', taskLabel(t), t.owner, t.s, t.e, t.ev], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${sp ? sp.code : ''} ${t.name} · ${t.owner}\n${t.ev}` }] })
   })
   return rows
 }
 function buildBaseline() {
   const rows = []
   let cur = ''
-  TASKS.forEach(t => {
+  TASKS.value.forEach(t => {
     if (t.stage !== cur) {
       rows.push({ cells: [STAGES[t.stage].name, '', '', '', '', '', '', '', '', '', ''], cls: 'stage' })
       cur = t.stage
     }
-    const pct = ACTUAL[t.n] || 0
-    const as = ACT_START[t.n] || ''
-    const ae = ACT_END[t.n] || ''
-    const dev = ae ? (D(ae) - D(t.e)) : (pct > 0 && pct < 1 ? '—' : (pct === 0 ? '—' : '0'))
+    const pct = isDemo.value ? (ACTUAL[t.n] || 0) : (t.status === 'DONE' ? 1 : 0)
+    const as = isDemo.value ? (ACT_START[t.n] || '') : (pct === 1 ? t.s : '')
+    const ae = isDemo.value ? (ACT_END[t.n] || '') : (pct === 1 ? t.e : '')
+    const dev = isDemo.value ? (ae ? (D(ae) - D(t.e)) : (pct > 0 && pct < 1 ? '—' : '—')) : ''
     const st = pct === 1 ? '按时完成' : pct > 0 ? '进行中' : '未开始'
-    rows.push({ cells: ['', t.n, `XM2026-001-${t.code} ${t.name}`, t.owner, t.s, t.e, as, ae, Math.round(pct * 100) + '%', dev, st, t.ev], bars: [{ s: t.s, e: t.e, cls: 'dark', text: `基准 ${t.s.slice(5)}~${t.e.slice(5)}`, title: `基准 ${t.s}~${t.e}` }] })
+    rows.push({ cells: ['', t.n, taskLabel(t), t.owner, t.s, t.e, as, ae, Math.round(pct * 100) + '%', dev, st, t.ev], bars: [{ s: t.s, e: t.e, cls: 'dark', text: `基准 ${t.s.slice(5)}~${t.e.slice(5)}`, title: `基准 ${t.s}~${t.e}` }] })
     if (pct > 0) {
       const done = pct === 1
       rows.push({ cells: ['', '', '└ 实际执行', '', '', '', '', '', '', '', '', ''], indent: true, bars: [{ s: as || t.s, e: done ? (ae || t.e) : TODAY, cls: done ? 'done' : 'ongoing', text: `实际 ${Math.round(pct * 100)}%`, title: `实际执行 ${Math.round(pct * 100)}%` }] })
@@ -230,8 +307,11 @@ function buildBaseline() {
   return rows
 }
 function buildResource() {
-  return ROLES.map(role => {
-    const mine = TASKS.filter(t => t.owner === role.name)
+  const list = isDemo.value
+    ? ROLES
+    : [...new Set(TASKS.value.map(t => t.owner))].filter(Boolean).map(name => ({ id: '', name, dept: '' }))
+  return list.map(role => {
+    const mine = TASKS.value.filter(t => t.owner === role.name)
     const days = mine.reduce((sum, t) => sum + dur(t.s, t.e), 0)
     let peak = 0
     for (let d = RANGE_START; d <= RANGE_END; d++) {
@@ -249,10 +329,10 @@ function buildResource() {
   })
 }
 function buildCritical() {
-  return TASKS.map(t => {
-    const dep = DEPS[t.n]
+  return TASKS.value.map(t => {
+    const dep = isDemo.value ? DEPS[t.n] : { pre: '—', type: '—', float: 0, cp: false }
     const cp = dep.cp
-    return { cells: [STAGES[t.stage].name, t.n, `XM2026-001-${t.code} ${t.name}`, t.owner, dep.pre, dep.type, t.s, t.e, dur(t.s, t.e), dep.float, cp ? '★' : ''], bars: [{ s: t.s, e: t.e, cls: cp ? 'cp' : t.stage, text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
+    return { cells: [STAGES[t.stage].name, t.n, taskLabel(t), t.owner, dep.pre, dep.type, t.s, t.e, dur(t.s, t.e), dep.float, cp ? '★' : ''], bars: [{ s: t.s, e: t.e, cls: cp ? 'cp' : t.stage, text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
   })
 }
 
@@ -269,7 +349,7 @@ const TYPES = [
 const activeType = ref('roadmap')
 const curType = computed(() => TYPES.find(t => t.key === activeType.value))
 const rows = computed(() => curType.value.build())
-const totalWidth = (RANGE_END - RANGE_START) * DAYW
+const totalWidth = computed(() => (RANGE_END - RANGE_START) * dayWidth.value)
 const todayLeft = x(TODAY)
 
 const months = computed(() => {
@@ -279,7 +359,7 @@ const months = computed(() => {
     const next = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1))
     const s = Math.max(D(m.toISOString().slice(0, 10)), RANGE_START)
     const e = Math.min(D(next.toISOString().slice(0, 10)) - 1, RANGE_END)
-    arr.push({ key: m.toISOString().slice(0, 7), label: `${m.getUTCFullYear()}-${String(m.getUTCMonth() + 1).padStart(2, '0')}`, left: (s - RANGE_START) * DAYW, width: (e - s + 1) * DAYW })
+    arr.push({ key: m.toISOString().slice(0, 7), label: `${m.getUTCFullYear()}-${String(m.getUTCMonth() + 1).padStart(2, '0')}`, left: (s - RANGE_START) * dayWidth.value, width: (e - s + 1) * dayWidth.value })
     m = next
   }
   return arr
@@ -287,8 +367,18 @@ const months = computed(() => {
 const days = computed(() => {
   const arr = []
   for (let d = RANGE_START; d <= RANGE_END; d++) {
-    const dayNum = new Date(d * DAY).getUTCDate()
-    arr.push({ key: d, label: dayNum === 1 ? '1' : String(dayNum), left: (d - RANGE_START) * DAYW, first: dayNum === 1 })
+    const dt = new Date(d * DAY)
+    const dayNum = dt.getUTCDate()
+    let label = String(dayNum)
+    let first = dayNum === 1
+    if (scale.value === 'week') {
+      if (dt.getUTCDay() !== 1) continue
+      label = `${dt.getUTCMonth() + 1}/${dayNum}`
+      first = false
+    } else if (scale.value === 'month') {
+      continue
+    }
+    arr.push({ key: d, label, left: (d - RANGE_START) * dayWidth.value, first })
   }
   return arr
 })
@@ -296,10 +386,15 @@ const weekendCols = computed(() => {
   const arr = []
   for (let d = RANGE_START; d <= RANGE_END; d++) {
     const dt = new Date(d * DAY)
-    if (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) arr.push({ left: (d - RANGE_START) * DAYW })
+    if (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) arr.push({ left: (d - RANGE_START) * dayWidth.value })
   }
   return arr
 })
+
+const SCALE_WIDTH = { day: 20, week: 5, month: 1.5 }
+function onScale(s) { dayWidth.value = SCALE_WIDTH[s] || 20 }
+function zoom(d) { dayWidth.value = Math.max(0.5, Math.min(40, dayWidth.value + d)) }
+
 function barStyle(b, i) { return { left: x(b.s) + 'px', width: Math.max(w(b.s, b.e), 2) + 'px', top: i * ROWH + 7 + 'px' } }
 function msStyle(m, i) { return { left: x(m.d) - 6 + 'px', top: i * ROWH + 11 + 'px' } }
 </script>
@@ -308,6 +403,8 @@ function msStyle(m, i) { return { left: x(m.d) - 6 + 'px', top: i * ROWH + 11 + 
 .hd { margin-bottom: 8px; }
 .hd h3 { margin: 0 0 6px; font-size: 16px; }
 .hd-sub { font-size: 12px; color: #909399; line-height: 1.8; }
+.proj-sel { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #606266; flex-wrap: wrap; }
+.proj-tip { color: #909399; font-size: 12px; }
 .g-desc { font-size: 12px; color: #606266; margin: 8px 0; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
