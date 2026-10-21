@@ -6,6 +6,7 @@ import com.hjgd.plm.agent.entity.AgentSession;
 import com.hjgd.plm.agent.mapper.AgentMessageMapper;
 import com.hjgd.plm.agent.mapper.AgentSessionMapper;
 import com.hjgd.plm.agent.service.LlmService;
+import com.hjgd.plm.agent.service.AgentMemoryService;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.system.service.SequenceService;
@@ -34,6 +35,7 @@ public class AgentChatController {
     private final AgentSessionMapper sessionMapper;
     private final AgentMessageMapper messageMapper;
     private final LlmService llmService;
+    private final AgentMemoryService memoryService;
     private final JdbcTemplate jdbc;
     private final SequenceService sequenceService;
 
@@ -83,6 +85,9 @@ public class AgentChatController {
         AgentMessage am = new AgentMessage();
         am.setSessionId(sessionId); am.setRole("assistant"); am.setContent(replyText); am.setCreatedAt(OffsetDateTime.now());
         messageMapper.insert(am);
+
+        // 4. 自学习：把本次问答写入记忆，供后续多维度检索复用
+        memoryService.remember(message, replyText, "chat");
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("sessionId", sessionId);
@@ -160,6 +165,7 @@ public class AgentChatController {
     private Map<String, Object> llmRoute(String message, Map<String, Object> context) {
         String who = name();
         String page = context == null ? "" : String.valueOf(context.getOrDefault("path", ""));
+        String mem = buildMemoryContext(message);
         String sys = "你是恒剑PLM的总控智能体（类似multica的Mika）。用户用通俗语言提需求，你自己判断怎么做，不要让用户自己去某个功能找。"
                 + "当前用户：" + (who.isEmpty() ? "未知" : who) + "；当前页面：" + (page.isEmpty() ? "未知" : page) + "。"
                 + "系统里有这些内容：研发项目(plm_project)、项目节点(plm_project_node)、我的待办、逾期节点、物料、证据、变更、生命周期等。\n"
@@ -169,6 +175,9 @@ public class AgentChatController {
                 + "若不能执行但可以基于系统常识直接回答：只输出JSON {\"action\":\"answer\",\"text\":\"<简洁回答>\"}\n"
                 + "若不能且需要澄清：只输出JSON {\"action\":\"ask\",\"question\":\"<一句通俗提问>\",\"options\":[\"选项1\",\"选项2\",\"选项3\"]}（2-4个选项）\n"
                 + "禁止输出JSON以外的任何内容。";
+        if (!mem.isEmpty()) {
+            sys = mem + "\n\n" + sys;
+        }
         String out = llmService.chat(sys, message);
         String json = extractJson(out);
         if (json == null) {
@@ -207,6 +216,35 @@ public class AgentChatController {
         if (s == null) return null;
         int a = s.indexOf('{'), b = s.lastIndexOf('}');
         return (a >= 0 && b > a) ? s.substring(a, b + 1) : null;
+    }
+
+    // ================= 自学习：多维度上下文（历史对话 + 知识库 + 系统概况） =================
+
+    private String buildMemoryContext(String message) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            List<Map<String, Object>> mem = memoryService.recall(message, 3);
+            if (!mem.isEmpty()) {
+                sb.append("【历史对话记忆】以下是你以前回答过的相似问题，可参考：\n");
+                for (Map<String, Object> m : mem) {
+                    sb.append("- 问：").append(m.get("question")).append("\n  答：").append(m.get("answer")).append("\n");
+                }
+            }
+            List<Map<String, Object>> kb = memoryService.recallKnowledge(message, 2);
+            if (!kb.isEmpty()) {
+                sb.append("【知识库】相关条目：\n");
+                for (Map<String, Object> k : kb) {
+                    sb.append("- ").append(k.get("title")).append("：").append(k.get("content")).append("\n");
+                }
+            }
+            Map<String, Object> snap = memoryService.systemSnapshot();
+            sb.append("【系统概况】项目").append(snap.get("projects")).append("个，物料").append(snap.get("materials"))
+              .append("个，已完成节点").append(snap.get("nodesDone")).append("个，待处理反馈").append(snap.get("feedbackPending"))
+              .append("条，知识库").append(snap.get("knowledge")).append("条，记忆").append(snap.get("memory")).append("条。\n");
+        } catch (Exception e) {
+            log.warn("[自学习] 上下文构建失败: {}", e.getMessage());
+        }
+        return sb.toString();
     }
 
     // ================= 工具 =================

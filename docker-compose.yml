@@ -73,6 +73,9 @@ services:
       - ./database/50_org_dept_assign.sql:/docker-entrypoint-initdb.d/50_org_dept_assign.sql:ro
       - ./database/51_knowledge.sql:/docker-entrypoint-initdb.d/51_knowledge.sql:ro
       - ./database/52_ebms_sync.sql:/docker-entrypoint-initdb.d/52_ebms_sync.sql:ro
+      - ./database/53_ebms_nodes_gates.sql:/docker-entrypoint-initdb.d/53_ebms_nodes_gates.sql:ro
+      - ./database/54_fix_22_nodes.sql:/docker-entrypoint-initdb.d/54_fix_22_nodes.sql:ro
+      - ./database/55_agent_memory.sql:/docker-entrypoint-initdb.d/55_agent_memory.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s
