@@ -229,6 +229,7 @@ const FOOT = '<div class="foot">编制：研发中心　审核：项目负责人
 /* ============ 各图（返回 rows，每行含 cells 左表 + bars/ms 甘特） ============ */
 function taskLabel(t) { return isDemo.value ? `XM2026-001-${t.code} ${t.name}` : t.name }
 function stageBarText(st) { return isDemo.value ? STAGES[st].range : STAGES[st].name }
+function barCls(t) { return t.status === 'DONE' ? 'done' : t.stage }
 
 function buildRoadmap() {
   return MILESTONES.value.map(m => ({
@@ -244,7 +245,7 @@ function buildWaterfall() {
       rows.push({ cells: [STAGES[t.stage].name, '', '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: stageBarText(t.stage) }] })
       cur = t.stage
     }
-    rows.push({ cells: ['', t.n, taskLabel(t), t.owner, t.s, t.e, dur(t.s, t.e), t.confirm], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}\n${t.ev}` }] })
+    rows.push({ cells: ['', t.n, taskLabel(t), t.owner, t.s, t.e, dur(t.s, t.e), t.confirm], bars: [{ s: t.s, e: t.e, cls: barCls(t), text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}\n${t.ev}` }] })
   })
   return rows
 }
@@ -255,7 +256,7 @@ function buildSprint() {
       rows.push({ cells: [sp.code, sp.r, sp.goal, '', '', '', '', sp.st], cls: 'stage', bars: [{ s: sp.s, e: sp.e, cls: 'track', text: sp.code, title: `${sp.code} ${sp.r} ${sp.goal}` }] })
       sp.tasks.forEach(tn => {
         const t = TASKS.value.find(x => x.n === tn)
-        rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}` }] })
+        rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: barCls(t), text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · ${t.owner}` }] })
       })
     })
   } else {
@@ -265,7 +266,7 @@ function buildSprint() {
         rows.push({ cells: [STAGES[t.stage].name, '', stageBarText(t.stage), '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'track', text: STAGES[t.stage].name }] })
         cur = t.stage
       }
-      rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}` }] })
+      rows.push({ cells: ['', '', '', taskLabel(t), t.owner, t.s, t.e, ''], bars: [{ s: t.s, e: t.e, cls: barCls(t), text: `${t.s.slice(5)}~${t.e.slice(5)}` }] })
     })
   }
   return rows
@@ -279,7 +280,7 @@ function buildHybrid() {
       rows.push({ cells: ['■ ' + STAGES[t.stage].name, '', '', '', '', '', ''], cls: 'stage', bars: [{ s: t.s, e: t.e, cls: 'dark', text: stageBarText(t.stage) }] })
     }
     const sp = isDemo.value ? SPRINTS.find(s => s.tasks.includes(t.n)) : null
-    rows.push({ cells: ['', sp ? sp.code : '', taskLabel(t), t.owner, t.s, t.e, t.ev], bars: [{ s: t.s, e: t.e, cls: t.stage, text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${sp ? sp.code : ''} ${t.name} · ${t.owner}\n${t.ev}` }] })
+    rows.push({ cells: ['', sp ? sp.code : '', taskLabel(t), t.owner, t.s, t.e, t.ev], bars: [{ s: t.s, e: t.e, cls: barCls(t), text: `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${sp ? sp.code : ''} ${t.name} · ${t.owner}\n${t.ev}` }] })
   })
   return rows
 }
@@ -332,13 +333,13 @@ function buildCritical() {
   return TASKS.value.map(t => {
     const dep = isDemo.value ? DEPS[t.n] : { pre: '—', type: '—', float: 0, cp: false }
     const cp = dep.cp
-    return { cells: [STAGES[t.stage].name, t.n, taskLabel(t), t.owner, dep.pre, dep.type, t.s, t.e, dur(t.s, t.e), dep.float, cp ? '★' : ''], bars: [{ s: t.s, e: t.e, cls: cp ? 'cp' : t.stage, text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
+    return { cells: [STAGES[t.stage].name, t.n, taskLabel(t), t.owner, dep.pre, dep.type, t.s, t.e, dur(t.s, t.e), dep.float, cp ? '★' : ''], bars: [{ s: t.s, e: t.e, cls: cp ? 'cp' : barCls(t), text: cp ? '★' : `${t.s.slice(5)}~${t.e.slice(5)}`, title: `${t.name} · 前置 ${dep.pre} · 浮动 ${dep.float}天${cp ? ' · 关键路径' : ''}` }] }
   })
 }
 
 const TYPES = [
   { key: 'roadmap', label: '①里程碑', title: '① 里程碑路标甘特图', desc: '一页纸对齐管理层/跨团队；只看 12 个 Gate，不看任务细节。', cols: [{ l: '阶段', w: 70 }, { l: '里程碑', w: 50 }, { l: '里程碑节点', w: 150 }, { l: '计划日期', w: 88 }, { l: '责任人', w: 80 }, { l: '判定依据/交付表单', w: 170 }, { l: '状态', w: 90 }], build: buildRoadmap, legend: '<span><i class="lg" style="background:#00B050"></i>已达成</span><span><i class="lg" style="background:#FFC000"></i>延期达成</span><span><i class="lg" style="background:#FFE699"></i>进行中</span><span><i class="lg" style="background:#D9D9D9"></i>未开始</span>' + LG_STAGE },
-  { key: 'waterfall', label: '②瀑布', title: '② 瀑布/阶段式甘特图', desc: '项目组排期主表；阶段串行、每阶段有评审关卡。', cols: [{ l: '阶段', w: 70 }, { l: '序号', w: 38 }, { l: '工作项目', w: 160 }, { l: '责任人', w: 80 }, { l: '计划开始', w: 88 }, { l: '计划结束', w: 88 }, { l: '工期(天)', w: 52 }, { l: '确认人/会签', w: 170 }], build: buildWaterfall, legend: LG_STAGE + '<span><i class="lg" style="background:#A6A6A6"></i>阶段总条</span>' },
+  { key: 'waterfall', label: '②瀑布', title: '② 瀑布/阶段式甘特图', desc: '项目组排期主表；阶段串行、每阶段有评审关卡。', cols: [{ l: '阶段', w: 70 }, { l: '序号', w: 38 }, { l: '工作项目', w: 160 }, { l: '责任人', w: 80 }, { l: '计划开始', w: 88 }, { l: '计划结束', w: 88 }, { l: '工期(天)', w: 52 }, { l: '确认人/会签', w: 170 }], build: buildWaterfall, legend: LG_STAGE + '<span><i class="lg" style="background:#00B050"></i>已完成</span><span><i class="lg" style="background:#A6A6A6"></i>阶段总条</span>' },
   { key: 'sprint', label: '③迭代', title: '③ 迭代式甘特图（Sprint/双周迭代）', desc: '需求多变时用；每迭代内是「设计-打样-测试」小循环。', cols: [{ l: '迭代', w: 40 }, { l: '迭代周期', w: 120 }, { l: '迭代目标', w: 150 }, { l: '工作项目', w: 170 }, { l: '责任人', w: 80 }, { l: '计划开始', w: 88 }, { l: '计划结束', w: 88 }, { l: '状态', w: 70 }], build: buildSprint, legend: '<span><i class="lg" style="background:#2E75B6"></i>迭代区间</span>' + LG_STAGE },
   { key: 'hybrid', label: '④混合', title: '④ 混合式甘特图', desc: '外层管阶段关卡，内层用迭代吸收需求变更。', cols: [{ l: '阶段', w: 90 }, { l: '迭代', w: 40 }, { l: '工作项目', w: 180 }, { l: '责任人', w: 80 }, { l: '计划开始', w: 88 }, { l: '计划结束', w: 88 }, { l: '交付表单/证据', w: 160 }], build: buildHybrid, legend: '<span><i class="lg" style="background:#A6A6A6"></i>阶段总条</span>' + LG_STAGE },
   { key: 'baseline', label: '⑤基准vs跟踪', title: '⑤ 基准计划 vs 进度跟踪甘特图', desc: '周会跟进度，一眼看出谁延期、偏差几天、证据是否齐。', cols: [{ l: '阶段', w: 70 }, { l: '序号', w: 38 }, { l: '工作项目', w: 150 }, { l: '责任人', w: 78 }, { l: '基准开始', w: 86 }, { l: '基准结束', w: 86 }, { l: '实际开始', w: 86 }, { l: '实际结束', w: 86 }, { l: '完成%', w: 52 }, { l: '偏差', w: 44 }, { l: '状态', w: 64 }, { l: '交付表单', w: 150 }], build: buildBaseline, legend: '<span><i class="lg" style="background:#A6A6A6"></i>基准计划条</span><span><i class="lg" style="background:#00B050"></i>实际·按时完成</span><span><i class="lg" style="background:#F4B183"></i>实际·进行中/预警</span>' },
