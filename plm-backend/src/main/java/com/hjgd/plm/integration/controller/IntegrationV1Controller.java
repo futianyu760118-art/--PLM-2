@@ -170,8 +170,61 @@ public class IntegrationV1Controller {
         }
     }
 
+    @Operation(summary = "EBMS项目跟踪表临时同步(主要同步完成状态)")
+    @PostMapping("/ebms-track-sync")
+    public Result<Map<String, Object>> ebmsTrackSync(@RequestBody EbmsTrackSyncReq req) {
+        if (req.getRows() == null || req.getRows().isEmpty()) {
+            return Result.failed(400, "rows 不能为空");
+        }
+        int updated = 0, done = 0, skipped = 0;
+        for (EbmsTrackRow r : req.getRows()) {
+            if (r.getProjectNo() == null || r.getNodeCode() == null || r.getProjectNo().isBlank() || r.getNodeCode().isBlank()) {
+                skipped++;
+                continue;
+            }
+            String st = r.getStatus();
+            if (st == null || st.isBlank()) {
+                st = Boolean.TRUE.equals(r.getDone()) ? "DONE" : null;
+            }
+            if (st == null || st.isBlank()) {
+                skipped++;
+                continue;
+            }
+            int n = jdbcTemplate.update(
+                    "UPDATE plm_project_node SET status=?, " +
+                            "actual_date=CASE WHEN ?='DONE' AND actual_date IS NULL THEN CURRENT_DATE ELSE actual_date END, " +
+                            "source_system='EBMS', sync_status='SYNCED', updated_at=NOW() " +
+                            "WHERE node_code=? AND project_no=?",
+                    st, st, r.getNodeCode(), r.getProjectNo());
+            if (n > 0) {
+                updated++;
+                if ("DONE".equals(st)) done++;
+            } else {
+                skipped++;
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("updated", updated);
+        out.put("done", done);
+        out.put("skipped", skipped);
+        return Result.success(out);
+    }
+
     private static String StringUtilsOr(String a, String b) {
         return a != null && !a.isBlank() ? a : b;
+    }
+
+    @Data
+    public static class EbmsTrackRow {
+        private String projectNo;
+        private String nodeCode;
+        private Boolean done;
+        private String status;
+    }
+
+    @Data
+    public static class EbmsTrackSyncReq {
+        private List<EbmsTrackRow> rows;
     }
 
     @Data
