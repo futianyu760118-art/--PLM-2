@@ -74,7 +74,7 @@ public class AgentChatController {
         if (rule != null) {
             result = rule;
         } else if (llmService.enabled()) {
-            result = llmRoute(message, req.getContext());
+            result = llmRoute(message, req.getContext(), loadHistory(sessionId));
         } else {
             result = cannotDo("我目前只能处理这些事情，请选择：",
                     List.of("查项目进度", "我的待办", "我的逾期节点", "打开研发项目跟踪", "查看生命周期"));
@@ -162,7 +162,7 @@ public class AgentChatController {
 
     // ================= LLM 层：通俗路由（输出动作JSON或提问选项） =================
 
-    private Map<String, Object> llmRoute(String message, Map<String, Object> context) {
+    private Map<String, Object> llmRoute(String message, Map<String, Object> context, String history) {
         String who = name();
         String page = context == null ? "" : String.valueOf(context.getOrDefault("path", ""));
         String mem = buildMemoryContext(message);
@@ -175,6 +175,9 @@ public class AgentChatController {
                 + "若不能执行但可以基于系统常识直接回答：只输出JSON {\"action\":\"answer\",\"text\":\"<简洁回答>\"}\n"
                 + "若不能且需要澄清：只输出JSON {\"action\":\"ask\",\"question\":\"<一句通俗提问>\",\"options\":[\"选项1\",\"选项2\",\"选项3\"]}（2-4个选项）\n"
                 + "禁止输出JSON以外的任何内容。";
+        if (history != null && !history.isEmpty()) {
+            sys = "【本轮对话上下文】\n" + history + "\n\n" + sys;
+        }
         if (!mem.isEmpty()) {
             sys = mem + "\n\n" + sys;
         }
@@ -219,6 +222,24 @@ public class AgentChatController {
     }
 
     // ================= 自学习：多维度上下文（历史对话 + 知识库 + 系统概况） =================
+
+    private String loadHistory(Long sessionId) {
+        try {
+            List<Map<String, Object>> rows = jdbc.queryForList(
+                    "SELECT role, content FROM plm_agent_message WHERE session_id=? ORDER BY id DESC LIMIT 6", sessionId);
+            Collections.reverse(rows);
+            StringBuilder sb = new StringBuilder();
+            for (Map<String, Object> r : rows) {
+                String role = String.valueOf(r.get("role"));
+                String c = String.valueOf(r.get("content"));
+                if (c.length() > 200) c = c.substring(0, 200);
+                sb.append(role).append(": ").append(c).append("\n");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
 
     private String buildMemoryContext(String message) {
         StringBuilder sb = new StringBuilder();
