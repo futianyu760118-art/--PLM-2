@@ -9,7 +9,12 @@
    docker compose up -d --no-build --no-deps backend
    docker compose up -d --no-build --no-deps frontend
    ```
-   `--no-deps` 保证不碰 postgres / redis。
+   `--no-deps` 保证不碰 postgres / redis。或直接用封装脚本（会自动先备份）：
+   ```powershell
+   powershell -File scripts\deploy.ps1                 # 备份后部署前后端
+   powershell -File scripts\deploy.ps1 -Service backend
+   powershell -File scripts\deploy.ps1 -Service frontend
+   ```
 
 3. **任何涉及 postgres / 数据操作的部署前，先备份**：
    ```powershell
