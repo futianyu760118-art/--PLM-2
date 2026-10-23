@@ -35,6 +35,8 @@ const routes = [
     redirect: '/project/list',
     meta: { title: '研发自治中心', icon: 'DataBoard', workflowStage: '研发自治中心' },
     children: [
+      { path: 'poms', name: 'M04Poms', component: () => import('@/views/project/poms.vue'),
+        meta: { title: '我的研发微系统', icon: 'UserFilled', workflowStage: '研发自治中心' } },
       { path: 'list', name: 'ProjectList', component: () => import('@/views/project/index.vue'),
         meta: { title: '研发项目' } },
       { path: 'progress', name: 'ProjectProgress', component: () => import('@/views/project/progress.vue'),
