@@ -9,11 +9,40 @@
       <div ref="chatArea" class="chat-area">
         <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
           <div class="bubble">{{ m.text }}</div>
-          <!-- 数据表 -->
-          <div v-if="m.data && m.data.length" class="data-table">
-            <div v-for="(row, ri) in m.data" :key="ri" class="data-row">
-              <span v-for="(v, k) in row" :key="k" class="data-cell"><i>{{ k }}</i>{{ v }}</span>
-            </div>
+          <!-- 智能体分析解读 -->
+          <div v-if="m.analysis" class="result-analysis">
+            <span class="result-analysis-tag">分析</span>
+            <p>{{ m.analysis }}</p>
+          </div>
+          <!-- 通用结果卡片 -->
+          <div v-if="m.data && m.data.length" class="result-cards">
+            <div class="result-summary">{{ summaryText(m) }}</div>
+            <article v-for="(row, index) in m.data" :key="index" class="result-card">
+              <div class="result-card-head">
+                <div class="result-card-title">
+                  <strong>{{ rowTitle(row, index, m.display) }}</strong>
+                  <small v-if="rowSubtitle(row, m.display)">{{ rowSubtitle(row, m.display) }}</small>
+                </div>
+                <span v-if="row.status" class="status-chip">{{ formatResultValue('status', row.status) }}</span>
+              </div>
+
+              <div class="result-grid">
+                <div v-for="key in primaryFields(row, m.display)" :key="key" class="result-field">
+                  <span>{{ labelFor(key, m.display) }}</span>
+                  <b>{{ formatResultValue(key, row[key]) }}</b>
+                </div>
+              </div>
+
+              <details v-if="detailFields(row, m.display).length" class="result-more">
+                <summary>查看全部字段</summary>
+                <div class="result-detail-grid">
+                  <div v-for="key in detailFields(row, m.display)" :key="key" class="result-detail">
+                    <span>{{ labelFor(key, m.display) }}</span>
+                    <b>{{ formatResultValue(key, row[key]) }}</b>
+                  </div>
+                </div>
+              </details>
+            </article>
           </div>
           <!-- 选项按钮（不能执行时提问） -->
           <div v-if="m.options && m.options.length" class="options">
@@ -44,6 +73,7 @@
 import { ref, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { chatExecute } from '@/api/agent'
+import { formatResultValue, rowTitle, rowSubtitle, primaryFields, detailFields, labelFor, summaryText } from './result-display'
 
 const visible = defineModel({ type: Boolean, default: false })
 const router = useRouter()
@@ -74,7 +104,9 @@ async function send(text, optionMsg) {
     messages.value.push({
       role: 'assistant',
       text: d.reply || '(空)',
+      analysis: d.analysis || null,
       data: d.data || null,
+      display: d.display || null,
       options: d.options || null
     })
     if (d.navigate) {
@@ -104,11 +136,27 @@ function scrollBottom() {
     .bubble { background: var(--plm-accent, #409eff); color: #fff; padding: 8px 12px; border-radius: 10px 10px 2px 10px; display: inline-block; max-width: 85%; text-align: left; white-space: pre-wrap; word-break: break-word; } }
   .msg.assistant {
     .bubble { background: #fff; border: 1px solid #ebeef5; padding: 8px 12px; border-radius: 10px 10px 10px 2px; display: inline-block; max-width: 92%; white-space: pre-wrap; word-break: break-word; } }
-  .data-table { margin-top: 6px; background: #fff; border: 1px solid #ebeef5; border-radius: 8px; overflow: hidden;
-    .data-row { display: flex; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid #f5f7fa; gap: 10px;
-      &:last-child { border-bottom: none; } }
-    .data-cell { font-size: 12px; color: #303133;
-      i { font-style: normal; color: #909399; margin-right: 4px; } } }
+  .result-analysis { margin-top: 6px; background: #f0f7ff; border: 1px solid #d4e6ff; border-radius: 8px; padding: 8px 10px;
+    .result-analysis-tag { display: inline-block; font-size: 11px; color: #409eff; background: #e8f2ff; border-radius: 4px; padding: 0 6px; margin-bottom: 4px; }
+    p { margin: 0; font-size: 12px; color: #303133; line-height: 1.6; white-space: pre-wrap; word-break: break-word; } }
+  .result-cards { margin-top: 6px; display: flex; flex-direction: column; gap: 8px;
+    .result-summary { font-size: 12px; color: #909399; padding: 0 2px; }
+    .result-card { background: #fff; border: 1px solid #ebeef5; border-radius: 8px; padding: 8px 10px;
+      .result-card-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;
+        .result-card-title { flex: 1; min-width: 0;
+          strong { display: block; font-size: 13px; color: #303133; word-break: break-all; }
+          small { display: block; font-size: 12px; color: #909399; margin-top: 2px; } }
+        .status-chip { flex-shrink: 0; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #ecf5ff; color: #409eff; } }
+      .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px;
+        .result-field { display: flex; flex-direction: column; min-width: 0;
+          span { font-size: 11px; color: #909399; }
+          b { font-size: 12px; color: #303133; font-weight: 500; word-break: break-all; } } }
+      .result-more { margin-top: 6px;
+        summary { font-size: 12px; color: #409eff; cursor: pointer; user-select: none; }
+        .result-detail-grid { margin-top: 6px; display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px 8px; background: #fafafa; border-radius: 6px;
+          .result-detail { display: flex; gap: 8px; font-size: 12px;
+            span { color: #909399; flex-shrink: 0; }
+            b { color: #303133; font-weight: 500; word-break: break-all; } } } } } }
   .options { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
   .chat-empty { text-align: center; color: #909399; padding: 30px 8px; font-size: 13px;
     p { margin: 8px 0 12px; }

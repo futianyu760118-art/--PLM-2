@@ -11,8 +11,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 反馈自动处理：用户提交反馈后，由 AI 自动接手并给出初步处理答复（无需人工派单）。
- * 状态流转：pending(待处理) → processing(处理中，AI 已回复初步方案)。
+ * 反馈自动分析：用户提交反馈后，AI 自动生成可执行方案（非代码），供提交人确认。
+ * 状态流转：pending(待分析) → proposed(待确认方案，AI 已出方案)。
+ * 提交人确认方案后(approved)，再由管理员派单给 AI Runner 做代码实现。
  */
 @Slf4j
 @Component
@@ -26,25 +27,29 @@ public class FeedbackAutoProcessJob {
     public void autoProcess() {
         if (!llmService.enabled()) return;
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT id, type, severity, title, description, page_path FROM plm_feedback " +
+                "SELECT id, type, severity, title, description, page_path, reject_note FROM plm_feedback " +
                         "WHERE deleted=0 AND status='pending' AND (ai_status IS NULL OR ai_status='none') ORDER BY id LIMIT 10");
         for (Map<String, Object> r : rows) {
             Long id = ((Number) r.get("id")).longValue();
-            String sys = "你是恒剑PLM的反馈处理智能体。用户刚提交了一条问题/建议，请自动给出初步处理："
-                    + "先一句话确认收到，再判断问题类型与可能影响，最后给出处理计划或建议（涉及功能改进时说明打算怎么改）。"
-                    + "用中文简洁回复、分点列出，不要编造系统里不存在的信息。";
+            String sys = "你是恒剑PLM的研发反馈分析智能体。请针对下面的用户反馈，输出一份可落地、可执行的技术方案（不是泛泛的安抚答复），包含三点："
+                    + "1) 问题定位与根因；2) 具体改动方案（涉及哪些模块/文件/接口/表）；3) 验证方式。"
+                    + "用中文分点、简洁、可落地，不要编造系统里不存在的信息，不要写代码正文。";
+            String rejectNote = r.get("reject_note") == null ? null : String.valueOf(r.get("reject_note"));
             String user = "类型:" + r.get("type") + " 严重度:" + r.get("severity")
                     + " 所在页面:" + (r.get("page_path") == null ? "" : r.get("page_path"))
                     + "\n标题:" + r.get("title")
                     + "\n描述:" + (r.get("description") == null ? "" : r.get("description"));
+            if (rejectNote != null && !rejectNote.isBlank()) {
+                user += "\n（上次方案被驳回，驳回意见：" + rejectNote + "，请据此调整方案。）";
+            }
             try {
-                String reply = llmService.chat(sys, user);
-                if (reply == null || reply.isBlank()) continue;
-                jdbc.update("UPDATE plm_feedback SET status='processing', reply=?, replied_by='AI 智能体', replied_at=now(), updated_at=now() WHERE id=?",
-                        reply, id);
-                log.info("[反馈自动处理] #{} 已生成初步答复", id);
+                String proposal = llmService.chat(sys, user);
+                if (proposal == null || proposal.isBlank()) continue;
+                jdbc.update("UPDATE plm_feedback SET status='proposed', proposal=?, proposal_at=now(), reject_note=NULL, updated_at=now() WHERE id=?",
+                        proposal, id);
+                log.info("[反馈自动分析] #{} 已生成方案", id);
             } catch (Exception e) {
-                log.warn("[反馈自动处理] #{} 处理失败: {}", id, e.getMessage());
+                log.warn("[反馈自动分析] #{} 分析失败: {}", id, e.getMessage());
             }
         }
     }

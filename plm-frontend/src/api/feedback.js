@@ -13,7 +13,7 @@ export function getFeedback(id) { return request({ url: `/v1/feedback/${id}`, me
 export function createFeedback(data) { return request({ url: '/v1/feedback', method: 'post', data }) }
 export function updateFeedback(id, data) { return request({ url: `/v1/feedback/${id}`, method: 'put', data }) }
 export function replyFeedback(id, data) { return request({ url: `/v1/feedback/${id}/reply`, method: 'post', data }) }
-export function changeFeedbackStatus(id, status) { return request({ url: `/v1/feedback/${id}/status`, method: 'patch', data: { status } }) }
+export function changeFeedbackStatus(id, status, note) { return request({ url: `/v1/feedback/${id}/status`, method: 'patch', data: { status, note } }) }
 export function aiQueueFeedback(id) { return request({ url: `/v1/feedback/${id}/ai-queue`, method: 'post' }) }
 export function aiCancelFeedback(id) { return request({ url: `/v1/feedback/${id}/ai-cancel`, method: 'post' }) }
 export function deleteFeedback(id) { return request({ url: `/v1/feedback/${id}`, method: 'delete' }) }

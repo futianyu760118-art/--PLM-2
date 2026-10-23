@@ -9,6 +9,8 @@ import com.hjgd.plm.agent.service.LlmService;
 import com.hjgd.plm.agent.service.AgentMemoryService;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.common.Result;
+import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.hub.service.HubInvocationService;
 import com.hjgd.plm.system.service.SequenceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +40,7 @@ public class AgentChatController {
     private final AgentMemoryService memoryService;
     private final JdbcTemplate jdbc;
     private final SequenceService sequenceService;
+    private final HubInvocationService hubInvocationService;
 
     @Data
     public static class ChatReq {
@@ -77,21 +80,25 @@ public class AgentChatController {
             result = llmRoute(message, req.getContext(), loadHistory(sessionId));
         } else {
             result = cannotDo("我目前只能处理这些事情，请选择：",
-                    List.of("查项目进度", "我的待办", "我的逾期节点", "打开研发项目跟踪", "查看生命周期"));
+                    List.of("查项目进度", "我的待办", "我的逾期节点", "查中台订单", "打开研发项目跟踪", "查看生命周期"));
         }
 
-        // 3. 组装回复并留痕
+        // 3. 结果分析解读：让智能体按规则解读查询结果（指出异常/风险，不编造）
+        String analysis = analyzeResult(message, result.get("data"));
+
+        // 4. 组装回复并留痕
         String replyText = str(result.get("reply"));
         AgentMessage am = new AgentMessage();
         am.setSessionId(sessionId); am.setRole("assistant"); am.setContent(replyText); am.setCreatedAt(OffsetDateTime.now());
         messageMapper.insert(am);
 
-        // 4. 自学习：把本次问答写入记忆，供后续多维度检索复用
+        // 5. 自学习：把本次问答写入记忆，供后续多维度检索复用
         memoryService.remember(message, replyText, "chat");
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("sessionId", sessionId);
         out.put("reply", replyText);
+        if (analysis != null) out.put("analysis", analysis);
         if (result.get("options") != null) out.put("options", result.get("options"));
         if (result.get("data") != null) out.put("data", result.get("data"));
         if (result.get("navigate") != null) out.put("navigate", result.get("navigate"));
@@ -101,6 +108,11 @@ public class AgentChatController {
     // ================= 规则层：通俗语言直接执行 =================
 
     private Map<String, Object> tryRuleExecute(String m) {
+        // hub.query：跨系统查中台（统一工具，经 Hub 能力调用，不直连中台）
+        if (m.contains("中台") || m.contains("跨系统") || m.contains("hub.query")) {
+            Map<String, Object> hub = tryHubQuery(m);
+            if (hub != null) return hub;
+        }
         // 导航指令：「打开/跳转/进入 XX」
         if (m.matches(".*(打开|跳转|进入|去).+")) {
             Map<String, String> nav = new LinkedHashMap<>();
@@ -160,6 +172,127 @@ public class AgentChatController {
         return null; // 规则未命中
     }
 
+    // ================= hub.query 统一工具（跨系统查中台，经 Hub 能力调用） =================
+
+    /**
+     * 把「查中台XX前N条」路由到 Hub 能力调用。当前提供中台订单的提示映射；
+     * 能力目录由 Hub 维护，此处只保留常用关键词→(capability,path) 的提示，不做每系统一套工具。
+     */
+    private Map<String, Object> tryHubQuery(String m) {
+        if (!hubInvocationService.enabled()) {
+            return reply("hub.query 未配置（后端缺少 AEOS_HUB_SYSTEM_TOKEN），暂不能查中台。", null);
+        }
+        String capability = "query_control_platform";
+        String path = null;
+        if (m.contains("订单")) {
+            path = "/external/orders/list";
+        }
+        if (path == null) {
+            return reply("我目前能通过 Hub 查中台的能力：订单。你可以说「查中台订单前 5 条」。", null);
+        }
+        int pageSize = extractPageSize(m, 5);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("page", 1);
+        params.put("page_size", pageSize);
+        try {
+            Map<String, Object> result = hubInvocationService.query(capability, path, params);
+            List<Map<String, Object>> items = extractItems(result);
+            Object total = result.get("total");
+            String msg = total != null
+                    ? "已通过 Hub 查到中台数据（共 " + total + " 条）："
+                    : "已通过 Hub 查到中台数据：";
+            if (items.isEmpty() && result != null && !result.isEmpty()) {
+                return reply(msg, List.of(result));
+            }
+            return reply(msg, items);
+        } catch (BusinessException e) {
+            log.warn("[hub.query] 查中台失败: {}", e.getMessage());
+            return reply("查询中台失败：" + e.getMessage(), null);
+        } catch (Exception e) {
+            log.warn("[hub.query] 查中台异常", e);
+            return reply("查询中台异常：" + e.getMessage(), null);
+        }
+    }
+
+    private int extractPageSize(String m, int dft) {
+        java.util.regex.Matcher mt = java.util.regex.Pattern.compile("前\\s*(\\d+)\\s*条").matcher(m);
+        if (mt.find()) {
+            try {
+                int n = Integer.parseInt(mt.group(1));
+                return n > 0 && n <= 100 ? n : dft;
+            } catch (NumberFormatException ignored) { }
+        }
+        return dft;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractItems(Map<String, Object> result) {
+        if (result == null) return new ArrayList<>();
+        Object items = result.get("items");
+        if (items instanceof List<?> list) {
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> m) out.add((Map<String, Object>) m);
+            }
+            return out;
+        }
+        Object records = result.get("records");
+        if (records instanceof List<?> list) {
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> m) out.add((Map<String, Object>) m);
+            }
+            return out;
+        }
+        return new ArrayList<>();
+    }
+
+    // ================= 结果分析解读（有规则，只读，不编造） =================
+
+    /**
+     * 让智能体按规则解读查询结果：先概括条数与主要对象，再指出异常/风险/逾期/阻塞/金额或数量异常。
+     * 规则：只基于给出数据、不编造、结论仅供参考、涉及金额/承诺/质量/法律须提示人工确认。
+     * LLM 未配置或数据为空时返回 null（前端不展示分析块，不影响主结果）。
+     */
+    private String analyzeResult(String query, Object dataObj) {
+        if (!llmService.enabled()) return null;
+        if (!(dataObj instanceof List<?> list) || list.isEmpty()) return null;
+        String dataJson = compactJson(list);
+        String sys = "你是恒剑PLM智能体的结果解读助手。请基于下面给出的查询结果，用中文简洁解读（2~4句，控制在80字内）。"
+                + "先概括结果（条数、主要对象、状态分布），再指出值得注意的点（如风险、异常、逾期、阻塞、金额或数量异常）。"
+                + "规则：严格只基于给出的数据，不得编造、不得臆断数据里没有的信息；"
+                + "结论仅供参考，涉及金额、对外承诺、质量判定、法律事项时必须提示用户人工确认。";
+        String out = llmService.chat(sys, "用户问题：" + query + "\n查询结果：" + dataJson);
+        return (out == null || out.isBlank()) ? null : out.trim();
+    }
+
+    /** 把查询结果压缩成受限 JSON（最多 20 行 × 15 字段，长文本截断），避免把完整业务数据交给模型。 */
+    private String compactJson(List<?> list) {
+        try {
+            int maxRows = Math.min(list.size(), 20);
+            List<Object> out = new ArrayList<>();
+            for (int i = 0; i < maxRows; i++) {
+                Object o = list.get(i);
+                if (o instanceof Map<?, ?> m) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    int c = 0;
+                    for (Map.Entry<?, ?> e : m.entrySet()) {
+                        if (c++ >= 15) break;
+                        Object v = e.getValue();
+                        if (v instanceof String s && s.length() > 80) v = s.substring(0, 80) + "…";
+                        row.put(String.valueOf(e.getKey()), v);
+                    }
+                    out.add(row);
+                } else {
+                    out.add(o);
+                }
+            }
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(out);
+        } catch (Exception e) {
+            return "[]";
+        }
+    }
+
     // ================= LLM 层：通俗路由（输出动作JSON或提问选项） =================
 
     private Map<String, Object> llmRoute(String message, Map<String, Object> context, String history) {
@@ -170,7 +303,7 @@ public class AgentChatController {
                 + "当前用户：" + (who.isEmpty() ? "未知" : who) + "；当前页面：" + (page.isEmpty() ? "未知" : page) + "。"
                 + "系统里有这些内容：研发项目(plm_project)、项目节点(plm_project_node)、我的待办、逾期节点、物料、证据、变更、生命周期等。\n"
                 + "只能执行以下动作：\n"
-                + "查项目(需项目编号/名称关键字)、查我的待办、查我的逾期节点、生命周期总览、打开页面(项目/跟踪/明细/工作表/立项/物料/BOM/变更/档案/模型/智能体/帮助/待办/证据)\n"
+                + "查项目(需项目编号/名称关键字)、查我的待办、查我的逾期节点、生命周期总览、查中台订单(经Hub跨系统)、打开页面(项目/跟踪/明细/工作表/立项/物料/BOM/变更/档案/模型/智能体/帮助/待办/证据)\n"
                 + "若能执行：只输出JSON {\"action\":\"execute\",\"command\":\"<上面任一动作的自然语言指令>\"}\n"
                 + "若不能执行但可以基于系统常识直接回答：只输出JSON {\"action\":\"answer\",\"text\":\"<简洁回答>\"}\n"
                 + "若不能且需要澄清：只输出JSON {\"action\":\"ask\",\"question\":\"<一句通俗提问>\",\"options\":[\"选项1\",\"选项2\",\"选项3\"]}（2-4个选项）\n"
@@ -185,7 +318,7 @@ public class AgentChatController {
         String json = extractJson(out);
         if (json == null) {
             return cannotDo("这个问题我暂时办不了，你可以：",
-                    List.of("查项目进度", "我的待办", "我的逾期节点", "查看生命周期"));
+                    List.of("查项目进度", "我的待办", "我的逾期节点", "查中台订单", "查看生命周期"));
         }
         try {
             com.fasterxml.jackson.databind.JsonNode node =
@@ -211,7 +344,7 @@ public class AgentChatController {
             return r;
         } catch (Exception e) {
             return cannotDo("我没听懂，可以换种说法，或选择：",
-                    List.of("查项目进度", "我的待办", "我的逾期节点", "查看生命周期"));
+                    List.of("查项目进度", "我的待办", "我的逾期节点", "查中台订单", "查看生命周期"));
         }
     }
 

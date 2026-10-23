@@ -43,3 +43,7 @@ aeos-execution-agent/test/probe*.mjs
 
 # Database backups / recovery artifacts (large binaries)
 database/backups/
+
+# Backup files (may contain tokens/secrets)
+*.bak-*
+aeos-execution-agent/.env.bak*

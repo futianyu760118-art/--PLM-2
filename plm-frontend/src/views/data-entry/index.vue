@@ -82,8 +82,8 @@ const loadingProject = ref(false)
 const loadingMaterial = ref(false)
 const loadingFeedback = ref(false)
 
-const fLabel = s => ({ pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[s] || s)
-const fTag = s => ({ pending: 'warning', processing: 'primary', resolved: 'success', closed: 'info' }[s] || 'info')
+const fLabel = s => ({ pending: '待分析', proposed: '待确认方案', approved: '待实现', implementing: '实现中', implemented: '待闭环', resolved: '待管理员确认', verified: '待合并', merged: '已合并', closed: '已关闭' }[s] || s)
+const fTag = s => ({ pending: 'warning', proposed: 'warning', approved: 'primary', implementing: 'primary', implemented: 'primary', resolved: 'warning', verified: 'primary', merged: 'success', closed: 'info' }[s] || 'info')
 
 function go(path) { router.push(path) }
 

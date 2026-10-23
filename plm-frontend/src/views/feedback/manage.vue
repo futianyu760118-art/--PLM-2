@@ -88,11 +88,24 @@
           </el-tag>
         </div>
 
+        <template v-if="detail.data.proposal">
+          <el-divider content-position="left">AI 方案</el-divider>
+          <pre class="proposal-text">{{ detail.data.proposal }}</pre>
+          <div v-if="detail.data.reject_note" class="reject-note">驳回意见：{{ detail.data.reject_note }}</div>
+        </template>
+
         <el-divider content-position="left">状态流转</el-divider>
         <div class="status-row">
           <span>当前：{{ label(STATUS_META[detail.data.status]) }}</span>
           <el-button v-for="b in statusButtons(detail.data.status)" :key="b.text" size="small"
             :type="b.type" @click="changeStatus(b.status, !!b.confirm)">{{ b.text }}</el-button>
+        </div>
+
+        <div v-if="hasAudit" class="audit-box">
+          <div v-if="detail.data.approved_by" class="audit-line">方案确认：{{ detail.data.approved_by }} · {{ fmt(detail.data.approved_at) }}</div>
+          <div v-if="detail.data.closed_by" class="audit-line">确认闭环：{{ detail.data.closed_by }} · {{ fmt(detail.data.closed_at) }}</div>
+          <div v-if="detail.data.verified_by" class="audit-line">管理员确认：{{ detail.data.verified_by }} · {{ fmt(detail.data.verified_at) }}</div>
+          <div v-if="detail.data.merged_by" class="audit-line">代码合并：{{ detail.data.merged_by }} · {{ fmt(detail.data.merged_at) }}{{ detail.data.merged_branch ? ' · ' + detail.data.merged_branch : '' }}</div>
         </div>
 
         <template v-if="detail.data.ai_status && detail.data.ai_status !== 'none'">
@@ -139,16 +152,27 @@ import AiSection from '@/components/feedback/AiSection.vue'
 
 const userStore = useUserStore()
 const canHandle = computed(() => userStore.hasPermission('feedback:manage'))
+const hasAudit = computed(() => detail.data && (detail.data.approved_by || detail.data.closed_by || detail.data.verified_by || detail.data.merged_by))
 
 const TYPE_META = { issue: { label: '问题', type: 'danger' }, suggestion: { label: '建议', type: 'success' }, inquiry: { label: '咨询', type: 'primary' } }
 const SEVERITY_META = { low: { label: '低', type: 'info' }, medium: { label: '中', type: 'warning' }, high: { label: '高', type: 'danger' } }
-const STATUS_META = { pending: { label: '待处理', type: 'warning' }, processing: { label: '处理中', type: 'primary' }, resolved: { label: '已解决', type: 'success' }, closed: { label: '已关闭', type: 'info' } }
+const STATUS_META = {
+  pending: { label: '待分析', type: 'warning' },
+  proposed: { label: '待确认方案', type: 'warning' },
+  approved: { label: '待实现', type: 'primary' },
+  implementing: { label: '实现中', type: 'primary' },
+  implemented: { label: '待闭环', type: 'primary' },
+  resolved: { label: '待管理员确认', type: 'warning' },
+  verified: { label: '待合并', type: 'primary' },
+  merged: { label: '已合并', type: 'success' },
+  closed: { label: '已关闭', type: 'info' }
+}
 const AI_STATUS_META = { none: { label: '未派单', type: 'info' }, queued: { label: '排队中', type: 'warning' }, running: { label: '实现中', type: 'primary' }, done: { label: '已实现', type: 'success' }, failed: { label: '失败', type: 'danger' } }
 
 const loading = ref(false)
 const data = ref([])
 const total = ref(0)
-const stats = ref({ total: 0, pending: 0, processing: 0, resolved: 0, closed: 0 })
+const stats = ref({ total: 0, pending: 0, proposed: 0, approved: 0, implementing: 0, implemented: 0, resolved: 0, verified: 0, merged: 0, closed: 0 })
 const query = reactive({ page: 1, pageSize: 20, keyword: '', type: '', severity: '', aiStatus: '' })
 const filterStatus = ref('')
 
@@ -159,11 +183,15 @@ const aiBusyId = ref(null)
 let refreshTimer = null
 
 const kpis = [
-  { key: 'pending', label: '待处理', accent: 'warn', filter: 'pending' },
-  { key: 'processing', label: '处理中', accent: 'info', filter: 'processing' },
-  { key: 'resolved', label: '已解决', accent: 'ok', filter: 'resolved' },
-  { key: 'closed', label: '已关闭', accent: 'gray', filter: 'closed' },
-  { key: 'total', label: '反馈总数', accent: 'brand', filter: '' }
+  { key: 'pending', label: '待分析', accent: 'warn', filter: 'pending' },
+  { key: 'proposed', label: '待确认方案', accent: 'warn', filter: 'proposed' },
+  { key: 'approved', label: '待实现', accent: 'info', filter: 'approved' },
+  { key: 'implementing', label: '实现中', accent: 'info', filter: 'implementing' },
+  { key: 'implemented', label: '待闭环', accent: 'info', filter: 'implemented' },
+  { key: 'resolved', label: '待终审', accent: 'warn', filter: 'resolved' },
+  { key: 'verified', label: '待合并', accent: 'info', filter: 'verified' },
+  { key: 'merged', label: '已合并', accent: 'ok', filter: 'merged' },
+  { key: 'total', label: '总数', accent: 'brand', filter: '' }
 ]
 
 const tag = m => (m && m.type) || 'info'
@@ -201,12 +229,11 @@ function openDetail(row) {
 function statusButtons(s) {
   const btns = []
   if (canHandle.value) {
-    if (s === 'pending') { btns.push({ text: '开始处理', status: 'processing', type: 'default' }, { text: '标记已解决', status: 'resolved', type: 'primary', confirm: true }, { text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
-    else if (s === 'processing') { btns.push({ text: '标记已解决', status: 'resolved', type: 'primary', confirm: true }, { text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
-    else if (s === 'resolved') { btns.push({ text: '重开处理', status: 'processing', type: 'default' }, { text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
+    if (s === 'resolved') { btns.push({ text: '管理员确认', status: 'verified', type: 'primary', confirm: true }, { text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
+    else if (s === 'verified') { btns.push({ text: '标记已合并', status: 'merged', type: 'success', confirm: true }, { text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
     else if (s === 'closed') { btns.push({ text: '重新打开', status: 'pending', type: 'default' }) }
-  } else if (s === 'resolved') {
-    btns.push({ text: '确认关闭', status: 'closed', type: 'primary', confirm: true })
+    else if (s === 'merged') { /* 终态 */ }
+    else { btns.push({ text: '关闭反馈', status: 'closed', type: 'danger', confirm: true }) }
   } else if (s === 'closed') {
     btns.push({ text: '重新打开', status: 'pending', type: 'default' })
   }
@@ -238,12 +265,13 @@ async function doReply() {
 }
 
 function aiAction(r) {
+  if (r.status === 'merged' || r.status === 'closed') return ''
   if (r.ai_status === 'queued') return '取消排队'
-  if (r.status === 'resolved' || r.status === 'closed') return ''
-  if (r.ai_status === 'running') return '重新排队'
   if (r.ai_status === 'failed') return '重试'
   if (r.ai_status === 'done') return ''
-  return '交 AI 实现'
+  if (r.ai_status === 'running') return ''
+  if (r.status === 'approved') return '交 AI 实现'
+  return ''
 }
 function aiActionType(r) {
   if (r.ai_status === 'queued') return 'warning'
@@ -284,7 +312,7 @@ onBeforeUnmount(() => clearInterval(refreshTimer))
 </script>
 
 <style scoped lang="scss">
-.kpi-band { display: flex; gap: 12px; margin-bottom: 12px;
+.kpi-band { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
   .kpi { flex: 1; background: #f5f8ff; border: 1px solid #e4e7ed; border-radius: 8px; padding: 12px 16px; cursor: pointer;
     .num { font-size: 24px; font-weight: 700; color: #409eff; }
     .lbl { font-size: 12px; color: #909399; margin-top: 2px; }
@@ -301,6 +329,10 @@ onBeforeUnmount(() => clearInterval(refreshTimer))
 .desc { white-space: pre-wrap; color: #334155; line-height: 1.8; margin-bottom: 8px; }
 .atts { display: flex; gap: 6px; flex-wrap: wrap; }
 .status-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.proposal-text { white-space: pre-wrap; font-family: inherit; font-size: 13px; color: #334155; background: #f0f7ff; border: 1px solid #d0e3ff; border-radius: 8px; padding: 10px 12px; line-height: 1.7; }
+.reject-note { margin-top: 6px; font-size: 12px; color: #e6a23c; }
+.audit-box { margin-top: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; }
+.audit-line { font-size: 12px; color: #606266; line-height: 1.9; }
 .reply-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;
   .reply-meta { font-size: 12px; color: #909399; }
   .reply-text { margin: 6px 0 0; white-space: pre-wrap; font-family: inherit; font-size: 13px; }

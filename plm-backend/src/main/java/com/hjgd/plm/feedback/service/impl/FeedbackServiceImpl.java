@@ -33,11 +33,37 @@ public class FeedbackServiceImpl implements FeedbackService {
     private final FeedbackMapper feedbackMapper;
     private final ObjectMapper objectMapper;
 
-    private static final Set<String> ALLOWED_STATUS = Set.of("pending", "processing", "resolved", "closed");
-    private static final Set<String> TERMINAL_STATUS = Set.of("resolved", "closed");
+    private static final List<String> ALL_STATUSES = List.of(
+            "pending", "proposed", "approved", "implementing", "implemented",
+            "resolved", "verified", "merged", "closed");
+    private static final Set<String> TERMINAL_STATUS = Set.of("merged", "closed");
     private static final Set<String> AI_STAGES = Set.of("preparing", "fetching", "agent",
             "gate_backend", "gate_frontend", "committing");
     private static final int PROGRESS_MAX_ENTRIES = 50;
+
+    // 用户操作层面的合法流转(pending→proposed、implementing→implemented/approved 由系统/AI 直接驱动)
+    private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.of(
+            "pending", Set.of("closed"),
+            "proposed", Set.of("approved", "pending", "closed"),
+            "approved", Set.of("closed"),
+            "implementing", Set.of("closed"),
+            "implemented", Set.of("resolved", "closed"),
+            "resolved", Set.of("verified", "closed"),
+            "verified", Set.of("merged", "closed"),
+            "merged", Set.of(),
+            "closed", Set.of("pending"));
+
+    // 提交人可执行的流转(其余仅管理员/系统)
+    private static final Set<String> SUBMITTER_TRANSITIONS = Set.of(
+            "proposed->approved",    // 确认方案可行
+            "proposed->pending",     // 驳回方案重新分析
+            "implemented->resolved", // 确认闭环
+            "closed->pending");      // 重新打开
+
+    private static final Map<String, String> STATUS_LABELS = Map.of(
+            "pending", "待分析", "proposed", "待确认方案", "approved", "待实现",
+            "implementing", "实现中", "implemented", "待闭环", "resolved", "待管理员确认",
+            "verified", "待合并", "merged", "已合并", "closed", "已关闭");
 
     // ---------- 权限 ----------
     private boolean manager() {
@@ -105,6 +131,18 @@ public class FeedbackServiceImpl implements FeedbackService {
         m.put("replied_at", f.getRepliedAt());
         m.put("submitter_id", f.getSubmitterId());
         m.put("submitter_name", f.getSubmitterName());
+        m.put("proposal", f.getProposal());
+        m.put("proposal_at", f.getProposalAt());
+        m.put("reject_note", f.getRejectNote());
+        m.put("approved_by", f.getApprovedBy());
+        m.put("approved_at", f.getApprovedAt());
+        m.put("closed_by", f.getClosedBy());
+        m.put("closed_at", f.getClosedAt());
+        m.put("verified_by", f.getVerifiedBy());
+        m.put("verified_at", f.getVerifiedAt());
+        m.put("merged_by", f.getMergedBy());
+        m.put("merged_at", f.getMergedAt());
+        m.put("merged_branch", f.getMergedBranch());
         m.put("ai_status", f.getAiStatus() == null ? "none" : f.getAiStatus());
         m.put("ai_branch", f.getAiBranch());
         m.put("ai_note", f.getAiNote());
@@ -150,10 +188,9 @@ public class FeedbackServiceImpl implements FeedbackService {
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("total", (int) p.getTotal());
-        stats.put("pending", countStatus(status, "pending"));
-        stats.put("processing", countStatus(status, "processing"));
-        stats.put("resolved", countStatus(status, "resolved"));
-        stats.put("closed", countStatus(status, "closed"));
+        for (String s : ALL_STATUSES) {
+            stats.put(s, countStatus(s));
+        }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("items", items);
@@ -180,7 +217,7 @@ public class FeedbackServiceImpl implements FeedbackService {
         }
     }
 
-    private long countStatus(String status, String s) {
+    private long countStatus(String s) {
         return feedbackMapper.selectCount(new LambdaQueryWrapper<Feedback>()
                 .eq(Feedback::getStatus, s)
                 .eq(!manager(), Feedback::getSubmitterId, uid()));
@@ -271,41 +308,66 @@ public class FeedbackServiceImpl implements FeedbackService {
             f.setRepliedAt(LocalDateTime.now());
         }
         if (StringUtils.hasText(status)) {
-            f.setStatus(status);
-        } else if (StringUtils.hasText(reply) && "pending".equals(f.getStatus())) {
-            f.setStatus("resolved");
+            applyTransition(f, status, null);
         }
         feedbackMapper.updateById(f);
         return toVO(f);
     }
 
-    // ---------- 状态变更 ----------
+    // ---------- 状态变更（统一状态机校验 + 审计） ----------
     @Override
     @Transactional
-    public Map<String, Object> changeStatus(Long id, String status) {
-        if (!ALLOWED_STATUS.contains(status)) {
-            throw new BusinessException(ResultCode.PARAM_ERROR, "非法状态");
-        }
+    public Map<String, Object> changeStatus(Long id, String status, String note) {
         Feedback f = entity(id);
-        if (manager()) {
-            f.setStatus(status);
-        } else {
+        applyTransition(f, status, note);
+        return toVO(f);
+    }
+
+    private void applyTransition(Feedback f, String to, String note) {
+        String from = f.getStatus();
+        if (!ALLOWED_TRANSITIONS.getOrDefault(from, Set.of()).contains(to)) {
+            throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR,
+                    "不允许从「" + STATUS_LABELS.getOrDefault(from, from)
+                            + "」变更为「" + STATUS_LABELS.getOrDefault(to, to) + "」");
+        }
+        boolean m = manager();
+        if (!m) {
             if (!f.getSubmitterId().equals(uid())) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "无权变更");
             }
-            if ("closed".equals(status) && !"resolved".equals(f.getStatus())) {
-                throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "只有已解决的反馈才能关闭");
-            }
-            if ("pending".equals(status) && !"closed".equals(f.getStatus())) {
-                throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "只有已关闭的反馈才能重开");
-            }
-            if (!"closed".equals(status) && !"pending".equals(status)) {
+            if (!SUBMITTER_TRANSITIONS.contains(from + "->" + to)) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "无权变更为该状态");
             }
-            f.setStatus(status);
         }
+        LocalDateTime now = LocalDateTime.now();
+        String name = uname();
+        switch (to) {
+            case "approved" -> {
+                f.setApprovedBy(name);
+                f.setApprovedAt(now);
+            }
+            case "pending" -> {
+                if ("proposed".equals(from)) {
+                    f.setRejectNote(note);
+                }
+            }
+            case "resolved" -> {
+                f.setClosedBy(name);
+                f.setClosedAt(now);
+            }
+            case "verified" -> {
+                f.setVerifiedBy(name);
+                f.setVerifiedAt(now);
+            }
+            case "merged" -> {
+                f.setMergedBy(name);
+                f.setMergedAt(now);
+                f.setMergedBranch(f.getAiBranch());
+            }
+            default -> { }
+        }
+        f.setStatus(to);
         feedbackMapper.updateById(f);
-        return toVO(f);
     }
 
     // ---------- AI 自动实现 ----------
@@ -315,7 +377,10 @@ public class FeedbackServiceImpl implements FeedbackService {
         requireManager();
         Feedback f = entity(id);
         if (TERMINAL_STATUS.contains(f.getStatus())) {
-            throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "已解决/已关闭的反馈不能派单");
+            throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "已合并/已关闭的反馈不能派单");
+        }
+        if (!"approved".equals(f.getStatus())) {
+            throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "仅「待实现」的反馈可交 AI 实现（需先确认方案）");
         }
         if ("queued".equals(f.getAiStatus())) {
             throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "该反馈已在 AI 排队中");
@@ -330,9 +395,7 @@ public class FeedbackServiceImpl implements FeedbackService {
         f.setAiResult(null);
         f.setAiRequestedBy(uname());
         f.setAiRequestedAt(LocalDateTime.now());
-        if ("pending".equals(f.getStatus())) {
-            f.setStatus("processing");
-        }
+        f.setStatus("implementing");
         feedbackMapper.updateById(f);
         return toVO(f);
     }
@@ -346,6 +409,9 @@ public class FeedbackServiceImpl implements FeedbackService {
             throw new BusinessException(ResultCode.FEEDBACK_STATUS_ERROR, "仅排队中的反馈可取消");
         }
         f.setAiStatus("none");
+        if ("implementing".equals(f.getStatus())) {
+            f.setStatus("approved");
+        }
         feedbackMapper.updateById(f);
         return toVO(f);
     }
@@ -436,13 +502,15 @@ public class FeedbackServiceImpl implements FeedbackService {
             f.setAiStatus("done");
             f.setAiBranch(branch);
             f.setAiNote(summary);
-            f.setReply("【AI 自动实现待审核】分支：" + (branch == null ? "—" : branch)
+            f.setStatus("implemented");
+            f.setReply("【AI 已实现，待确认闭环】分支：" + (branch == null ? "—" : branch)
                     + "。\n验证说明：" + (StringUtils.hasText(summary) ? summary : "已通过自动门禁")
-                    + "。\n请在开发机审核 diff 并合入后再更新本反馈状态。");
+                    + "。\n请提交人确认问题已解决后进入管理员终审。");
         } else {
             f.setAiStatus("failed");
             f.setAiNote(error);
-            f.setReply("【AI 自动实现失败】" + (StringUtils.hasText(error) ? error : "未知原因") + "。修改反馈后可点击「重试」。");
+            f.setStatus("approved");
+            f.setReply("【AI 实现失败】" + (StringUtils.hasText(error) ? error : "未知原因") + "。管理员可点击「重试」。");
         }
         f.setAiResult(json(result));
         f.setAiStage(null);

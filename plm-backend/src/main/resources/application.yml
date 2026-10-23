@@ -66,6 +66,17 @@ plm:
     base-url: ${PLM_LLM_BASE_URL:}
     api-key: ${PLM_LLM_API_KEY:}
     model: ${PLM_LLM_MODEL:}
+  # AEOS Hub 能力调用(PLM 作为跨系统请求方, 借调 Hub 能力目录里的只读能力, 如 query_control_platform)
+  hub:
+    base-url: ${AEOS_HUB_BASE_URL:https://aeos-hub.test:9444}
+    system-id: ${AEOS_HUB_SYSTEM_ID:hengjian-plm}
+    system-token: ${AEOS_HUB_SYSTEM_TOKEN:}
+    contract-version: ${AEOS_HUB_CONTRACT_VERSION:4.0}
+    from-agent-id: ${AEOS_HUB_FROM_AGENT_ID:plm-agent-orch}
+    poll-interval-ms: 1000
+    poll-timeout-ms: 30000
+    # 内网试点阶段 Hub 用自签证书；置 true 时仅对 Hub 出站连接忽略证书校验(不关闭全局 TLS)
+    insecure: ${AEOS_HUB_INSECURE:true}
   integration:
     erp:
       base-url: ${ERP_BASE_URL:}

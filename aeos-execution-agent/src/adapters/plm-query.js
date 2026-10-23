@@ -179,6 +179,17 @@ export function createPlmQueryAdapter({ baseUrl, username, password }) {
     if (!body || typeof body !== 'object' || body.code !== 200) {
       throw errorWithCode('UPSTREAM_ERROR', (body && body.message) || '上游返回业务错误');
     }
-    return body.data ?? null;
+    const data = body.data;
+    // 统一返回契约：分页结果包装为 { items, total, data_as_of, data_confidence, stale }
+    if (data && typeof data === 'object' && Array.isArray(data.records)) {
+      return {
+        items: data.records,
+        total: data.total ?? data.records.length,
+        data_as_of: new Date().toISOString(),
+        data_confidence: 'high',
+        stale: false,
+      };
+    }
+    return data ?? null;
   };
 }

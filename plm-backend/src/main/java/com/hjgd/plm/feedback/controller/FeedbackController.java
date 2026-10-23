@@ -70,10 +70,12 @@ public class FeedbackController {
         return Result.success(feedbackService.reply(id, reply, status));
     }
 
-    @Operation(summary = "状态变更")
+    @Operation(summary = "状态变更(状态机校验+审计,可附驳回/说明)")
     @PatchMapping("/{id}/status")
     public Result<Map<String, Object>> changeStatus(@PathVariable Long id, @RequestBody Map<String, Object> body) {
-        return Result.success(feedbackService.changeStatus(id, String.valueOf(body.get("status"))));
+        String status = String.valueOf(body.get("status"));
+        String note = body.get("note") == null ? null : String.valueOf(body.get("note"));
+        return Result.success(feedbackService.changeStatus(id, status, note));
     }
 
     @Operation(summary = "AI 派单")

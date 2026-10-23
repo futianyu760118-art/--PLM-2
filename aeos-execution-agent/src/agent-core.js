@@ -3,7 +3,27 @@
 import WebSocket from 'ws';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 5_000;
+const DEFAULT_QUERY_TIMEOUT_MS = 30_000;
+const DEFAULT_REASONING_TIMEOUT_MS = 200_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
+
+function handlerTimeoutMs(capability, override) {
+  if (typeof override === 'number' && Number.isFinite(override) && override > 0) return override;
+  return /(^|[_-])reason(ing)?([_-]|$)/i.test(capability)
+    ? DEFAULT_REASONING_TIMEOUT_MS
+    : DEFAULT_QUERY_TIMEOUT_MS;
+}
+
+/** 优先使用每系统令牌；未配置时保留 legacy 根令牌，便于滚动升级。 */
+export function buildConnectionHeaders(config) {
+  if (config.systemId && config.systemToken) {
+    return {
+      'x-aeos-system-id': config.systemId,
+      'x-aeos-system-token': config.systemToken,
+    };
+  }
+  return { 'x-aeos-execution-token': config.token };
+}
 
 export class ExecutionAgentCore {
   constructor(config, handlers, log = console.log) {
@@ -33,7 +53,7 @@ export class ExecutionAgentCore {
   }
 
   connect() {
-    const ws = new WebSocket(this.config.wsUrl, { headers: { 'x-aeos-execution-token': this.config.token } });
+    const ws = new WebSocket(this.config.wsUrl, { headers: buildConnectionHeaders(this.config) });
     this.ws = ws;
     ws.on('open', () => {
       this.reconnectAttempt = 0;
@@ -80,37 +100,83 @@ export class ExecutionAgentCore {
       return;
     }
     // 修复: handler 第二参必须是真 AbortSignal(旧版误传 ctx 对象导致 fetch 报
-    // "signal is not of type AbortSignal"); ctx 作为第三参传递, 召回时真正中断请求
+    // "signal is not of type AbortSignal"); ctx 作为第三参传递, 召回/超时时真正中断请求
+    const runId = msg.runId;
+    const timeoutMs = handlerTimeoutMs(capability, msg.timeoutMs);
     const controller = new AbortController();
+    let timer = null;
+    const finish = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (this.activeRun?.runId === runId) this.activeRun = null;
+    };
     const ctx = {
-      runId: msg.runId,
+      runId,
       aborted: false,
       signal: controller.signal,
       abort: () => controller.abort(),
-      sendProgress: (detail) => this.send({ type: 'run_update', runId: msg.runId, state: 'running', detail }),
-      sendComplete: (result) => this.send({ type: 'run_complete', runId: msg.runId, result }),
-      sendFailed: (code, message) => this.sendRunFailed(msg.runId, code, message),
+      sendProgress: (detail) => {
+        if (!ctx.aborted) this.send({ type: 'run_update', runId, state: 'running', detail });
+      },
+      sendComplete: (result) => {
+        if (ctx.aborted) return;
+        ctx.aborted = true;
+        finish();
+        this.send({ type: 'run_complete', runId, result });
+      },
+      sendFailed: (code, message) => {
+        if (ctx.aborted) return;
+        ctx.aborted = true;
+        finish();
+        this.sendRunFailed(runId, code, message);
+      },
     };
-    this.activeRun = { runId: msg.runId, ctx, controller };
-    this.log(`[agent] 收到派单 ${msg.runId}: ${capability}`);
+    this.activeRun = { runId, ctx, controller, timer: null };
+    this.log(`[agent] 收到派单 ${runId}: ${capability}`);
+    timer = setTimeout(() => {
+      if (this.activeRun?.runId !== runId) return;
+      ctx.aborted = true;
+      try { controller.abort(); } catch { /* already aborted */ }
+      this.activeRun = null;
+      this.sendRunFailed(runId, 'EXECUTION_TIMEOUT', `执行超时（${timeoutMs}ms）`);
+    }, timeoutMs);
+    timer.unref?.();
+    this.activeRun.timer = timer;
     Promise.resolve()
       .then(() => handler(msg.input ?? {}, controller.signal, ctx))
-      .catch((error) => ctx.sendFailed('EXECUTION_FAILED', error?.message || String(error)));
+      .then((result) => {
+        if (!ctx.aborted) ctx.sendComplete(result);
+      })
+      .catch((error) => {
+        if (!ctx.aborted) ctx.sendFailed('EXECUTION_FAILED', error?.message || String(error));
+      });
   }
 
   handleRecall(msg) {
     if (this.activeRun && (msg.runId === undefined || this.activeRun.runId === msg.runId)) {
-      this.activeRun.ctx.aborted = true;
-      try { this.activeRun.controller.abort(); } catch { /* already aborted */ }
+      const active = this.activeRun;
+      active.ctx.aborted = true;
+      try { active.controller.abort(); } catch { /* already aborted */ }
+      if (active.timer) clearTimeout(active.timer);
       this.activeRun = null;
       this.log(`[agent] 收到召回 ${msg.runId ?? ''}`);
     }
   }
 
+  heartbeat() {
+    this.send({
+      type: 'heartbeat',
+      status: this.activeRun ? 'working' : 'idle',
+      currentRunId: this.activeRun?.runId ?? null,
+    });
+  }
+
   startHeartbeat(intervalMs) {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
-      this.send({ type: 'heartbeat', status: this.activeRun ? 'working' : 'idle' });
+      this.heartbeat();
     }, intervalMs);
   }
 
@@ -120,6 +186,7 @@ export class ExecutionAgentCore {
 
   scheduleReconnect() {
     this.stopHeartbeat();
+    if (this.activeRun?.timer) clearTimeout(this.activeRun.timer);
     this.activeRun = null;
     if (!this.shouldRun) return;
     const delay = Math.min(MAX_RECONNECT_DELAY_MS, 1000 * 2 ** this.reconnectAttempt);

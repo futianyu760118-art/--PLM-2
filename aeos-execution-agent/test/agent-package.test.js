@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerCapability, capabilityHandlers, capabilityDefinitions } from '../src/capabilities.js';
 import { loadConfig } from '../src/config.js';
+import { buildConnectionHeaders, ExecutionAgentCore } from '../src/agent-core.js';
 import { createHttpQueryAdapter } from '../src/adapters/query-adapter.js';
 import { createCompanyControlQueryAdapter, COMPANY_CONTROL_PATHS, COMPANY_CONTROL_QUERY_INTENT } from '../src/adapters/company-control-query.js';
 import { createReasoningAdapter } from '../src/adapters/reasoning-adapter.js';
@@ -70,4 +71,120 @@ test('推理适配器返回结构正确且明确未接通（不伪造）', async
   assert.equal(result.data_confidence, 'low');
   assert.ok(Array.isArray(result.conclusions) && result.conclusions.length > 0);
   assert.ok(Array.isArray(result.conclusions[0].evidence_refs) && result.conclusions[0].evidence_refs.length > 0);
+});
+
+// ============ 超时修复补充测试（来自 Hub 超时修复包，适配 PLM JWT 配置） ============
+
+const PLM_ENV_BASE = {
+  EXECUTION_WS_URL: 'wss://h/execution-agent',
+  EXECUTION_AGENT_ID: 'agent-1',
+  EXECUTION_SOURCE_SYSTEM: '恒剑PLM',
+  TARGET_QUERY_BASE_URL: 'http://backend:8080/api',
+  TARGET_QUERY_USERNAME: 'u',
+  TARGET_QUERY_PASSWORD: 'p',
+};
+
+test('配置支持每系统令牌，且优先于 legacy 根令牌', () => {
+  const config = loadConfig({
+    ...PLM_ENV_BASE,
+    EXECUTION_SYSTEM_ID: 'hengjian-plm',
+    EXECUTION_SYSTEM_TOKEN: 'system-token',
+    EXECUTION_PLANE_TOKEN: 'legacy-token',
+  });
+  assert.equal(config.authMode, 'system-token');
+  assert.deepEqual(buildConnectionHeaders(config), {
+    'x-aeos-system-id': 'hengjian-plm',
+    'x-aeos-system-token': 'system-token',
+  });
+});
+
+test('系统令牌只提供一半时拒绝启动', () => {
+  assert.throws(() => loadConfig({ ...PLM_ENV_BASE, EXECUTION_SYSTEM_ID: 'hengjian-plm' }), /必须同时提供/);
+  assert.throws(() => loadConfig({ ...PLM_ENV_BASE, EXECUTION_SYSTEM_TOKEN: 'token' }), /必须同时提供/);
+});
+
+test('未配置系统令牌时保留 legacy 连接头', () => {
+  assert.deepEqual(buildConnectionHeaders({ token: 'legacy-token' }), {
+    'x-aeos-execution-token': 'legacy-token',
+  });
+});
+
+test('心跳携带当前 runId，空闲时显式清空', () => {
+  const sent = [];
+  const core = new ExecutionAgentCore({}, {}, () => {});
+  core.send = (message) => sent.push(message);
+  core.activeRun = { runId: 'run-1', ctx: { aborted: false } };
+  core.heartbeat();
+  assert.deepEqual(sent[0], { type: 'heartbeat', status: 'working', currentRunId: 'run-1' });
+  core.activeRun = null;
+  core.heartbeat();
+  assert.deepEqual(sent[1], { type: 'heartbeat', status: 'idle', currentRunId: null });
+});
+
+test('handler 完成后发送 run_complete 并释放 activeRun', async () => {
+  const sent = [];
+  const core = new ExecutionAgentCore({}, { query_x: async () => ({ ok: true }) }, () => {});
+  core.send = (message) => sent.push(message);
+  core.handleMessage(JSON.stringify({ type: 'dispatch', runId: 'run-ok', capability: 'query_x', input: {}, timeoutMs: 100 }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(core.activeRun, null);
+  assert.deepEqual(sent.find((message) => message.type === 'run_complete'), {
+    type: 'run_complete',
+    runId: 'run-ok',
+    result: { ok: true },
+  });
+  core.heartbeat();
+  assert.deepEqual(sent[sent.length - 1], { type: 'heartbeat', status: 'idle', currentRunId: null });
+});
+
+test('handler 超时发送 run_failed 并释放 activeRun', async () => {
+  const sent = [];
+  const core = new ExecutionAgentCore({}, { query_x: () => new Promise(() => {}) }, () => {});
+  core.send = (message) => sent.push(message);
+  core.handleMessage(JSON.stringify({ type: 'dispatch', runId: 'run-timeout', capability: 'query_x', input: {}, timeoutMs: 10 }));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(core.activeRun, null);
+  const failed = sent.find((message) => message.type === 'run_failed');
+  assert.equal(failed.runId, 'run-timeout');
+  assert.equal(failed.error.code, 'EXECUTION_TIMEOUT');
+});
+
+test('超时后 handler 迟到完成不得再发 run_complete', async () => {
+  const sent = [];
+  let resolveLate;
+  const core = new ExecutionAgentCore({}, {
+    query_x: () => new Promise((resolve) => { resolveLate = resolve; }),
+  }, () => {});
+  core.send = (message) => sent.push(message);
+  core.handleMessage(JSON.stringify({ type: 'dispatch', runId: 'run-late', capability: 'query_x', input: {}, timeoutMs: 10 }));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  resolveLate({ late: true });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(sent.filter((message) => message.type === 'run_failed').length, 1);
+  assert.equal(sent.filter((message) => message.type === 'run_complete').length, 0);
+});
+
+test('handler 抛错发送 run_failed 并释放 activeRun', async () => {
+  const sent = [];
+  const core = new ExecutionAgentCore({}, {
+    query_x: async () => { throw new Error('boom'); },
+  }, () => {});
+  core.send = (message) => sent.push(message);
+  core.handleMessage(JSON.stringify({ type: 'dispatch', runId: 'run-error', capability: 'query_x', input: {}, timeoutMs: 100 }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(core.activeRun, null);
+  const failed = sent.find((message) => message.type === 'run_failed');
+  assert.equal(failed.error.code, 'EXECUTION_FAILED');
+  assert.equal(failed.error.message, 'boom');
+});
+
+test('召回会取消超时计时器，不再发送 run_failed', async () => {
+  const sent = [];
+  const core = new ExecutionAgentCore({}, { query_x: () => new Promise(() => {}) }, () => {});
+  core.send = (message) => sent.push(message);
+  core.handleMessage(JSON.stringify({ type: 'dispatch', runId: 'run-recall', capability: 'query_x', input: {}, timeoutMs: 20 }));
+  core.handleMessage(JSON.stringify({ type: 'recall', runId: 'run-recall' }));
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  assert.equal(core.activeRun, null);
+  assert.equal(sent.filter((message) => message.type === 'run_failed').length, 0);
 });

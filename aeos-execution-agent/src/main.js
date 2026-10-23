@@ -104,6 +104,8 @@ function main() {
     {
       wsUrl: config.wsUrl,
       token: config.token,
+      systemId: config.systemId,
+      systemToken: config.systemToken,
       agentId: config.agentId,
       name: config.agentName,
       version: config.agentVersion,
@@ -116,6 +118,8 @@ function main() {
   );
 
   core.start();
+
+  log(`[agent] 认证模式: ${config.authMode}${config.authMode === 'system-token' ? '（系统令牌 ' + config.systemId + '）' : '（legacy 根令牌）'}`);
 
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.on(signal, () => {

@@ -76,6 +76,7 @@ services:
       - ./database/53_ebms_nodes_gates.sql:/docker-entrypoint-initdb.d/53_ebms_nodes_gates.sql:ro
       - ./database/54_fix_22_nodes.sql:/docker-entrypoint-initdb.d/54_fix_22_nodes.sql:ro
       - ./database/55_agent_memory.sql:/docker-entrypoint-initdb.d/55_agent_memory.sql:ro
+      - ./database/56_feedback_pipeline.sql:/docker-entrypoint-initdb.d/56_feedback_pipeline.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s
@@ -125,6 +126,10 @@ services:
       PLM_LLM_BASE_URL: ${PLM_LLM_BASE_URL:-}
       PLM_LLM_API_KEY: ${PLM_LLM_API_KEY:-}
       PLM_LLM_MODEL: ${PLM_LLM_MODEL:-}
+      # AEOS Hub 能力调用(PLM 作为请求方借调中台只读能力)
+      AEOS_HUB_BASE_URL: ${AEOS_HUB_BASE_URL:-https://aeos-hub.test:9444}
+      AEOS_HUB_SYSTEM_ID: ${AEOS_HUB_SYSTEM_ID:-hengjian-plm}
+      AEOS_HUB_SYSTEM_TOKEN: ${AEOS_HUB_SYSTEM_TOKEN:-}
     volumes:
       - plm_files:/data/files
     depends_on:
@@ -161,8 +166,7 @@ services:
     environment:
       # 容器网络内走服务名；覆盖 .env 中的宿主机地址
       TARGET_QUERY_BASE_URL: http://backend:8080/api
-      # Hub 使用内部 CA 证书(aeos-hub.test)，容器内放行(仅内网试点)
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      # 提供方阶段仅出站访问 ws://192.168.0.23:8788，不使用 9444 TLS，故不再关闭 TLS 校验
     extra_hosts:
       - "aeos-hub.test:192.168.0.23"
     volumes:

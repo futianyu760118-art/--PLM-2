@@ -90,8 +90,8 @@ public class LifecycleOverviewController {
 
         // 8 售后与质量反馈（mine: 只统计本人提交的反馈）
         stages.add(stage("售后与质量反馈", "反馈、失效分析、纠正措施", "/admin/feedback", items(
-                item("反馈-待处理", cnt("SELECT COUNT(*) FROM plm_feedback WHERE status='pending' AND " + fSub(me), me), "条", "/admin/feedback"),
-                item("反馈-已解决", cnt("SELECT COUNT(*) FROM plm_feedback WHERE status='resolved' AND " + fSub(me), me), "条", "/admin/feedback"),
+                item("反馈-待分析", cnt("SELECT COUNT(*) FROM plm_feedback WHERE status='pending' AND " + fSub(me), me), "条", "/admin/feedback"),
+                item("反馈-已闭环", cnt("SELECT COUNT(*) FROM plm_feedback WHERE status IN ('resolved','verified','merged') AND " + fSub(me), me), "条", "/admin/feedback"),
                 item("供应链品质异常", cnt("SELECT COUNT(*) FROM plm_project_supply_issue s WHERE " + iSheet("s.project_no", me), me), "条", "/project/supply"))));
 
         // 9 变更与迭代

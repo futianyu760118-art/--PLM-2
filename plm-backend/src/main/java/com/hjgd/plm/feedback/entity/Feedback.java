@@ -19,7 +19,8 @@ public class Feedback extends BaseEntity {
     private String title;
     private String description;
     private String attachments;   // JSON 数组 [{key,url,name,size,mime}]
-    private String status;        // pending/processing/resolved/closed
+    // pending/proposed/approved/implementing/implemented/resolved/verified/merged/closed
+    private String status;
 
     private String reply;         // 管理员回复
     private String repliedBy;
@@ -27,6 +28,20 @@ public class Feedback extends BaseEntity {
 
     private Long submitterId;
     private String submitterName;
+
+    // 7 步闭环新增: AI 方案与各节点审计
+    private String proposal;      // AI 生成的方案(待提交人确认)
+    private LocalDateTime proposalAt;
+    private String rejectNote;    // 提交人驳回方案的原因(重新分析用)
+    private String approvedBy;    // 确认方案人
+    private LocalDateTime approvedAt;
+    private String closedBy;      // 确认闭环人(提交人)
+    private LocalDateTime closedAt;
+    private String verifiedBy;    // 管理员终审人
+    private LocalDateTime verifiedAt;
+    private String mergedBy;      // 合并人
+    private LocalDateTime mergedAt;
+    private String mergedBranch;  // 合并的分支
 
     // AI 自动实现
     private String aiStatus;      // none/queued/running/done/failed

@@ -95,12 +95,13 @@ const statusLabel = computed(() => AI_STATUS_LABELS[props.detail.ai_status] || p
 const statusType = computed(() => AI_STATUS_TYPES[props.detail.ai_status] || 'info')
 const aiAction = computed(() => {
   const r = props.detail
+  if (r.status === 'merged' || r.status === 'closed') return ''
   if (r.ai_status === 'queued') return '取消排队'
-  if (r.status === 'resolved' || r.status === 'closed') return ''
-  if (r.ai_status === 'running') return '重新排队'
   if (r.ai_status === 'failed') return '重试'
   if (r.ai_status === 'done') return ''
-  return '交 AI 实现'
+  if (r.ai_status === 'running') return ''
+  if (r.status === 'approved') return '交 AI 实现'
+  return ''
 })
 
 const stageLabel = s => STAGE_LABELS[s] || s

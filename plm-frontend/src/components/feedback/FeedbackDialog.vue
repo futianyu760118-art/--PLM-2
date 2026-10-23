@@ -16,7 +16,7 @@
           <el-icon class="receipt-icon"><CircleCheckFilled /></el-icon>
           <div class="receipt-title">提交成功</div>
           <div class="receipt-row">反馈编号：#{{ receipt.id }}</div>
-          <div class="receipt-row">状态：待处理</div>
+          <div class="receipt-row">状态：待分析</div>
           <el-button type="primary" plain @click="startNew">再提一条</el-button>
         </div>
 
@@ -60,16 +60,28 @@
             <div class="fb-rec-head">
               <span class="fb-rec-id">#{{ r.id }}</span>
               <span class="fb-rec-title">{{ r.title }}</span>
-              <el-select :model-value="r.status" size="small" style="width:104px"
-                @change="v => changeStatus(r, v)">
-                <el-option v-for="(meta, k) in STATUS_META" :key="k" :label="meta[0]" :value="k" />
-              </el-select>
+              <el-tag size="small" :type="statusTag(r.status)">{{ statusLabel(r.status) }}</el-tag>
               <el-tag size="small" :type="aiTag(r.ai_status)">{{ aiLabel(r.ai_status) }}</el-tag>
             </div>
             <div class="fb-rec-desc">{{ r.description || '—' }}</div>
+
+            <div v-if="r.proposal" class="fb-proposal">
+              <div class="fb-proposal-title">AI 方案</div>
+              <pre class="fb-rec-text">{{ r.proposal }}</pre>
+              <div v-if="r.reject_note" class="fb-reject">驳回意见：{{ r.reject_note }}</div>
+              <div v-if="isSubmitter(r) && r.status === 'proposed'" class="fb-acts">
+                <el-button size="small" type="primary" @click="approveProposal(r)">确认方案</el-button>
+                <el-button size="small" @click="rejectProposal(r)">驳回方案</el-button>
+              </div>
+            </div>
+
             <div v-if="r.reply" class="fb-rec-reply">
               <div class="fb-rec-meta">{{ r.replied_by || '系统' }} · {{ fmt(r.replied_at) }}</div>
               <pre class="fb-rec-text">{{ r.reply }}</pre>
+            </div>
+
+            <div v-if="isSubmitter(r) && r.status === 'implemented'" class="fb-acts">
+              <el-button size="small" type="success" @click="closeLoop(r)">确认问题已解决（闭环）</el-button>
             </div>
           </div>
           <el-empty v-if="!records.length" description="暂无反馈记录" :image-size="70" />
@@ -91,13 +103,15 @@
 <script setup>
 import { ref, reactive, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUserStore } from '@/stores/user'
 import { createFeedback, uploadFeedbackFile, listFeedback, changeFeedbackStatus } from '@/api/feedback'
 
 defineProps({ modelValue: { type: Boolean, default: false } })
 const emit = defineEmits(['update:modelValue', 'minimize'])
 
 const route = useRoute()
+const userStore = useUserStore()
 const formRef = ref(null)
 const submitting = ref(false)
 const uploading = ref(false)
@@ -118,7 +132,11 @@ const SEVERITY_OPTS = [
   { value: 'high', label: '高' }
 ]
 
-const STATUS_META = { pending: ['待处理', 'warning'], processing: ['处理中', 'primary'], resolved: ['已解决', 'success'], closed: ['已关闭', 'info'] }
+const STATUS_META = {
+  pending: ['待分析', 'warning'], proposed: ['待确认方案', 'warning'], approved: ['待实现', 'primary'],
+  implementing: ['实现中', 'primary'], implemented: ['待闭环', 'primary'], resolved: ['待管理员确认', 'warning'],
+  verified: ['待合并', 'primary'], merged: ['已合并', 'success'], closed: ['已关闭', 'info']
+}
 const AI_META = { none: ['未派单', 'info'], queued: ['排队中', 'warning'], running: ['实现中', 'primary'], done: ['已实现', 'success'], failed: ['失败', 'danger'] }
 const statusLabel = s => (STATUS_META[s] || ['', 'info'])[0]
 const statusTag = s => (STATUS_META[s] || ['', 'info'])[1]
@@ -160,6 +178,41 @@ async function changeStatus(r, status) {
   } catch (e) {
     // 拦截器已提示
   }
+}
+
+const isSubmitter = r => String(r.submitter_id) === String(userStore.userId)
+
+async function approveProposal(r) {
+  try {
+    const res = await changeFeedbackStatus(r.id, 'approved')
+    Object.assign(r, res.data)
+    ElMessage.success('方案已确认，等待实现')
+    loadRecords()
+  } catch (e) { /* 拦截器已提示 */ }
+}
+
+async function rejectProposal(r) {
+  let note
+  try {
+    const { value } = await ElMessageBox.prompt('请说明方案不可行的原因（将返回给 AI 重新分析）', '驳回方案',
+      { inputPlaceholder: '驳回原因…', confirmButtonText: '驳回', cancelButtonText: '取消' })
+    note = value
+  } catch (e) { return }
+  try {
+    const res = await changeFeedbackStatus(r.id, 'pending', note)
+    Object.assign(r, res.data)
+    ElMessage.success('已驳回，等待重新分析')
+    loadRecords()
+  } catch (e) { /* 拦截器已提示 */ }
+}
+
+async function closeLoop(r) {
+  try {
+    const res = await changeFeedbackStatus(r.id, 'resolved')
+    Object.assign(r, res.data)
+    ElMessage.success('已闭环，等待管理员终审')
+    loadRecords()
+  } catch (e) { /* 拦截器已提示 */ }
 }
 
 function startNew() {
@@ -234,4 +287,8 @@ async function handleSubmit() {
 .fb-rec-reply { margin-top: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
 .fb-rec-meta { font-size: 12px; color: #909399; }
 .fb-rec-text { margin: 4px 0 0; white-space: pre-wrap; font-family: inherit; font-size: 12px; color: #334155; }
+.fb-proposal { margin-top: 8px; background: #f0f7ff; border: 1px solid #d0e3ff; border-radius: 6px; padding: 8px 10px; }
+.fb-proposal-title { font-size: 12px; font-weight: 600; color: #409eff; margin-bottom: 4px; }
+.fb-reject { margin-top: 6px; font-size: 12px; color: #e6a23c; }
+.fb-acts { margin-top: 8px; display: flex; gap: 8px; }
 </style>

@@ -20,7 +20,7 @@ public interface FeedbackService {
 
     Map<String, Object> reply(Long id, String reply, String status);
 
-    Map<String, Object> changeStatus(Long id, String status);
+    Map<String, Object> changeStatus(Long id, String status, String note);
 
     Map<String, Object> aiQueue(Long id);
 

@@ -52,6 +52,16 @@ plm:
     extranet-dir: ${PLM_FILE_EXTRANET_DIR:/data/files/extranet}
   algorithm:
     base-url: ${PLM_ALGORITHM_BASE_URL:http://localhost:8001}
+  # AEOS Hub 能力调用(PLM 作为跨系统请求方借调 Hub 只读能力)
+  hub:
+    base-url: ${AEOS_HUB_BASE_URL:https://aeos-hub.test:9444}
+    system-id: ${AEOS_HUB_SYSTEM_ID:hengjian-plm}
+    system-token: ${AEOS_HUB_SYSTEM_TOKEN:}
+    contract-version: ${AEOS_HUB_CONTRACT_VERSION:4.0}
+    from-agent-id: ${AEOS_HUB_FROM_AGENT_ID:plm-agent-orch}
+    poll-interval-ms: 1000
+    poll-timeout-ms: 30000
+    insecure: ${AEOS_HUB_INSECURE:true}
   integration:
     erp:
       base-url: ${ERP_BASE_URL:}
