@@ -501,13 +501,19 @@ public class ProjectProgressService {
 
     /** 节点统计摘要(项目级)。 */
     public Map<String, Object> summary(List<ProjectNode> nodes) {
-        int total = nodes.size();
+        int total = 0;
+        int noNode = 0;
         int done = 0, keyTotal = 0, keyDone = 0, overdue = 0, notSet = 0, planMissing = 0, onTime = 0, doneWithDate = 0, planSet = 0;
         int editSum = 0;
         LocalDate today = LocalDate.now();
         Map<String, Integer> byStatus = new LinkedHashMap<>();
         for (ProjectNode n : nodes) {
             byStatus.merge(n.getStatus(), 1, Integer::sum);
+            if ("NO_NODE".equals(n.getStatus())) {
+                noNode++;
+                continue; // 无节点：不计入完成项统计
+            }
+            total++;
             boolean isDone = DONE_LIKE.contains(n.getStatus());
             if (isDone) {
                 done++;
@@ -526,6 +532,7 @@ public class ProjectProgressService {
         }
         Map<String, Object> s = new LinkedHashMap<>();
         s.put("total", total);
+        s.put("noNode", noNode);
         s.put("done", done);
         s.put("keyTotal", keyTotal);
         s.put("keyDone", keyDone);
@@ -554,6 +561,7 @@ public class ProjectProgressService {
         int planSet = 0, onTime = 0, doneWithDate = 0;
         long requiredFields = 0, satisfiedFields = 0;
         for (ProjectNode n : nodes) {
+            if ("NO_NODE".equals(n.getStatus())) continue; // 无节点不计入统计
             if (n.getPlanDate() != null) planSet++;
             boolean isDone = DONE_LIKE.contains(n.getStatus());
             if (isDone) {
@@ -581,6 +589,7 @@ public class ProjectProgressService {
         LocalDate today = LocalDate.now();
         boolean projectClosed = "CLOSED".equals(p.getStatus()) || "MP".equals(p.getStatus());
         for (ProjectNode n : nodes) {
+            if ("NO_NODE".equals(n.getStatus())) continue; // 无节点不参与自检问题
             boolean isDone = DONE_LIKE.contains(n.getStatus());
             if (isDone) {
                 if (n.getActualDate() == null || (n.getEvidenceCount() == null || n.getEvidenceCount() < 1)) {

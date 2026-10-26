@@ -20,6 +20,7 @@
         <el-tag type="primary">关键节点 {{ summary.keyDone }}/{{ summary.keyTotal }}</el-tag>
         <el-tag type="warning">逾期 {{ summary.overdue }}</el-tag>
         <el-tag type="info">未设置 {{ summary.notSet }}</el-tag>
+        <el-tag v-if="summary.noNode" type="info" effect="plain">无节点 {{ summary.noNode }}</el-tag>
         <span class="rate">节点完成率 <b>{{ Math.round((summary.nodeRate || 0) * 100) }}%</b></span>
       </div>
 
@@ -31,7 +32,7 @@
             <div class="node-form">
               <el-form :inline="true" :model="row" label-width="90px">
                 <el-form-item label="状态">
-                  <el-select v-model="row.status" style="width:140px">
+                  <el-select v-model="row.status" style="width:140px" @change="onStatusChange(row)">
                     <el-option v-for="s in statusList" :key="s.v" :label="s.l" :value="s.v" />
                   </el-select>
                 </el-form-item>
@@ -364,6 +365,10 @@ async function confirmDone(row) {
   row.actualDate = todayStr()
   if (!row.owner) row.owner = currentProject()?.owner || ''
   await saveNode(row)
+}
+
+function onStatusChange(row) {
+  if (row.status === 'DONE' && !row.actualDate) row.actualDate = todayStr()
 }
 
 async function doUpload(row, opt) {
