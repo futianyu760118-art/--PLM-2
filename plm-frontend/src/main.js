@@ -21,4 +21,16 @@ app.component('BatchImport', BatchImport)
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
+
+// 前端重新部署后 chunk 哈希变化，旧标签页动态导入会 404；检测到即自动刷新一次
+router.onError((error) => {
+  const msg = (error && error.message) || ''
+  if (msg.includes('Failed to fetch dynamically imported module') || msg.includes('Importing a module script failed')) {
+    if (!sessionStorage.getItem('plm_chunk_reload')) {
+      sessionStorage.setItem('plm_chunk_reload', '1')
+      window.location.reload()
+    }
+  }
+})
+
 app.mount('#app')
