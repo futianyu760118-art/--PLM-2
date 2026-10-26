@@ -45,6 +45,7 @@
                 <el-form-item label="交付物"><el-input v-model="row.deliveryDesc" style="width:180px" /></el-form-item>
                 <el-form-item label="备注"><el-input v-model="row.remark" style="width:200px" /></el-form-item>
                 <el-form-item>
+                  <el-button type="success" size="small" :loading="savingId === row.id" @click="confirmDone(row)">确认完成</el-button>
                   <el-button type="primary" size="small" :loading="savingId === row.id" @click="saveNode(row)">保存节点</el-button>
                 </el-form-item>
               </el-form>
@@ -225,12 +226,41 @@ const docxBox = ref(null)
 const evForm = reactive({ visible: false, saving: false, id: null, nodeId: null, node: null, docType: '', note: '', content: '' })
 
 const statusList = [
-  { v: 'NOT_SET', l: '未设置' }, { v: 'PLANNED', l: '已计划' },
-  { v: 'IN_PROGRESS', l: '进行中' }, { v: 'DONE', l: '已完成' },
-  { v: 'FAILED', l: '未完成' }, { v: 'PENDING', l: '待定' }
+  { v: 'NO_NODE', l: '无节点' }, { v: 'NOT_SET', l: '未设置' },
+  { v: 'PLANNED', l: '已计划' }, { v: 'IN_PROGRESS', l: '进行中' },
+  { v: 'DONE', l: '已完成' }, { v: 'FAILED', l: '未完成' }, { v: 'PENDING', l: '待办' }
 ]
 const statusLabel = (s) => statusList.find(x => x.v === s)?.l || s
-const statusTag = (s) => ({ DONE: 'success', IN_PROGRESS: 'warning', FAILED: 'danger', PENDING: 'info', PLANNED: 'primary' }[s] || 'info')
+const statusTag = (s) => ({ DONE: 'success', IN_PROGRESS: 'warning', FAILED: 'danger', PENDING: 'warning', PLANNED: 'primary', NO_NODE: 'info' }[s] || 'info')
+
+// 各节点应交付资料/表单（交付物默认值）
+const NODE_DELIVERABLES = {
+  PLAN: '《立项书》',
+  BOM: '《基础BOM表》',
+  SPEC: '《规格书》',
+  CONFIG: '《配置表》',
+  MOLD_DRAWING: '《开修模评审表》、2D图纸',
+  MOLD_REVIEW: '《开修模评审表》',
+  HAND_SAMPLE: '《样机评审表》',
+  APPEARANCE: '《外观评审表》',
+  STRUCTURE: '《结构评审表》',
+  ELECTRONICS: '《电子评审表》《成本BOM》',
+  MOLD: '《问题清单》',
+  MOLD_SAMPLE: '《样品评审表》《模具验收书》',
+  PACKAGING: '《包装平面图纸》',
+  ELEC_TRIAL: '《试产报告》《预测单》《基础BOM表》',
+  RD_TRIAL: '《试产报告》《基础BOM表》',
+  ENG_TRIAL: '《SOP》《客户BOM》《工程试产报告》',
+  PROD_TRIAL: '《生产试产报告》',
+  TEST_REPORT: '《新产品测试报告》',
+  TECH_TRANSFER: '《技转评审报告》《新产品测试报告》《BOM表》',
+  SHIPMENT: '《出货/验货记录》',
+  REVIEW: '《复盘报告》',
+  OTHER: '其他'
+}
+function deliverableOf(code) { return NODE_DELIVERABLES[code] || '' }
+function currentProject() { return projects.value.find(p => p.id === projectId.value) }
+function todayStr() { return new Date().toISOString().slice(0, 10) }
 const pct = (v) => Math.round((v || 0) * 100) + '%'
 const scoreColor = (s) => s >= 85 ? '#67c23a' : s >= 70 ? '#e6a23c' : '#f56c6c'
 
@@ -288,7 +318,12 @@ async function load() {
   loading.value = true
   try {
     const res = await getNodeMatrix(projectId.value)
-    nodes.value = res.data.nodes || []
+    const projOwner = currentProject()?.owner || ''
+    nodes.value = (res.data.nodes || []).map(n => {
+      if (!n.owner) n.owner = projOwner
+      if (!n.deliveryDesc) n.deliveryDesc = deliverableOf(n.nodeCode)
+      return n
+    })
     summary.value = res.data.summary || null
     evidenceMap.value = {}
   } finally { loading.value = false }
@@ -307,6 +342,12 @@ async function loadEvidences(row) {
 }
 
 async function saveNode(row) {
+  if (row.status === 'PENDING' && !row.planDate) {
+    ElMessage.warning('待办必须填写计划日期')
+    return
+  }
+  if (!row.owner) row.owner = currentProject()?.owner || ''
+  if (row.status === 'DONE' && !row.actualDate) row.actualDate = todayStr()
   savingId.value = row.id
   try {
     await updateNode(projectId.value, row.nodeCode, {
@@ -316,6 +357,13 @@ async function saveNode(row) {
     ElMessage.success('节点已保存')
     await load()
   } finally { savingId.value = null }
+}
+
+async function confirmDone(row) {
+  row.status = 'DONE'
+  row.actualDate = todayStr()
+  if (!row.owner) row.owner = currentProject()?.owner || ''
+  await saveNode(row)
 }
 
 async function doUpload(row, opt) {
