@@ -9,6 +9,7 @@ import com.hjgd.plm.common.ResultCode;
 import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.project.entity.Project;
 import com.hjgd.plm.project.entity.ProjectGateLog;
+import com.hjgd.plm.project.entity.ProjectNode;
 import com.hjgd.plm.project.mapper.ProjectGateLogMapper;
 import com.hjgd.plm.project.mapper.ProjectMapper;
 import com.hjgd.plm.system.service.SequenceService;
@@ -33,6 +34,7 @@ public class ProjectService {
     private final SequenceService sequenceService;
     private final ProjectProgressService progressService;
     private final DomainEventService domainEventService;
+    private final com.hjgd.plm.project.mapper.ProjectNodeMapper projectNodeMapper;
 
     private static final String[] GATES = {"G0","G1","G2","G3","G4","G5","G6","G7","G8"};
     private static final Map<String,String> GATE_NAMES = Map.of(
@@ -72,8 +74,10 @@ public class ProjectService {
 
     @Transactional
     public Project create(Project p) {
+        String autoNo = sequenceService.nextNo("PROJECT_NO");
+        p.setAutoNo(autoNo);
         if (!StringUtils.hasText(p.getProjectNo())) {
-            p.setProjectNo(sequenceService.nextNo("PROJECT_NO"));
+            p.setProjectNo(autoNo);
         }
         if (!StringUtils.hasText(p.getStatus())) p.setStatus("ACTIVE");
         if (!StringUtils.hasText(p.getCurrentGate())) p.setCurrentGate("G0");
@@ -94,6 +98,19 @@ public class ProjectService {
         p.setUpdatedAt(LocalDateTime.now());
         projectMapper.updateById(p);
         Project after = getById(p.getId());
+        // 项目暂停联动：置为 ON_HOLD 时，未完成节点自动调整为「暂停(PENDING)」，可再手动修改
+        if ("ON_HOLD".equals(after.getStatus()) && !"ON_HOLD".equals(exist.getStatus())) {
+            try {
+                int n = projectNodeMapper.update(null,
+                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                                .eq(ProjectNode::getProjectId, after.getId())
+                                .notIn(ProjectNode::getStatus, "DONE", "PENDING")
+                                .set(ProjectNode::getStatus, "PENDING"));
+                log.info("[暂停联动] 项目 {} 暂停，{} 个未完成节点已置为暂停", after.getProjectNo(), n);
+            } catch (Exception e) {
+                log.warn("[暂停联动] 项目 {} 节点暂停联动失败: {}", after.getProjectNo(), e.getMessage());
+            }
+        }
         domainEventService.publish("project.updated", "PROJECT", after.getProjectNo(), projectPayload(after));
         return after;
     }

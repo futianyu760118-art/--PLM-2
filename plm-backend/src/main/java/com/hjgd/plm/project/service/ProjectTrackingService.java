@@ -104,10 +104,15 @@ public class ProjectTrackingService {
             Map<String, String> cells = new LinkedHashMap<>();
             Map<String, Boolean> doneCells = new LinkedHashMap<>();
             Map<String, Boolean> overdueCells = new LinkedHashMap<>();
-            int done = 0, keyDone = 0, keyTotal = 0, inProgress = 0, notSet = 0, hasDate = 0;
+            int done = 0, keyDone = 0, keyTotal = 0, inProgress = 0, notSet = 0, hasDate = 0, noNode = 0;
             LocalDate today = LocalDate.now();
             for (String code : ProjectProgressService.TRACKING_ORDER) {
                 ProjectNode n = byCode.get(code);
+                if (n != null && "NO_NODE".equals(n.getStatus())) {
+                    noNode++;
+                    cells.put(code, "");
+                    continue; // 无节点：不计入完成统计
+                }
                 String v = ProjectProgressService.cellValue(n);
                 cells.put(code, v);
                 boolean nodeDone = n != null && "DONE".equals(n.getStatus());
@@ -127,7 +132,8 @@ public class ProjectTrackingService {
             row.put("cells", cells);
             row.put("doneCells", doneCells);
             row.put("overdueCells", overdueCells);
-            row.put("nodeTotal", ProjectProgressService.TRACKING_ORDER.size());
+            row.put("nodeTotal", ProjectProgressService.TRACKING_ORDER.size() - noNode);
+            row.put("noNode", noNode);
             row.put("nodeDone", done);
             row.put("keyDone", keyDone);
             row.put("keyTotal", keyTotal);

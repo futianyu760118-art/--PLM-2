@@ -115,8 +115,11 @@ function openDialog(row) {
   else {
     if (preset.value) Object.assign(form, preset.value)
     if (ctx.value && ctx.value.fields) {
-      if (!form.project_no) form.project_no = ctx.value.fields.project_no
-      if (!form.model && ctx.value.fields.part_no) form.model = ctx.value.fields.part_no
+      // 项目信息全量预填：与表单列同名的字段自动带入（project_no/project_name/customer_name/owner 等）
+      const f = ctx.value.fields
+      Object.keys(f).forEach(k => { if (f[k] != null && f[k] !== '' && !(k in form)) form[k] = f[k] })
+      if (!form.project_no && f.project_no) form.project_no = f.project_no
+      if (!form.model && f.part_no) form.model = f.part_no
     }
     dialog.title = '新增 - ' + activeDef.value.label
   }

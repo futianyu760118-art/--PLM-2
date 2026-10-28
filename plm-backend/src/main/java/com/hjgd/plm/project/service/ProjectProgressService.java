@@ -144,8 +144,10 @@ public class ProjectProgressService {
         } else if (v.equals("待进行") || v.equals("待设置")) {
             node.setStatus("PLANNED");
         } else if (v.matches("\\d{4}-\\d{2}-\\d{2}.*")) {
-            node.setStatus("PLANNED");
-            node.setPlanDate(LocalDate.parse(v.substring(0, 10)));
+            LocalDate d = LocalDate.parse(v.substring(0, 10));
+            node.setPlanDate(d);
+            // 计划日期自动推断：未到→已计划，已到/过了→进行中
+            node.setStatus(d.isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
         } else {
             node.setRemark(v);
         }
@@ -248,6 +250,11 @@ public class ProjectProgressService {
         if (req.getDeliveryDesc() != null) node.setDeliveryDesc(req.getDeliveryDesc());
         if (req.getRemark() != null) node.setRemark(req.getRemark());
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
+
+        // 计划日期自动推断状态：未到计划日期→已计划，已到/过了→进行中（不覆盖 DONE/FAILED 等明确状态）
+        if (node.getPlanDate() != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()))) {
+            node.setStatus(node.getPlanDate().isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
+        }
 
         validateFacts(node);
 
