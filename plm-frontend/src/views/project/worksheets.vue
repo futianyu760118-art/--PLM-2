@@ -75,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSheetMeta, getSheetContext, pageSheet, createSheet, updateSheet, deleteSheet, exportSheet, importSheet } from '@/api/project'
@@ -121,6 +121,8 @@ function openDialog(row) {
       if (!form.project_no && f.project_no) form.project_no = f.project_no
       if (!form.model && f.part_no) form.model = f.part_no
     }
+    // 兜底：ctx 未加载时直接用当前筛选的项目编号
+    if (!form.project_no && query.projectNo) form.project_no = query.projectNo
     dialog.title = '新增 - ' + activeDef.value.label
   }
   dialog.visible = true
@@ -156,6 +158,16 @@ async function doImport(opt) {
 }
 
 onMounted(async () => {
+  await initFromRoute()
+})
+
+// keep-alive 缓存：从明细表等页面带新 query 二次进入时，重新按 query 初始化
+watch(() => route.query, async () => {
+  const q = route.query
+  if (q.projectNo || q.type || q.new) { await initFromRoute() }
+}, { deep: true })
+
+async function initFromRoute() {
   const res = await getSheetMeta()
   defs.value = res.data || []
   const q = route.query
@@ -167,5 +179,5 @@ onMounted(async () => {
   if (t) activeType.value = t
   if (activeType.value) loadData()
   if (q.new === '1' && activeType.value) openDialog()
-})
+}
 </script>
