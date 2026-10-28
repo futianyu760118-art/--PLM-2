@@ -252,7 +252,7 @@ public class ProjectProgressService {
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
 
         // 计划日期自动推断状态：未到计划日期→已计划，已到/过了→进行中（不覆盖 DONE/FAILED 等明确状态）
-        if (node.getPlanDate() != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()))) {
+        if (node.getPlanDate() != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()) || "PENDING".equals(node.getStatus()))) {
             node.setStatus(node.getPlanDate().isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
         }
 

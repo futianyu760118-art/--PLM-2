@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { myTodos, deptTodos } from '@/api/me'
 import TodoSections from '@/components/collab/TodoSections.vue'
@@ -186,6 +186,8 @@ function refresh() { isDept.value ? loadDept() : load() }
 
 watch(activeTab, (v) => { if (v === 'dept') loadDept() })
 onMounted(load)
+// keep-alive 缓存：切回本页时刷新最新节点状态
+onActivated(() => { load(); if (activeTab.value === 'dept') loadDept() })
 </script>
 
 <style scoped>
