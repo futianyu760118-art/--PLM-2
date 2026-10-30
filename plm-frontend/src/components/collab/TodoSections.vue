@@ -4,7 +4,9 @@
       <div class="sec-head od">逾期（{{ data.overdue.length }}）</div>
       <el-table v-if="data.overdue.length" :data="data.overdue" size="small" border stripe>
         <el-table-column v-if="showOwner" prop="owner_name" label="成员" width="90" />
-        <el-table-column prop="project_no" label="项目" width="160" />
+        <el-table-column label="项目" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.project_no }}<span v-if="row.project_name" class="pname"> {{ row.project_name }}</span></template>
+        </el-table-column>
         <el-table-column prop="node_name" label="节点" width="140" />
         <el-table-column label="计划日期" width="110"><template #default="{ row }">{{ fmt(row.plan_date) }}</template></el-table-column>
         <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button></template></el-table-column>
@@ -16,7 +18,9 @@
       <div class="sec-head">待办（{{ data.todo.length }}）</div>
       <el-table v-if="data.todo.length" :data="data.todo" size="small" border stripe>
         <el-table-column v-if="showOwner" prop="owner_name" label="成员" width="90" />
-        <el-table-column prop="project_no" label="项目" width="160" />
+        <el-table-column label="项目" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.project_no }}<span v-if="row.project_name" class="pname"> {{ row.project_name }}</span></template>
+        </el-table-column>
         <el-table-column prop="node_name" label="节点" width="140" />
         <el-table-column label="计划日期" width="110"><template #default="{ row }">{{ row.plan_date ? fmt(row.plan_date) : '无到期' }}</template></el-table-column>
         <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button></template></el-table-column>
@@ -28,7 +32,9 @@
       <div class="sec-head">已完成（{{ data.done.length }}）</div>
       <el-table v-if="data.done.length" :data="data.done" size="small" border stripe>
         <el-table-column v-if="showOwner" prop="owner_name" label="成员" width="90" />
-        <el-table-column prop="project_no" label="项目" width="160" />
+        <el-table-column label="项目" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.project_no }}<span v-if="row.project_name" class="pname"> {{ row.project_name }}</span></template>
+        </el-table-column>
         <el-table-column prop="node_name" label="节点" width="140" />
         <el-table-column label="完成日期" width="110"><template #default="{ row }">{{ row.actual_date ? fmt(row.actual_date) : '—' }}</template></el-table-column>
         <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="$emit('open', row)">查看</el-button></template></el-table-column>
@@ -49,4 +55,5 @@ function fmt(dt) { return dt ? String(dt).slice(0, 10) : '—' }
 .sec-head { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .sec-head.od { color: #f56c6c; }
 .muted { color: #c0c4cc; font-size: 12px; }
+.pname { color: #909399; font-size: 12px; }
 </style>

@@ -115,6 +115,23 @@ export const MODES = {
         { path: '/help', title: '帮助与学习', icon: 'QuestionFilled' }
       ] }
     ]
+  },
+  poms: {
+    key: 'poms',
+    label: '06 微系统',
+    short: '微系统',
+    desc: 'M10 岗位与个人运营微系统（采集/录入/待办/审批/跟踪，与 PLM 实时同步）',
+    home: '/poms',
+    sidebar: 'dark',
+    groups: [
+      { stage: '微系统', icon: 'Monitor', items: [
+        { path: '/poms', title: 'M10 工作台（嵌入）', icon: 'Monitor' }
+      ] },
+      { stage: 'PLM 内部', icon: 'Files', items: [
+        { path: '/project/tasks', title: '我的待办(PLM)', icon: 'Tickets' },
+        { path: '/project/tracking', title: '研发项目跟踪', icon: 'DataBoard' }
+      ] }
+    ]
   }
 }
 

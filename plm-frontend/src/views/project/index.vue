@@ -24,6 +24,7 @@
       </div>
 
       <el-table v-loading="loading" :data="tableData" border stripe>
+        <el-table-column prop="autoNo" label="系统编号" width="160" fixed sortable />
         <el-table-column prop="projectNo" label="项目编号" width="160" fixed sortable />
         <el-table-column prop="customerName" label="客户" width="130" show-overflow-tooltip />
         <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
@@ -62,6 +63,7 @@
       <el-form :model="form" label-width="100px">
         <el-row :gutter="12">
           <el-col :span="12"><el-form-item label="项目名称" required><el-input v-model="form.projectName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="项目编号"><el-input v-model="form.projectNo" placeholder="留空自动生成" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="关联料号"><el-input v-model="form.partNo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="负责人"><el-input v-model="form.owner" /></el-form-item></el-col>

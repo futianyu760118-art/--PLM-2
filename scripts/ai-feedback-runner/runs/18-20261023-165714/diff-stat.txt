@@ -1,0 +1,9 @@
+449c679 fix(feedback#18): 修改记录
+ .../project/service/ProjectProgressService.java    |  4 ++
+ .../hjgd/plm/project/service/ProjectService.java   |  7 ++
+ .../hjgd/plm/rd/controller/RdChangeController.java |  3 +-
+ .../com/hjgd/plm/rd/service/ChangeLogService.java  |  3 +-
+ .../plm/project/ProjectProgressServiceTest.java    | 15 +++++
+ .../com/hjgd/plm/project/ProjectServiceTest.java   | 75 ++++++++++++++++++++++
+ plm-frontend/src/views/project/tracking.vue        | 70 +++++++++++++++++++-
+ 7 files changed, 173 insertions(+), 4 deletions(-)

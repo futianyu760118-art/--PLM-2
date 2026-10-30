@@ -51,6 +51,24 @@
                 </el-form-item>
               </el-form>
 
+              <!-- 子项节点（如模具重开记录）-->
+              <el-divider content-position="left">
+                子项 ({{ childNodes(row.nodeCode).length }})
+                <el-button size="small" type="warning" plain icon="Plus" style="margin-left:8px" @click="openChildForm(row)">追加子项</el-button>
+              </el-divider>
+              <el-table v-if="childNodes(row.nodeCode).length" :data="childNodes(row.nodeCode)" size="small" border>
+                <el-table-column prop="nodeCode" label="编码" width="120" />
+                <el-table-column prop="nodeName" label="子项名称" min-width="160" />
+                <el-table-column label="状态" width="90" align="center">
+                  <template #default="{ row: c }"><el-tag size="small" :type="statusTag(c.status)">{{ statusLabel(c.status) }}</el-tag></template>
+                </el-table-column>
+                <el-table-column prop="planDate" label="计划日期" width="110" />
+                <el-table-column prop="actualDate" label="实际日期" width="110" />
+                <el-table-column prop="owner" label="责任人" width="90" />
+                <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+              </el-table>
+              <p v-else class="std-tip" style="margin-top:4px">无子项（如遇模具重开等，点「追加子项」记录）</p>
+
               <el-divider content-position="left">
                 证据文件 ({{ (evidenceMap[row.id] || []).length }})
                 <el-upload style="display:inline-block;margin-left:8px"
@@ -177,6 +195,29 @@
       </template>
     </el-dialog>
 
+    <!-- 追加子项节点 -->
+    <el-dialog v-model="childForm.visible" :title="`追加子项 · ${childForm.parentName}`" width="560px">
+      <el-form :model="childForm" label-width="90px">
+        <el-form-item label="子项名称" required>
+          <el-input v-model="childForm.nodeName" placeholder="如: 模具重开 / 追加工序 / 二次T1" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="childForm.status" style="width:160px">
+            <el-option v-for="s in statusList" :key="s.v" :label="s.l" :value="s.v" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="计划日期">
+          <el-date-picker v-model="childForm.planDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
+        </el-form-item>
+        <el-form-item label="责任人"><el-input v-model="childForm.owner" style="width:160px" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="childForm.remark" type="textarea" :rows="2" placeholder="如: 重开原因/维修内容" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="childForm.visible = false">取消</el-button>
+        <el-button type="primary" :loading="childForm.busy" @click="submitChild">追加</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 填写/编辑证据 -->
     <el-dialog v-model="evForm.visible" :title="evForm.id ? '编辑证据' : '填写证据(系统内)'" width="640px">
       <el-form :model="evForm" label-width="70px">
@@ -202,6 +243,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { renderAsync } from 'docx-preview'
 import { pageProject } from '@/api/project'
+import request from '@/utils/request'
 import { nodeSheet, UNMAPPED_NODES } from '@/config/nodeSheetLinks'
 
 const route = useRoute()
@@ -353,12 +395,33 @@ async function saveNode(row) {
   try {
     await updateNode(projectId.value, row.nodeCode, {
       status: row.status, planDate: row.planDate, actualDate: row.actualDate,
+      clearPlan: !row.planDate, clearActual: !row.actualDate,
       owner: row.owner, deliveryDesc: row.deliveryDesc, remark: row.remark
     })
     ElMessage.success('节点已保存')
     await load()
   } finally { savingId.value = null }
 }
+
+// ===== 追加子项节点（如模具重开记录）=====
+const childForm = reactive({ visible: false, busy: false, parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', owner: '', remark: '' })
+function openChildForm(row) {
+  Object.assign(childForm, { visible: true, busy: false, parentCode: row.nodeCode, parentName: row.nodeName, nodeName: '', status: 'NOT_SET', planDate: '', owner: row.owner || currentProject()?.owner || '', remark: '' })
+}
+async function submitChild() {
+  if (!childForm.nodeName.trim()) { ElMessage.warning('请填写子项名称(如: 模具重开)'); return }
+  childForm.busy = true
+  try {
+    await request({ url: `/project/${projectId.value}/nodes/${childForm.parentCode}/child`, method: 'post', data: {
+      nodeName: childForm.nodeName, status: childForm.status,
+      planDate: childForm.planDate || null, owner: childForm.owner, remark: childForm.remark
+    } })
+    ElMessage.success('子项已追加')
+    childForm.visible = false
+    await load()
+  } finally { childForm.busy = false }
+}
+const childNodes = (parentCode) => nodes.value.filter(n => n.parentCode === parentCode)
 
 async function confirmDone(row) {
   row.status = 'DONE'

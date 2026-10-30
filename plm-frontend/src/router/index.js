@@ -28,6 +28,7 @@ const routes = [
         meta: { title: '工作台', icon: 'HomeFilled', workflowStage: '工作台' } },
       { path: 'lifecycle', name: 'Lifecycle', component: () => import('@/views/lifecycle/index.vue'),
         meta: { title: '全生命周期', workflowStage: '工作台' } },
+      { path: 'poms', name: 'Poms', component: () => import('@/views/poms/index.vue'), meta: { title: '06 微系统', icon: 'Monitor' } },
       { path: 'help', name: 'HelpCenter', component: () => import('@/views/help/index.vue'),
         meta: { title: '帮助与学习', workflowStage: '工作台' } },
       { path: 'data-entry', name: 'DataEntry', component: () => import('@/views/data-entry/index.vue'),

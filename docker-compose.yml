@@ -77,6 +77,8 @@ services:
       - ./database/54_fix_22_nodes.sql:/docker-entrypoint-initdb.d/54_fix_22_nodes.sql:ro
       - ./database/55_agent_memory.sql:/docker-entrypoint-initdb.d/55_agent_memory.sql:ro
       - ./database/56_feedback_pipeline.sql:/docker-entrypoint-initdb.d/56_feedback_pipeline.sql:ro
+      - ./database/57_project_auto_no.sql:/docker-entrypoint-initdb.d/57_project_auto_no.sql:ro
+      - ./database/58_node_parent.sql:/docker-entrypoint-initdb.d/58_node_parent.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

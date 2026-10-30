@@ -553,16 +553,29 @@ def invoke_claude(cfg: dict, worktree: Path, prompt: str, run_dir: Path,
 
     with output_path.open("w", encoding="utf-8") as output_file, \
             stderr_path.open("w", encoding="utf-8") as stderr_file:
-        proc = subprocess.Popen(
-            parts,
-            cwd=str(worktree),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=stderr_file,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        if os.name == "nt":
+            proc = subprocess.Popen(
+                subprocess.list2cmdline(parts),
+                cwd=str(worktree),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=stderr_file,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=True,
+            )
+        else:
+            proc = subprocess.Popen(
+                parts,
+                cwd=str(worktree),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=stderr_file,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
         watchdog = threading.Timer(claude_cfg["timeout_minutes"] * 60, kill_on_timeout)
         watchdog.daemon = True
         watchdog.start()

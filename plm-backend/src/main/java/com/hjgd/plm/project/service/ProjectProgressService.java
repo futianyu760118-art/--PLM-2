@@ -100,6 +100,7 @@ public class ProjectProgressService {
     /** 结构化节点 -> EBMS 单元格值 (完成=实际日期/其他日期/进行中/待定/空) */
     public static String cellValue(ProjectNode n) {
         if (n == null) return "";
+        if ("NO_NODE".equals(n.getStatus())) return "无";
         if (n.getStatus() == null) return n.getPlanDate() != null ? n.getPlanDate().toString() : "";
         return switch (n.getStatus()) {
             case "DONE" -> {
@@ -246,6 +247,12 @@ public class ProjectProgressService {
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
         if (req.getActualDate() != null) node.setActualDate(req.getActualDate());
+        // 显式清空日期：clearActual/clearPlan=true 时清掉；清实际日期时 DONE 自动降级为进行中
+        if (Boolean.TRUE.equals(req.getClearActual())) {
+            node.setActualDate(null);
+            if ("DONE".equals(node.getStatus())) node.setStatus("IN_PROGRESS");
+        }
+        if (Boolean.TRUE.equals(req.getClearPlan())) node.setPlanDate(null);
         if (req.getOwner() != null) node.setOwner(req.getOwner());
         if (req.getDeliveryDesc() != null) node.setDeliveryDesc(req.getDeliveryDesc());
         if (req.getRemark() != null) node.setRemark(req.getRemark());
@@ -275,6 +282,55 @@ public class ProjectProgressService {
                 node.getNodeCode(), "UPDATE", "status", oldStatus, node.getStatus(), "UI");
         gateAdvanceService.autoAdvance(projectId);
         return node;
+    }
+
+    /**
+     * 追加子项节点（如模具重开记录、追加工序等挂靠在标准22节点下）。
+     * 权限：ADMIN 或项目负责人；nodeCode 自动生成为 父编码-SEQ。
+     */
+    @Transactional
+    public ProjectNode addChildNode(Long projectId, String parentCode, ProjectNode req) {
+        Project p = projectMapper.selectById(projectId);
+        if (p == null) throw new BusinessException("项目不存在");
+        // 权限：ADMIN 或项目负责人可追加子项
+        boolean isOwner = p.getOwner() != null && p.getOwner().equals(com.hjgd.plm.common.DataScope.name());
+        boolean isAdmin = com.hjgd.plm.common.DataScope.admin();
+        if (!isAdmin && !isOwner) {
+            throw new BusinessException("仅项目负责人或管理员可追加子项节点");
+        }
+        // 父节点必须存在
+        ProjectNode parent = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
+                .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getNodeCode, parentCode));
+        if (parent == null) throw new BusinessException("父节点不存在: " + parentCode);
+
+        // 子项编码: 父编码-01 递增
+        Long cnt = nodeMapper.selectCount(new LambdaQueryWrapper<ProjectNode>()
+                .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getParentCode, parentCode));
+        String childCode = parentCode + "-" + String.format("%02d", cnt + 1);
+
+        ProjectNode child = new ProjectNode();
+        child.setProjectId(projectId);
+        child.setProjectNo(p.getProjectNo());
+        child.setNodeCode(childCode);
+        child.setParentCode(parentCode);
+        child.setSeq(parent.getSeq());
+        String name = StringUtils.hasText(req.getNodeName()) ? req.getNodeName() : "子项" + (cnt + 1);
+        child.setNodeName(parent.getNodeName() + "-" + name);
+        child.setIsKey(0);
+        child.setStatus(StringUtils.hasText(req.getStatus()) ? req.getStatus() : "NOT_SET");
+        if (req.getPlanDate() != null) child.setPlanDate(req.getPlanDate());
+        if (req.getActualDate() != null) child.setActualDate(req.getActualDate());
+        if (StringUtils.hasText(req.getOwner())) child.setOwner(req.getOwner());
+        if (StringUtils.hasText(req.getDeliveryDesc())) child.setDeliveryDesc(req.getDeliveryDesc());
+        if (StringUtils.hasText(req.getRemark())) child.setRemark(req.getRemark());
+        child.setEvidenceCount(0);
+        child.setEditCount(0);
+        child.setCreatedAt(LocalDateTime.now());
+        child.setUpdatedAt(LocalDateTime.now());
+        nodeMapper.insert(child);
+        changeLogService.record(projectId, p.getProjectNo(), "PROJECT_NODE", child.getId(),
+                child.getNodeCode(), "ADD_CHILD", "nodeName", "", child.getNodeName(), "UI");
+        return child;
     }
 
     /**

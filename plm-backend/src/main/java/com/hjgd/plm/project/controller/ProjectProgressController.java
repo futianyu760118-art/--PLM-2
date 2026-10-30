@@ -37,6 +37,15 @@ public class ProjectProgressController {
         return Result.success(service.updateNode(projectId, code, req));
     }
 
+    @Operation(summary = "追加子项节点(如模具重开记录): 仅项目负责人/管理员")
+    @OperationLog(value = "追加子项节点")
+    @PostMapping("/{projectId}/nodes/{parentCode}/child")
+    public Result<ProjectNode> addChildNode(@PathVariable Long projectId,
+                                            @PathVariable String parentCode,
+                                            @RequestBody ProjectNode req) {
+        return Result.success(service.addChildNode(projectId, parentCode, req));
+    }
+
     @Operation(summary = "节点证据文件列表")
     @GetMapping("/nodes/{nodeId}/evidence")
     public Result<List<ProjectNodeEvidence>> evidence(@PathVariable Long nodeId) {
