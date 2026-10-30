@@ -31,21 +31,21 @@
       <div v-if="viewMode === 'board'" class="board">
         <div class="bcol od"><div class="bcol-head">逾期 <b>{{ activeData.overdue.length }}</b></div>
           <div v-for="t in activeData.overdue" :key="key(t)" class="item" @click="open(t)">
-            <span class="nm"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<b>·</b>{{ t.node_name }}</span>
+            <span class="nm" :title="`${t.project_no} ${t.project_name || ''}`"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<i v-if="t.project_name" class="pn">{{ t.project_name }}</i><b>·</b>{{ t.node_name }}</span>
             <span class="dt od">{{ fmt(t.plan_date) }}</span>
           </div>
           <p v-if="!activeData.overdue.length" class="muted">无</p>
         </div>
         <div class="bcol"><div class="bcol-head">待办 <b>{{ activeData.todo.length }}</b></div>
           <div v-for="t in activeData.todo" :key="key(t)" class="item" @click="open(t)">
-            <span class="nm"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<b>·</b>{{ t.node_name }}</span>
+            <span class="nm" :title="`${t.project_no} ${t.project_name || ''}`"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<i v-if="t.project_name" class="pn">{{ t.project_name }}</i><b>·</b>{{ t.node_name }}</span>
             <span class="dt">{{ t.plan_date ? fmt(t.plan_date) : '无到期' }}</span>
           </div>
           <p v-if="!activeData.todo.length" class="muted">无</p>
         </div>
         <div class="bcol"><div class="bcol-head">已完成 <b>{{ activeData.done.length }}</b></div>
           <div v-for="t in activeData.done" :key="key(t)" class="item" @click="open(t)">
-            <span class="nm"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<b>·</b>{{ t.node_name }}</span>
+            <span class="nm" :title="`${t.project_no} ${t.project_name || ''}`"><template v-if="isDept">{{ t.owner_name }}<b>·</b></template>{{ t.project_no }}<i v-if="t.project_name" class="pn">{{ t.project_name }}</i><b>·</b>{{ t.node_name }}</span>
             <span class="dt">{{ t.actual_date ? fmt(t.actual_date) : '—' }}</span>
           </div>
           <p v-if="!activeData.done.length" class="muted">无</p>
@@ -207,6 +207,7 @@ onActivated(() => { load(); if (activeTab.value === 'dept') loadDept() })
 .item:hover { border-color: var(--plm-accent, #409eff); }
 .item .nm { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #303133; }
 .item .nm b { color: #c0c4cc; margin: 0 5px; font-weight: 400; }
+.item .nm i.pn { font-style: normal; color: #909399; font-size: 11px; margin-right: 2px; }
 .item .dt { font-size: 11px; color: #909399; font-family: monospace; flex-shrink: 0; background: #f7f8fb; border-radius: 4px; padding: 1px 6px; }
 .item .dt.od { color: #f56c6c; background: #fef0f0; }
 .pgroup { border: 1px solid #e4e7ed; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
