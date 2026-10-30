@@ -9,6 +9,9 @@
               :label="`${p.projectNo || ''} ${p.projectName}`" :value="p.id" />
           </el-select>
         </el-form-item>
+        <el-form-item label="节点查找">
+          <el-input v-model="nodeKeyword" placeholder="节点名/责任人" clearable style="width:180px" prefix-icon="Search" />
+        </el-form-item>
         <el-form-item>
           <el-button icon="Refresh" :disabled="!projectId" @click="load">刷新</el-button>
           <el-button type="primary" plain icon="CircleCheck" :disabled="!projectId" @click="doCheck">进度自检</el-button>
@@ -24,8 +27,8 @@
         <span class="rate">节点完成率 <b>{{ Math.round((summary.nodeRate || 0) * 100) }}%</b></span>
       </div>
 
-      <el-table v-if="nodes.length" :data="nodes" row-key="id" border ref="tableRef"
-        highlight-current-row :row-class-name="rowClassName"
+      <el-table v-if="nodes.length" :data="filteredNodes" row-key="id" border ref="tableRef"
+        highlight-current-row :row-class-name="rowClassName" :default-sort="{ prop: 'seq', order: 'ascending' }"
         v-loading="loading" @expand-change="onExpand">
         <el-table-column type="expand">
           <template #default="{ row }">
@@ -108,21 +111,38 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="seq" label="#" width="50" align="center" />
-        <el-table-column label="节点" width="150">
+        <el-table-column prop="seq" label="#" width="50" align="center" sortable />
+        <el-table-column label="节点" width="150" sortable prop="nodeName" :sort-method="sortNodeName">
           <template #default="{ row }">
             <el-tag v-if="row.isKey" type="danger" size="small" effect="dark" style="margin-right:4px">★</el-tag>
             {{ row.nodeName }}
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="110" align="center">
+        <el-table-column label="状态" width="130" align="center" sortable :sort-method="sortStatus" prop="status">
           <template #default="{ row }">
-            <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            <el-select :model-value="row.status" size="small" style="width:110px" @change="v => { row.status = v; onStatusChange(row); saveNode(row) }">
+              <el-option v-for="s in statusList" :key="s.v" :label="s.l" :value="s.v" />
+            </el-select>
           </template>
         </el-table-column>
-        <el-table-column prop="planDate" label="计划日期" width="120" />
-        <el-table-column prop="actualDate" label="实际日期" width="120" />
-        <el-table-column prop="owner" label="责任人" width="110" />
+        <el-table-column label="计划日期" width="150" sortable prop="planDate">
+          <template #default="{ row }">
+            <el-date-picker :model-value="row.planDate" type="date" size="small" value-format="YYYY-MM-DD"
+              style="width:135px" :clearable="true" @update:model-value="v => { row.planDate = v; saveNode(row) }" />
+          </template>
+        </el-table-column>
+        <el-table-column label="实际日期" width="150" sortable prop="actualDate">
+          <template #default="{ row }">
+            <el-date-picker :model-value="row.actualDate" type="date" size="small" value-format="YYYY-MM-DD"
+              style="width:135px" :clearable="true" @update:model-value="v => { row.actualDate = v; saveNode(row) }" />
+          </template>
+        </el-table-column>
+        <el-table-column label="责任人" width="130" sortable prop="owner">
+          <template #default="{ row }">
+            <el-input :model-value="row.owner" size="small" style="width:110px"
+              @change="v => { row.owner = v; saveNode(row) }" />
+          </template>
+        </el-table-column>
         <el-table-column prop="deliveryDesc" label="交付物" min-width="160" show-overflow-tooltip />
         <el-table-column label="证据" width="80" align="center">
           <template #default="{ row }">
@@ -260,6 +280,22 @@ const uploadingId = ref(null)
 const evidenceMap = ref({})
 const tableRef = ref(null)
 const focusNodeCode = computed(() => route.query.node ? String(route.query.node) : '')
+
+// ===== 表格：查找 + 排序 =====
+const nodeKeyword = ref('')
+const filteredNodes = computed(() => {
+  const kw = nodeKeyword.value.trim().toLowerCase()
+  if (!kw) return nodes.value
+  return nodes.value.filter(n =>
+    (n.nodeName || '').toLowerCase().includes(kw) ||
+    (n.owner || '').toLowerCase().includes(kw) ||
+    (n.nodeCode || '').toLowerCase().includes(kw))
+})
+const STATUS_ORDER = ['NO_NODE', 'NOT_SET', 'PLANNED', 'PENDING', 'IN_PROGRESS', 'FAILED', 'DONE']
+function sortStatus(a, b) {
+  return STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)
+}
+function sortNodeName(a, b) { return (a.nodeName || '').localeCompare(b.nodeName || '', 'zh') }
 
 const checkVisible = ref(false)
 const check = ref({})
