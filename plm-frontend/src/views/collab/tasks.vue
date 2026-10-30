@@ -8,6 +8,7 @@
           <el-radio-button value="dept">部门待办</el-radio-button>
         </el-radio-group>
         <el-checkbox v-model="onlyActive" @change="noop">仅进行中项目</el-checkbox>
+        <el-input v-model="todoKeyword" placeholder="查找: 节点/项目/成员" clearable size="small" style="width:200px" prefix-icon="Search" />
         <el-radio-group v-model="viewMode" size="small">
           <el-radio-button value="list">列表</el-radio-button>
           <el-radio-button value="board">看板</el-radio-button>
@@ -70,7 +71,7 @@
       </div>
 
       <!-- 列表：三块纵向同页 -->
-      <TodoSections v-else :data="activeData" :show-owner="isDept" @open="open" />
+      <TodoSections v-else :data="activeData" :show-owner="isDept" @open="open" @save="onTodoSave" />
     </el-card>
   </div>
 </template>
@@ -78,7 +79,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onActivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { myTodos, deptTodos } from '@/api/me'
+import { pageProject } from '@/api/project'
+import { updateNode } from '@/api/progress'
 import TodoSections from '@/components/collab/TodoSections.vue'
 
 const router = useRouter()
@@ -135,12 +139,53 @@ const deptFlat = computed(() => {
   return items
 })
 
-// 当前页签数据源：部门待办同样应用「仅进行中项目」过滤
+// 当前页签数据源：部门待办同样应用「仅进行中项目」过滤 + 关键字查找
+const todoKeyword = ref('')
+const kwFilter = (l) => {
+  const kw = todoKeyword.value.trim().toLowerCase()
+  if (!kw) return l
+  return l.filter(t =>
+    (t.node_name || '').toLowerCase().includes(kw) ||
+    (t.project_no || '').toLowerCase().includes(kw) ||
+    (t.project_name || '').toLowerCase().includes(kw) ||
+    (t.owner_name || '').toLowerCase().includes(kw))
+}
 const activeData = computed(() => {
-  if (!isDept.value) return d.value
-  if (!onlyActive.value) return deptFlat.value
-  return { overdue: onlyActiveFilter(deptFlat.value.overdue), todo: onlyActiveFilter(deptFlat.value.todo), done: onlyActiveFilter(deptFlat.value.done) }
+  let base
+  if (!isDept.value) base = d.value
+  else if (!onlyActive.value) base = deptFlat.value
+  else base = { overdue: onlyActiveFilter(deptFlat.value.overdue), todo: onlyActiveFilter(deptFlat.value.todo), done: onlyActiveFilter(deptFlat.value.done) }
+  return { overdue: kwFilter(base.overdue), todo: kwFilter(base.todo), done: kwFilter(base.done) }
 })
+
+// ===== 行内编辑保存：按 project_no 映射 project_id 后调 updateNode =====
+const pidMap = ref({})
+async function loadPidMap() {
+  try {
+    const r = await pageProject({ pageNum: 1, pageSize: 1000 })
+    pidMap.value = {}
+    for (const p of (r.data.records || [])) pidMap.value[p.projectNo] = p.id
+  } catch (e) { /* 忽略 */ }
+}
+const savingTodo = ref(false)
+async function onTodoSave(row, patch) {
+  const pid = pidMap.value[row.project_no]
+  if (!pid) { ElMessage.warning('未找到项目，无法保存'); return }
+  savingTodo.value = true
+  try {
+    await updateNode(pid, row.node_code, {
+      plan_date: 'plan_date' in patch ? patch.plan_date : undefined,
+      clearPlan: 'plan_date' in patch && !patch.plan_date,
+      actual_date: 'actual_date' in patch ? patch.actual_date : undefined,
+      clearActual: 'actual_date' in patch && !patch.actual_date
+    })
+    ElMessage.success('已保存')
+    // 本地立即更新 + 后台刷新
+    if ('plan_date' in patch) row.plan_date = patch.plan_date
+    if ('actual_date' in patch) row.actual_date = patch.actual_date
+    refresh()
+  } finally { savingTodo.value = false }
+}
 
 function clearProject() {
   projectNo.value = ''
@@ -185,7 +230,7 @@ async function loadDept() {
 function refresh() { isDept.value ? loadDept() : load() }
 
 watch(activeTab, (v) => { if (v === 'dept') loadDept() })
-onMounted(load)
+onMounted(() => { load(); loadPidMap() })
 // keep-alive 缓存：切回本页时刷新最新节点状态
 onActivated(() => { load(); if (activeTab.value === 'dept') loadDept() })
 </script>
