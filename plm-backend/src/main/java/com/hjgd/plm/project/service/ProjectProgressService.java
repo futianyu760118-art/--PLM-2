@@ -50,6 +50,8 @@ public class ProjectProgressService {
     private final GateAdvanceService gateAdvanceService;
     /** 企业微信通知。 */
     private final com.hjgd.plm.common.WeComNotifyService weComNotifyService;
+    /** 企业微信按人即时推送。 */
+    private final com.hjgd.plm.common.TodoPushService todoPushService;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
@@ -247,6 +249,7 @@ public class ProjectProgressService {
         if (node == null) throw new BusinessException("节点不存在: " + code);
         String oldStatus = node.getStatus();
         LocalDate oldPlanDate = node.getPlanDate();
+        String oldOwner = node.getOwner();
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
         if (req.getActualDate() != null) node.setActualDate(req.getActualDate());
@@ -299,6 +302,13 @@ public class ProjectProgressService {
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
                 node.getNodeCode(), "UPDATE", "status", oldStatus, node.getStatus(), "UI");
         gateAdvanceService.autoAdvance(projectId);
+
+        // 即时推送：责任人变更通知新责任人
+        String newOwner = node.getOwner();
+        if (newOwner != null && !newOwner.isBlank() && !newOwner.equals(oldOwner)) {
+            todoPushService.pushUser(newOwner, "【PLM任务指派】" + node.getProjectNo() + " " + node.getNodeName()
+                    + " 已指派给你" + (node.getPlanDate() == null ? "" : "，计划 " + node.getPlanDate()) + "，请登录处理。");
+        }
         return node;
     }
 
@@ -370,6 +380,12 @@ public class ProjectProgressService {
                 code, "PLAN_SUBMIT", "planApproval", node.getPlanApprovalStatus(), "PENDING_APPROVAL", "UI");
         weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 由 " + me + " 提交计划(" + node.getPlanDate() + ")，待经理审批。");
+        // 即时推送项目负责人(审批人)
+        Project p = projectMapper.selectById(projectId);
+        if (p != null && p.getOwner() != null) {
+            todoPushService.pushUser(p.getOwner(), "【PLM待审批】" + node.getProjectNo() + " " + node.getNodeName()
+                    + " 计划(" + node.getPlanDate() + ") 由 " + me + " 提交，请审批。");
+        }
         return findNode(projectId, code);
     }
 
@@ -391,6 +407,8 @@ public class ProjectProgressService {
                 code, "PLAN_APPROVE", "planApproval", "PENDING_APPROVAL", "APPROVED", "UI");
         weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 计划(" + node.getPlanDate() + ") 已由 " + me + " 审批通过。");
+        todoPushService.pushUser(node.getOwner(), "【PLM审批通过】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 计划(" + node.getPlanDate() + ") 已通过。");
         return findNode(projectId, code);
     }
 
@@ -411,6 +429,8 @@ public class ProjectProgressService {
                 code, "PLAN_REJECT", "planApproval", node.getPlanApprovalStatus(), "REJECTED", "UI");
         weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 计划被 " + me + " 驳回：" + (note == null ? "" : note));
+        todoPushService.pushUser(node.getOwner(), "【PLM审批驳回】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 计划被驳回：" + (note == null ? "" : note));
         return findNode(projectId, code);
     }
 

@@ -74,6 +74,35 @@ public class TodoPushService {
         return weComAppService.sendText(userid, content) ? 1 : -1;
     }
 
+    /**
+     * 即时推送：按真实姓名解析企业微信 userid 后发送一条自定义通知。
+     * 未启用/找不到用户/未匹配到 userid 时静默返回 false。
+     */
+    public boolean pushUser(String realName, String content) {
+        if (!weComAppService.enabled() || realName == null || realName.isBlank() || content == null) return false;
+        String me = com.hjgd.plm.common.DataScope.name();
+        if (realName.equals(me)) return false; // 不打扰操作者本人
+        try {
+            var rows = jdbc.queryForList(
+                    "SELECT id, phone, wecom_userid FROM sys_user WHERE deleted=0 AND status=1 AND real_name=? LIMIT 1",
+                    realName);
+            if (rows.isEmpty()) return false;
+            Map<String, Object> u = rows.get(0);
+            String userid = str(u.get("wecom_userid"));
+            if (userid.isEmpty()) {
+                userid = weComAppService.useridByMobile(str(u.get("phone")));
+                if (userid != null && !userid.isEmpty()) {
+                    jdbc.update("UPDATE sys_user SET wecom_userid=? WHERE id=?", userid, u.get("id"));
+                }
+            }
+            if (userid == null || userid.isEmpty()) return false;
+            return weComAppService.sendText(userid, content);
+        } catch (Exception e) {
+            log.warn("[即时推送] 给{} 发送失败: {}", realName, e.getMessage());
+            return false;
+        }
+    }
+
     /** 组装某人的待办文本；无待办返回 null。 */
     @SuppressWarnings("unchecked")
     public String buildContent(String realName) {
