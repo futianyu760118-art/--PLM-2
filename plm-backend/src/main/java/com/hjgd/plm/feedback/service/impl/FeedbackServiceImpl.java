@@ -32,6 +32,7 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     private final FeedbackMapper feedbackMapper;
     private final ObjectMapper objectMapper;
+    private final com.hjgd.plm.common.WeComNotifyService weComNotifyService;
 
     private static final List<String> ALL_STATUSES = List.of(
             "pending", "proposed", "approved", "implementing", "implemented",
@@ -266,6 +267,9 @@ public class FeedbackServiceImpl implements FeedbackService {
         f.setSubmitterId(uid());
         f.setSubmitterName(uname());
         feedbackMapper.insert(f);
+        weComNotifyService.send("【PLM反馈】" + f.getSubmitterName() + " 提交了" +
+                ("issue".equals(f.getType()) ? "问题" : "建议") + "：" + title +
+                (StringUtils.hasText(f.getPagePath()) ? "（" + f.getPagePath() + "）" : ""));
         return toVO(f);
     }
 

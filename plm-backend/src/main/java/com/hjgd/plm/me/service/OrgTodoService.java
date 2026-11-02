@@ -133,7 +133,8 @@ public class OrgTodoService {
         String cols = "n.project_no, p.project_name, p.status AS project_status, " +
                 "n.node_code, n.node_name, n.status, n.plan_date, n.actual_date";
         String from = " FROM plm_project_node n LEFT JOIN plm_project p ON p.project_no = n.project_no " +
-                "WHERE (n.owner=? OR n.project_no IN (SELECT project_no FROM plm_project WHERE owner=?))";
+                "WHERE (n.owner=? OR n.project_no IN (SELECT project_no FROM plm_project WHERE owner=?)) " +
+                "AND n.status NOT IN ('PENDING','NO_NODE')"; // 待定/暂停、无节点 都不算待办
         List<Map<String, Object>> overdue = jdbc.queryForList(
                 "SELECT " + cols + from + " AND n.status <> 'DONE' AND n.plan_date IS NOT NULL AND n.plan_date < CURRENT_DATE " +
                         "ORDER BY n.plan_date", realName, realName);

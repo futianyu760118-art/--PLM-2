@@ -10,6 +10,9 @@ raw.interceptors.request.use(cfg => {
 
 export function getNodeMatrix(projectId) { return request({ url: `/project/${projectId}/nodes`, method: 'get' }) }
 export function updateNode(projectId, code, data) { return request({ url: `/project/${projectId}/nodes/${code}`, method: 'put', data }) }
+export function submitNodePlan(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/plan/submit`, method: 'post' }) }
+export function approveNodePlan(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/plan/approve`, method: 'post' }) }
+export function rejectNodePlan(projectId, code, note) { return request({ url: `/project/${projectId}/nodes/${code}/plan/reject`, method: 'post', data: { note } }) }
 export function listEvidence(nodeId) { return request({ url: `/project/nodes/${nodeId}/evidence`, method: 'get' }) }
 export function deleteEvidence(id) { return request({ url: `/project/nodes/evidence/${id}`, method: 'delete' }) }
 export function progressCheck(projectId) { return request({ url: `/project/${projectId}/progress-check`, method: 'get' }) }

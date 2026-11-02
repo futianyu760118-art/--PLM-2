@@ -46,6 +46,29 @@ public class ProjectProgressController {
         return Result.success(service.addChildNode(projectId, parentCode, req));
     }
 
+    @Operation(summary = "提交计划审批(工程师)")
+    @OperationLog(value = "提交计划审批")
+    @PostMapping("/{projectId}/nodes/{code}/plan/submit")
+    public Result<ProjectNode> submitPlan(@PathVariable Long projectId, @PathVariable String code) {
+        return Result.success(service.submitPlan(projectId, code));
+    }
+
+    @Operation(summary = "计划审批通过(经理)")
+    @OperationLog(value = "计划审批通过")
+    @PostMapping("/{projectId}/nodes/{code}/plan/approve")
+    public Result<ProjectNode> approvePlan(@PathVariable Long projectId, @PathVariable String code) {
+        return Result.success(service.approvePlan(projectId, code));
+    }
+
+    @Operation(summary = "计划审批驳回(经理)")
+    @OperationLog(value = "计划审批驳回")
+    @PostMapping("/{projectId}/nodes/{code}/plan/reject")
+    public Result<ProjectNode> rejectPlan(@PathVariable Long projectId, @PathVariable String code,
+                                          @RequestBody(required = false) java.util.Map<String, String> body) {
+        String note = body == null ? null : body.get("note");
+        return Result.success(service.rejectPlan(projectId, code, note));
+    }
+
     @Operation(summary = "节点证据文件列表")
     @GetMapping("/nodes/{nodeId}/evidence")
     public Result<List<ProjectNodeEvidence>> evidence(@PathVariable Long nodeId) {

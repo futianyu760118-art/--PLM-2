@@ -48,6 +48,8 @@ public class ProjectProgressService {
     private final com.hjgd.plm.evidence.service.EvidenceService evidenceService;
     /** 阶段门自动进阶：节点达成后自动推进当前门。 */
     private final GateAdvanceService gateAdvanceService;
+    /** 企业微信通知。 */
+    private final com.hjgd.plm.common.WeComNotifyService weComNotifyService;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
@@ -244,6 +246,7 @@ public class ProjectProgressService {
                 .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getNodeCode, code));
         if (node == null) throw new BusinessException("节点不存在: " + code);
         String oldStatus = node.getStatus();
+        LocalDate oldPlanDate = node.getPlanDate();
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
         if (req.getActualDate() != null) node.setActualDate(req.getActualDate());
@@ -258,6 +261,15 @@ public class ProjectProgressService {
         if (req.getRemark() != null) node.setRemark(req.getRemark());
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
 
+        // 计划日期变更后，原审批结论失效，需重新提交审批
+        boolean resetApproval = false;
+        if (!java.util.Objects.equals(oldPlanDate, node.getPlanDate())
+                && !"PENDING_APPROVAL".equals(node.getPlanApprovalStatus())) {
+            node.setPlanApprovalStatus(null);
+            node.setPlanRejectNote(null);
+            resetApproval = true;
+        }
+
         // 计划日期自动推断状态：未到计划日期→已计划，已到/过了→进行中（不覆盖 DONE/FAILED 等明确状态）
         if (node.getPlanDate() != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()) || "PENDING".equals(node.getStatus()))) {
             node.setStatus(node.getPlanDate().isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
@@ -268,6 +280,12 @@ public class ProjectProgressService {
         node.setEditCount((node.getEditCount() == null ? 0 : node.getEditCount()) + 1);
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
+        if (resetApproval) {
+            nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                    .eq(ProjectNode::getId, node.getId())
+                    .set(ProjectNode::getPlanApprovalStatus, null)
+                    .set(ProjectNode::getPlanRejectNote, null));
+        }
 
         validateGate(node, oldStatus);
 
@@ -331,6 +349,89 @@ public class ProjectProgressService {
         changeLogService.record(projectId, p.getProjectNo(), "PROJECT_NODE", child.getId(),
                 child.getNodeCode(), "ADD_CHILD", "nodeName", "", child.getNodeName(), "UI");
         return child;
+    }
+
+    /**
+     * 提交计划审批（工程师）：节点必须已填计划日期，状态置“待审批”。
+     */
+    @Transactional
+    public ProjectNode submitPlan(Long projectId, String code) {
+        ProjectNode node = findNode(projectId, code);
+        if (node.getPlanDate() == null) throw new BusinessException("请先填写计划日期再提交审批");
+        String me = com.hjgd.plm.common.DataScope.name();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getPlanApprovalStatus, "PENDING_APPROVAL")
+                .set(ProjectNode::getPlanSubmittedBy, me)
+                .set(ProjectNode::getPlanSubmittedAt, LocalDateTime.now())
+                .set(ProjectNode::getPlanRejectNote, null)
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "PLAN_SUBMIT", "planApproval", node.getPlanApprovalStatus(), "PENDING_APPROVAL", "UI");
+        weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 由 " + me + " 提交计划(" + node.getPlanDate() + ")，待经理审批。");
+        return findNode(projectId, code);
+    }
+
+    /** 计划审批通过（经理）。 */
+    @Transactional
+    public ProjectNode approvePlan(Long projectId, String code) {
+        requireManager();
+        ProjectNode node = findNode(projectId, code);
+        if (!"PENDING_APPROVAL".equals(node.getPlanApprovalStatus()))
+            throw new BusinessException("该节点未处于待审批状态");
+        String me = com.hjgd.plm.common.DataScope.name();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getPlanApprovalStatus, "APPROVED")
+                .set(ProjectNode::getPlanApprovedBy, me)
+                .set(ProjectNode::getPlanApprovedAt, LocalDateTime.now())
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "PLAN_APPROVE", "planApproval", "PENDING_APPROVAL", "APPROVED", "UI");
+        weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 计划(" + node.getPlanDate() + ") 已由 " + me + " 审批通过。");
+        return findNode(projectId, code);
+    }
+
+    /** 计划审批驳回（经理）。 */
+    @Transactional
+    public ProjectNode rejectPlan(Long projectId, String code, String note) {
+        requireManager();
+        ProjectNode node = findNode(projectId, code);
+        String me = com.hjgd.plm.common.DataScope.name();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getPlanApprovalStatus, "REJECTED")
+                .set(ProjectNode::getPlanRejectNote, note)
+                .set(ProjectNode::getPlanApprovedBy, me)
+                .set(ProjectNode::getPlanApprovedAt, LocalDateTime.now())
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "PLAN_REJECT", "planApproval", node.getPlanApprovalStatus(), "REJECTED", "UI");
+        weComNotifyService.send("【PLM计划审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 计划被 " + me + " 驳回：" + (note == null ? "" : note));
+        return findNode(projectId, code);
+    }
+
+    /** 经理/管理员校验 */
+    private void requireManager() {
+        boolean ok = com.hjgd.plm.common.DataScope.admin()
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("rd_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("sales_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("sales_director")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("gm")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("project_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("hr_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("cw1");
+        if (!ok) throw new BusinessException("仅经理/管理员可审批计划");
+    }
+
+    private ProjectNode findNode(Long projectId, String code) {
+        ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
+                .eq(ProjectNode::getProjectId, projectId).eq(ProjectNode::getNodeCode, code));
+        if (node == null) throw new BusinessException("节点不存在: " + code);
+        return node;
     }
 
     /**

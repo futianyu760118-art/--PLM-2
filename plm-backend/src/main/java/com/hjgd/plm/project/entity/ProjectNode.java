@@ -36,6 +36,13 @@ public class ProjectNode {
     private String sourceSystem;
     private Integer revision;
     private String syncStatus;
+    /** 计划审批：null/DRAFT 未提交, PENDING_APPROVAL 待审批, APPROVED 通过, REJECTED 驳回 */
+    private String planApprovalStatus;
+    private String planSubmittedBy;
+    private LocalDateTime planSubmittedAt;
+    private String planApprovedBy;
+    private LocalDateTime planApprovedAt;
+    private String planRejectNote;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

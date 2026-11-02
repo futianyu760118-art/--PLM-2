@@ -29,6 +29,23 @@
     </el-card>
 
     <el-card style="margin-top:16px">
+      <template #header><span>企业微信通知（计划审批提醒等）</span></template>
+      <el-form :model="wecom" label-width="120px" style="max-width:760px">
+        <el-form-item label="群机器人Webhook">
+          <el-input v-model="wecom.webhookUrl" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx" clearable />
+        </el-form-item>
+        <el-form-item label="启用通知">
+          <el-switch v-model="wecom.enabled" />
+          <span style="color:#909399;font-size:12px;margin-left:12px">填写 webhook 并开启后，计划提交/审批/驳回、反馈等事件将推送到企业微信群</span>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="wecomSaving" @click="saveWecom">保存</el-button>
+          <el-button :loading="wecomTesting" @click="testWecom">发送测试</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <el-card style="margin-top:16px">
       <template #header><span>2D 模具图纸自动分解引擎</span></template>
       <el-alert type="info" :closable="false" style="margin-bottom:16px"
         title="上传模具总装 DWG/DXF 文件, 系统自动解析图层分类为: 总装图/CNC模仁/EDM铜公/线割/水路/排气/模胚/散件 8类标准图纸" />
@@ -66,9 +83,33 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { integrationStatus, testIntegration, decomposeDrawing } from '@/api/algorithm'
+import request from '@/utils/request'
 
 const systems = ref([])
 const decomposeResult = ref(null)
+const wecom = ref({ webhookUrl: '', enabled: false })
+const wecomSaving = ref(false)
+const wecomTesting = ref(false)
+
+async function loadWecom() {
+  const res = await request({ url: '/system/notify/wecom', method: 'get' })
+  wecom.value = { webhookUrl: res.data?.webhookUrl || '', enabled: !!res.data?.enabled }
+}
+async function saveWecom() {
+  wecomSaving.value = true
+  try {
+    await request({ url: '/system/notify/wecom', method: 'put', data: wecom.value })
+    ElMessage.success('已保存')
+  } finally { wecomSaving.value = false }
+}
+async function testWecom() {
+  wecomTesting.value = true
+  try {
+    await saveWecom()
+    const res = await request({ url: '/system/notify/wecom/test', method: 'post' })
+    ElMessage.success(res.data || '已发送')
+  } finally { wecomTesting.value = false }
+}
 
 async function loadData() {
   const res = await integrationStatus()
@@ -95,5 +136,5 @@ async function handleDecompose(file) {
   return false
 }
 
-onMounted(loadData)
+onMounted(() => { loadData(); loadWecom() })
 </script>

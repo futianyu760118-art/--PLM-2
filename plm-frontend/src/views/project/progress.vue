@@ -116,6 +116,7 @@
           <template #default="{ row }">
             <el-tag v-if="row.isKey" type="danger" size="small" effect="dark" style="margin-right:4px">★</el-tag>
             {{ row.nodeName }}
+            <el-tag v-if="row.status === 'NO_NODE'" size="small" type="info" effect="plain" style="margin-left:4px">无节点</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="130" align="center" sortable :sort-method="sortStatus" prop="status">
@@ -125,10 +126,26 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="计划日期" width="150" sortable prop="planDate">
+        <el-table-column label="计划日期" width="190" sortable prop="planDate">
           <template #default="{ row }">
-            <el-date-picker :model-value="row.planDate" type="date" size="small" value-format="YYYY-MM-DD"
-              style="width:135px" :clearable="true" @update:model-value="v => { row.planDate = v; saveNode(row) }" />
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <el-date-picker :model-value="row.planDate" type="date" size="small" value-format="YYYY-MM-DD"
+                style="width:135px" :clearable="true" @update:model-value="v => { row.planDate = v; saveNode(row) }" />
+              <div v-if="planApprovalTag(row.planApprovalStatus)" style="display:flex;align-items:center;gap:4px">
+                <el-tooltip v-if="row.planApprovalStatus === 'REJECTED' && row.planRejectNote" :content="row.planRejectNote" placement="top">
+                  <el-tag size="small" :type="planApprovalTag(row.planApprovalStatus).type">{{ planApprovalTag(row.planApprovalStatus).text }}</el-tag>
+                </el-tooltip>
+                <el-tag v-else size="small" :type="planApprovalTag(row.planApprovalStatus).type">{{ planApprovalTag(row.planApprovalStatus).text }}</el-tag>
+              </div>
+              <div style="display:flex;gap:4px">
+                <el-button v-if="row.planDate && row.planApprovalStatus !== 'PENDING_APPROVAL' && row.planApprovalStatus !== 'APPROVED'"
+                  size="small" link type="primary" @click="submitPlan(row)">提交审批</el-button>
+                <template v-if="row.planApprovalStatus === 'PENDING_APPROVAL' && isManager">
+                  <el-button size="small" link type="success" @click="approvePlan(row)">通过</el-button>
+                  <el-button size="small" link type="danger" @click="rejectPlan(row)">驳回</el-button>
+                </template>
+              </div>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="实际日期" width="150" sortable prop="actualDate">
@@ -268,7 +285,8 @@ import { nodeSheet, UNMAPPED_NODES } from '@/config/nodeSheetLinks'
 
 const route = useRoute()
 const router = useRouter()
-import { getNodeMatrix, updateNode, listEvidence, uploadEvidence, deleteEvidence, progressCheck, downloadEvidence, createTextEvidence, updateEvidence, fetchPreview, fetchTextEvidence } from '@/api/progress'
+import { getNodeMatrix, updateNode, listEvidence, uploadEvidence, deleteEvidence, progressCheck, downloadEvidence, createTextEvidence, updateEvidence, fetchPreview, fetchTextEvidence, submitNodePlan, approveNodePlan, rejectNodePlan } from '@/api/progress'
+import { useUserStore } from '@/stores/user'
 
 const projects = ref([])
 const projectId = ref(null)
@@ -280,6 +298,9 @@ const uploadingId = ref(null)
 const evidenceMap = ref({})
 const tableRef = ref(null)
 const focusNodeCode = computed(() => route.query.node ? String(route.query.node) : '')
+const userStore = useUserStore()
+const MANAGER_ROLES = ['ADMIN', 'admin', 'rd_manager', 'sales_manager', 'sales_director', 'project_manager', 'gm', 'hr_manager', 'cw1']
+const isManager = computed(() => (userStore.roles || []).some(r => MANAGER_ROLES.includes(r)))
 
 // ===== 表格：查找 + 排序 =====
 const nodeKeyword = ref('')
@@ -370,7 +391,12 @@ function syncFromRoute() {
   else if (!projectId.value && projects.value.length) projectId.value = projects.value[0].id
 }
 
-function rowClassName({ row }) { return row.nodeCode === focusNodeCode.value ? 'focus-node' : '' }
+function rowClassName({ row }) {
+  const cls = []
+  if (row.nodeCode === focusNodeCode.value) cls.push('focus-node')
+  if (row.status === 'NO_NODE') cls.push('row-no-node')
+  return cls.join(' ')
+}
 
 async function focusTarget() {
   if (!focusNodeCode.value) return
@@ -437,6 +463,42 @@ async function saveNode(row) {
     ElMessage.success('节点已保存')
     await load()
   } finally { savingId.value = null }
+}
+
+// ===== 计划审批流：工程师提交，经理审批 =====
+const planApprovalTag = (s) => ({
+  PENDING_APPROVAL: { type: 'warning', text: '待审批' },
+  APPROVED: { type: 'success', text: '已审批' },
+  REJECTED: { type: 'danger', text: '已驳回' }
+}[s] || null)
+
+async function submitPlan(row) {
+  if (!row.planDate) { ElMessage.warning('请先填写计划日期'); return }
+  await saveNode(row)
+  try {
+    await submitNodePlan(projectId.value, row.nodeCode)
+    ElMessage.success('已提交经理审批')
+    await load()
+  } catch (e) { /* 错误已由 request 弹出 */ }
+}
+
+async function approvePlan(row) {
+  try {
+    await approveNodePlan(projectId.value, row.nodeCode)
+    ElMessage.success('审批通过')
+    await load()
+  } catch (e) { /* ignore */ }
+}
+
+async function rejectPlan(row) {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回计划', {
+      inputPlaceholder: '如：计划日期不合理', confirmButtonText: '驳回', cancelButtonText: '取消'
+    })
+    await rejectNodePlan(projectId.value, row.nodeCode, value)
+    ElMessage.success('已驳回')
+    await load()
+  } catch (e) { /* 取消或失败 */ }
 }
 
 // ===== 追加子项节点（如模具重开记录）=====
@@ -609,4 +671,6 @@ onMounted(loadProjects)
 .preview-docx { max-height: 65vh; overflow: auto; border: 1px solid #eee; border-radius: 6px; padding: 16px; background: #fff; }
 :deep(.el-table__row.focus-node) { background: #fff7e6 !important; }
 :deep(.el-table__row.focus-node:hover > td) { background: #fff1d6 !important; }
+:deep(.el-table__row.row-no-node > td) { background: #f4f4f5 !important; color: #b1b3b8; }
+:deep(.el-table__row.row-no-node > td .cell) { font-style: italic; }
 </style>
