@@ -19,6 +19,9 @@ const Layout = () => import('@/layout/index.vue')
 const routes = [
   { path: '/login', component: () => import('@/views/login/index.vue'), hidden: true },
   { path: '/share/:token', name: 'SharePublic', component: () => import('@/views/share/public.vue'), hidden: true, meta: { title: '产品3D预览' } },
+  // M04 模块化改造：配置页从 /admin 迁到 /m04，旧链接保留跳转
+  { path: '/admin/coderule', redirect: '/m04/coderule', hidden: true },
+  { path: '/admin/approval', redirect: '/m04/flow', hidden: true },
   {
     path: '/',
     component: Layout,
@@ -92,6 +95,17 @@ const routes = [
         meta: { title: '物料主数据' } },
       { path: 'wizard', name: 'MaterialWizard', component: () => import('@/views/material/wizard.vue'),
         meta: { title: '建档向导', activeMenu: '/material/list' } }
+    ]
+  },
+  {
+    // ===== M04 研发数据中台 · 文档中心（T05–T08：五区 + 版本链 + 检入检出） =====
+    path: '/document',
+    component: Layout,
+    redirect: '/document/list',
+    meta: { title: '文档中心', icon: 'FolderOpened', workflowStage: 'M04 研发数据中台' },
+    children: [
+      { path: 'list', name: 'DocumentList', component: () => import('@/views/m04/document/index.vue'),
+        meta: { title: '文档中心' } }
     ]
   },
   {
@@ -172,6 +186,40 @@ const routes = [
     children: [
       { path: 'list', name: 'EcnList', component: () => import('@/views/ecn/index.vue'),
         meta: { title: '工程变更' } }
+    ]
+  },
+  {
+    // ===== 工序阶段 4: 工程变更（M04 T09–T11：ECR 申请 + 审批待办） =====
+    path: '/ecr',
+    component: Layout,
+    redirect: '/ecr/list',
+    meta: { title: 'ECR变更申请', icon: 'DocumentAdd', permission: 'ecr:list', workflowStage: 'M04 研发数据中台' },
+    children: [
+      { path: 'list', name: 'EcrList', component: () => import('@/views/m04/ecr/index.vue'),
+        meta: { title: 'ECR 申请' } }
+    ]
+  },
+  {
+    path: '/approval',
+    component: Layout,
+    redirect: '/approval/pending',
+    meta: { title: '我的待办', icon: 'Bell', workflowStage: 'M04 研发数据中台' },
+    children: [
+      { path: 'pending', name: 'ApprovalPending', component: () => import('@/views/m04/approval/pending.vue'),
+        meta: { title: '审批待办' } }
+    ]
+  },
+  {
+    // ===== M04 模块配置（仅管理员）：编码规则引擎 + 审批流定义 =====
+    path: '/m04',
+    component: Layout,
+    redirect: '/m04/coderule',
+    meta: { title: 'M04 模块配置', icon: 'Coin', roles: ['ADMIN'], workflowStage: 'M04 研发数据中台' },
+    children: [
+      { path: 'coderule', name: 'M04CodeRule', component: () => import('@/views/m04/codegen/index.vue'),
+        meta: { title: '编码规则' } },
+      { path: 'flow', name: 'M04ApprovalFlow', component: () => import('@/views/m04/approval/flow.vue'),
+        meta: { title: '审批流配置' } }
     ]
   },
   {

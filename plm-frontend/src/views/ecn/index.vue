@@ -47,8 +47,7 @@
             <el-button link type="primary" size="small" @click="viewDetail(row)">详情</el-button>
             <el-button link type="primary" size="small" v-if="(row.status==='DRAFT'||row.status==='REJECTED') && userStore.hasPermission('ecn:add')" @click="openDialog(row)">修改</el-button>
             <el-button link type="success" size="small" v-if="(row.status==='DRAFT'||row.status==='REJECTED') && userStore.hasPermission('ecn:add')" @click="handleSubmit(row)">提交</el-button>
-            <el-button link type="warning" size="small" v-if="row.status==='PENDING_L1' && userStore.hasPermission('ecn:review1')" @click="openReview(row,'l1')">一审</el-button>
-            <el-button link type="warning" size="small" v-if="row.status==='PENDING_L2' && userStore.hasPermission('ecn:review2')" @click="openReview(row,'l2')">二审</el-button>
+            <el-button link type="warning" size="small" v-if="row.status==='PENDING_L1'||row.status==='PENDING_L2'" @click="openReview(row)">审批</el-button>
             <el-button link type="success" size="small" v-if="row.status==='APPROVED' && userStore.hasPermission('ecn:effect')" @click="handleEffect(row)">生效</el-button>
           </template>
         </el-table-column>
@@ -162,7 +161,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
-import { pageEcn, addEcn, updateEcn, submitEcn, reviewL1Approve, reviewL1Reject, reviewL2Approve, reviewL2Reject, effectEcn, getEcn, getEcnLogs, getEcnImpacts, saveEcnImpacts } from '@/api/ecn'
+import { pageEcn, addEcn, updateEcn, submitEcn, approveEcn, effectEcn, getEcn, getEcnLogs, getEcnImpacts, saveEcnImpacts } from '@/api/ecn'
 import LedgerEvidencePanel from '@/components/ledger/LedgerEvidencePanel.vue'
 
 const route = useRoute()
@@ -228,9 +227,8 @@ async function handleSubmit(row) {
   loadData()
 }
 
-function openReview(row, level) {
+function openReview(row) {
   reviewDialog.id = row.id
-  reviewDialog.level = level
   reviewDialog.approve = true
   reviewDialog.comment = ''
   reviewDialog.visible = true
@@ -240,9 +238,8 @@ async function submitReview() {
   if (!reviewDialog.comment) { ElMessage.warning('请输入审批意见'); return }
   submitting.value = true
   try {
-    const { id, level, approve, comment } = reviewDialog
-    if (level === 'l1') { approve ? await reviewL1Approve(id, { comment }) : await reviewL1Reject(id, { comment }) }
-    else { approve ? await reviewL2Approve(id, { comment }) : await reviewL2Reject(id, { comment }) }
+    const { id, approve, comment } = reviewDialog
+    await approveEcn(id, { action: approve ? 'APPROVE' : 'REJECT', comment })
     ElMessage.success(approve ? '审批通过' : '已驳回')
     reviewDialog.visible = false
     loadData()

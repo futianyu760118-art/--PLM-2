@@ -66,10 +66,23 @@
           <el-col :span="12"><el-form-item label="项目编号"><el-input v-model="form.projectNo" placeholder="留空自动生成" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="关联料号"><el-input v-model="form.partNo" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="客户名称"><el-input v-model="form.customerName" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="客户编码"><el-input v-model="form.customerCode" placeholder="数字3~4位，自研填000" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="负责人"><el-input v-model="form.owner" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="类型">
             <el-select v-model="form.projectType" style="width:100%">
               <el-option label="自研" value="SELF" /><el-option label="客制" value="NEW" />
+            </el-select>
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="产品分类">
+            <el-select v-model="form.projectClass" style="width:100%" placeholder="决定编号第3段">
+              <el-option label="V 全新产品" value="V" />
+              <el-option label="R 功能/性能拓展" value="R" />
+              <el-option label="M 客户定制变化" value="M" />
+            </el-select>
+          </el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="分类版本">
+            <el-select v-model="form.classVersion" style="width:100%">
+              <el-option v-for="n in 9" :key="n" :label="String(n)" :value="n" />
             </el-select>
           </el-form-item></el-col>
           <el-col :span="12"><el-form-item label="等级">
@@ -166,7 +179,7 @@ function search() { query.pageNum = 1; loadData() }
 function openDialog(row) {
   Object.keys(form).forEach(k => delete form[k])
   if (row) { Object.assign(form, JSON.parse(JSON.stringify(row))); dialog.title = '编辑项目' }
-  else { form.urgency = 'normal'; form.projectType = 'NEW'; dialog.title = '新建项目' }
+  else { form.urgency = 'normal'; form.projectType = 'NEW'; form.projectClass = 'V'; form.classVersion = 1; form.customerCode = '000'; dialog.title = '新建项目' }
   dialog.visible = true
 }
 
