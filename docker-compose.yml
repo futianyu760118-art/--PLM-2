@@ -80,6 +80,7 @@ services:
       - ./database/57_project_auto_no.sql:/docker-entrypoint-initdb.d/57_project_auto_no.sql:ro
       - ./database/58_node_parent.sql:/docker-entrypoint-initdb.d/58_node_parent.sql:ro
       - ./database/59_node_plan_approval.sql:/docker-entrypoint-initdb.d/59_node_plan_approval.sql:ro
+      - ./database/60_wecom_app.sql:/docker-entrypoint-initdb.d/60_wecom_app.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

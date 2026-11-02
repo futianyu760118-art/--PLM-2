@@ -30,6 +30,7 @@ public class WeComNotifyService {
             var r = rows.get(0);
             Object enabled = r.get("enabled");
             String url = r.get("webhook_url") == null ? "" : String.valueOf(r.get("webhook_url")).trim();
+            url = normalize(url);
             if (!(enabled instanceof Number n && n.intValue() == 1) || url.isEmpty()) return;
 
             String body = "{\"msgtype\":\"text\",\"text\":{\"content\":"
@@ -45,6 +46,18 @@ public class WeComNotifyService {
         } catch (Exception e) {
             log.warn("[企业微信通知] 发送失败: {}", e.getMessage());
         }
+    }
+
+    /** 归一化 webhook：允许只填 key、或省略协议头。 */
+    private String normalize(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        String v = raw.trim();
+        if (v.startsWith("http://") || v.startsWith("https://")) return v;
+        if (v.contains("qyapi.weixin.qq.com")) return "https://" + v;
+        if (!v.contains("/") && !v.contains("?")) {
+            return "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=" + v;
+        }
+        return "https://" + v;
     }
 
     private String quote(String s) {

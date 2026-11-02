@@ -29,10 +29,43 @@
     </el-card>
 
     <el-card style="margin-top:16px">
+      <template #header><span>企业微信自建应用（按人推送待办到个人）</span></template>
+      <el-alert type="info" :closable="false" style="margin-bottom:12px"
+        title="按个人推送必须使用企业微信「自建应用」：企业微信管理后台→应用管理→自建→创建应用，获取 企业ID(CorpID)、应用AgentId、应用Secret；并让成员手机号与本系统用户手机号一致(或已匹配到企业微信账号)。" />
+      <el-form :model="wecomApp" label-width="140px" style="max-width:760px">
+        <el-form-item label="企业ID CorpID">
+          <el-input v-model="wecomApp.corpId" placeholder="ww开头，企业微信管理后台-我的企业-企业信息" clearable />
+        </el-form-item>
+        <el-form-item label="应用 AgentId">
+          <el-input v-model="wecomApp.agentId" placeholder="自建应用详情页的 AgentId（数字）" clearable />
+        </el-form-item>
+        <el-form-item label="应用 Secret">
+          <el-input v-model="wecomApp.corpSecret" type="password" show-password placeholder="自建应用详情页的 Secret" clearable />
+        </el-form-item>
+        <el-form-item label="启用按人推送">
+          <el-switch v-model="wecomApp.enabled" />
+          <span style="color:#909399;font-size:12px;margin-left:12px">启用后每天 08:30 自动把各自待办推送到个人企业微信</span>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="wecomAppSaving" @click="saveWecomApp">保存</el-button>
+          <el-button type="success" :loading="wecomPushing" @click="pushTodosNow">立即推送待办</el-button>
+        </el-form-item>
+      </el-form>
+      <div v-if="pushResult" style="color:#606266;font-size:13px">
+        推送结果：用户 {{ pushResult.users ?? '-' }}，成功 {{ pushResult.sent ?? '-' }}，跳过 {{ pushResult.skipped ?? '-' }}，失败 {{ pushResult.failed ?? '-' }}
+        <span v-if="pushResult.error" style="color:#f56c6c">（{{ pushResult.error }}）</span>
+      </div>
+    </el-card>
+
+    <el-card style="margin-top:16px">
       <template #header><span>企业微信通知（计划审批提醒等）</span></template>
       <el-form :model="wecom" label-width="120px" style="max-width:760px">
         <el-form-item label="群机器人Webhook">
-          <el-input v-model="wecom.webhookUrl" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx" clearable />
+          <el-input v-model="wecom.webhookUrl" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx" clearable />
+          <div style="color:#e6a23c;font-size:12px;line-height:1.6;margin-top:4px">
+            注意：这里要填的是「群机器人」的 Webhook 地址（以 <code>/cgi-bin/webhook/send?key=</code> 结尾），<b>不是「智能机器人」的 Bot ID/Secret</b>。<br>
+            获取方式：目标群聊右上角 → 群机器人 → 添加机器人 → 复制 Webhook 地址。
+          </div>
         </el-form-item>
         <el-form-item label="启用通知">
           <el-switch v-model="wecom.enabled" />
@@ -90,6 +123,32 @@ const decomposeResult = ref(null)
 const wecom = ref({ webhookUrl: '', enabled: false })
 const wecomSaving = ref(false)
 const wecomTesting = ref(false)
+const wecomApp = ref({ corpId: '', agentId: '', corpSecret: '', enabled: false })
+const wecomAppSaving = ref(false)
+const wecomPushing = ref(false)
+const pushResult = ref(null)
+
+async function loadWecomApp() {
+  const res = await request({ url: '/system/notify/wecom-app', method: 'get' })
+  const d = res.data || {}
+  wecomApp.value = { corpId: d.corpId || '', agentId: d.agentId || '', corpSecret: d.corpSecret || '', enabled: !!d.enabled }
+}
+async function saveWecomApp() {
+  wecomAppSaving.value = true
+  try {
+    await request({ url: '/system/notify/wecom-app', method: 'put', data: wecomApp.value })
+    ElMessage.success('已保存')
+  } finally { wecomAppSaving.value = false }
+}
+async function pushTodosNow() {
+  wecomPushing.value = true
+  try {
+    await saveWecomApp()
+    const res = await request({ url: '/system/notify/wecom-app/push-todos', method: 'post' })
+    pushResult.value = res.data || {}
+    ElMessage.success(`推送完成：成功 ${pushResult.value.sent ?? 0} 人`)
+  } finally { wecomPushing.value = false }
+}
 
 async function loadWecom() {
   const res = await request({ url: '/system/notify/wecom', method: 'get' })
@@ -136,5 +195,5 @@ async function handleDecompose(file) {
   return false
 }
 
-onMounted(() => { loadData(); loadWecom() })
+onMounted(() => { loadData(); loadWecom(); loadWecomApp() })
 </script>
