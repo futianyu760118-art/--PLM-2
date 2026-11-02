@@ -1,4 +1,4 @@
-package com.hjgd.plm.codegen.service;
+package com.hjgd.plm.m04.codegen.service;
 
 import java.util.Map;
 

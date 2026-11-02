@@ -41,5 +41,8 @@ public class Ecn extends BaseEntity {
     private String finalComment;
     private LocalDateTime effectiveTime;
     private LocalDateTime voidTime;
+    /** 来源 ECR（变更申请单），ECR 一键转 ECN 时回填 */
+    private Long ecrId;
+    private String ecrNo;
     private String createdBy;
 }

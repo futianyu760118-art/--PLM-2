@@ -2,6 +2,10 @@ package com.hjgd.plm.ecn.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.hjgd.plm.m04.approval.dto.ApprovalProgressVO;
+import com.hjgd.plm.m04.approval.entity.ApprovalInstance;
+import com.hjgd.plm.m04.approval.enums.ApprovalAction;
+import com.hjgd.plm.m04.approval.service.ApprovalService;
 import com.hjgd.plm.auth.security.SecurityUtils;
 import com.hjgd.plm.bom.service.BomService;
 import com.hjgd.plm.common.BusinessException;
@@ -55,6 +59,7 @@ public class EcnServiceImpl implements EcnService {
     private final DomainEventService domainEventService;
     private final com.hjgd.plm.ecn.service.EcnImpactService ecnImpactService;
     private final BomService bomService;
+    private final ApprovalService approvalService;
 
     @Override
     public PageResult<Ecn> page(EcnQueryDTO query) {
@@ -143,7 +148,14 @@ public class EcnServiceImpl implements EcnService {
             throw new BusinessException(ResultCode.ECN_STATUS_ERROR);
         }
         EcnStatus from = exist.getStatus();
-        exist.setStatus(EcnStatus.PENDING_L1);
+        // 审批级数由流程配置决定，不再硬编码 L1/L2；无启用流程时回落旧的两级逻辑
+        ApprovalInstance inst = approvalService.start("ECN", exist.getEcnNo(), null,
+                Map.of("change_type", exist.getChangeType() == null ? "" : exist.getChangeType().name()));
+        if (inst == null) {
+            exist.setStatus(EcnStatus.PENDING_L1);
+        } else {
+            syncStatus(exist, inst);
+        }
         ecnMapper.updateById(exist);
         // 物料进入变更中
         try {
@@ -154,60 +166,116 @@ public class EcnServiceImpl implements EcnService {
         } catch (Exception e) {
             log.warn("startChange on submit: {}", e.getMessage());
         }
-        recordFlow(exist.getId(), 0, "submit", from, EcnStatus.PENDING_L1, "提交ECN审批");
+        recordFlow(exist.getId(), 0, "submit", from, exist.getStatus(), "提交ECN审批");
     }
 
     @Override
     @Transactional
+    public void approve(Long id, ApprovalAction action, String comment) {
+        Ecn exist = getById(id);
+        ApprovalInstance inst = approvalService.instanceOf("ECN", exist.getEcnNo());
+        if (inst == null) {
+            // 在途老单：没有审批实例，按原两级逻辑处理
+            legacyAct(exist, action, comment);
+            return;
+        }
+        EcnStatus from = exist.getStatus();
+        ApprovalInstance after = approvalService.act(inst.getId(), action, comment);
+        syncStatus(exist, after);
+        fillReviewFields(exist, after, action, comment);
+        ecnMapper.updateById(exist);
+        recordFlow(exist.getId(), after.getCurrentSeq(), action.name().toLowerCase(),
+                from, exist.getStatus(), comment);
+    }
+
+    @Override
+    public ApprovalProgressVO progress(Long id) {
+        Ecn exist = getById(id);
+        return approvalService.progress("ECN", exist.getEcnNo());
+    }
+
+    /** 把审批实例状态映射回 ECN 状态；节点 seq 1 记 PENDING_L1，seq>=2 记 PENDING_L2，兼容老枚举与前端 */
+    private void syncStatus(Ecn ecn, ApprovalInstance inst) {
+        if (inst == null) {
+            return;
+        }
+        switch (inst.getStatus()) {
+            case "RUNNING" -> ecn.setStatus(inst.getCurrentSeq() != null && inst.getCurrentSeq() <= 1
+                    ? EcnStatus.PENDING_L1 : EcnStatus.PENDING_L2);
+            case "APPROVED" -> ecn.setStatus(EcnStatus.APPROVED);
+            case "REJECTED" -> ecn.setStatus(EcnStatus.REJECTED);
+            case "CANCELLED" -> ecn.setStatus(EcnStatus.VOID);
+            default -> log.warn("未知审批状态 {}，ECN {} 状态保持不变", inst.getStatus(), ecn.getEcnNo());
+        }
+    }
+
+    /** 旧字段 review_l1/l2 继续写，保证老报表和历史列表不空 */
+    private void fillReviewFields(Ecn ecn, ApprovalInstance inst, ApprovalAction action, String comment) {
+        int seq = inst.getCurrentSeq() == null ? 1 : inst.getCurrentSeq();
+        String who = SecurityUtils.getCurrentRealName();
+        LocalDateTime now = LocalDateTime.now();
+        if (seq <= 1) {
+            ecn.setReviewL1By(who);
+            ecn.setReviewL1Time(now);
+            ecn.setReviewL1Comment(comment);
+        } else {
+            ecn.setReviewL2By(who);
+            ecn.setReviewL2Time(now);
+            ecn.setReviewL2Comment(comment);
+        }
+        if (action == ApprovalAction.APPROVE && "APPROVED".equals(inst.getStatus())) {
+            ecn.setFinalComment(comment);
+        }
+    }
+
+    /** 无审批实例的在途单：保留原 L1→L2 行为 */
+    private void legacyAct(Ecn exist, ApprovalAction action, String comment) {
+        EcnStatus from = exist.getStatus();
+        String who = SecurityUtils.getCurrentRealName();
+        LocalDateTime now = LocalDateTime.now();
+        if (exist.getStatus() == EcnStatus.PENDING_L1) {
+            exist.setReviewL1By(who);
+            exist.setReviewL1Time(now);
+            exist.setReviewL1Comment(comment);
+            exist.setStatus(action == ApprovalAction.APPROVE ? EcnStatus.PENDING_L2 : EcnStatus.REJECTED);
+            recordFlow(exist.getId(), 1, action.name().toLowerCase(), from, exist.getStatus(), comment);
+        } else if (exist.getStatus() == EcnStatus.PENDING_L2) {
+            exist.setReviewL2By(who);
+            exist.setReviewL2Time(now);
+            exist.setReviewL2Comment(comment);
+            if (action == ApprovalAction.APPROVE) {
+                exist.setStatus(EcnStatus.APPROVED);
+                exist.setFinalComment(comment);
+            } else {
+                exist.setStatus(EcnStatus.REJECTED);
+            }
+            recordFlow(exist.getId(), 2, action.name().toLowerCase(), from, exist.getStatus(), comment);
+        } else {
+            throw new BusinessException(ResultCode.ECN_STATUS_ERROR);
+        }
+        ecnMapper.updateById(exist);
+    }
+
+    // ---------- 兼容旧接口：前端 /ecn/{id}/l1/approve 等仍可用 ----------
+
+    @Override
     public void reviewL1Approve(Long id, EcnReviewDTO dto) {
-        Ecn exist = getById(id);
-        assertStatus(exist, EcnStatus.PENDING_L1);
-        exist.setStatus(EcnStatus.PENDING_L2);
-        exist.setReviewL1By(SecurityUtils.getCurrentRealName());
-        exist.setReviewL1Time(LocalDateTime.now());
-        exist.setReviewL1Comment(dto.getComment());
-        ecnMapper.updateById(exist);
-        recordFlow(exist.getId(), 1, "approve", EcnStatus.PENDING_L1, EcnStatus.PENDING_L2, dto.getComment());
+        approve(id, ApprovalAction.APPROVE, dto.getComment());
     }
 
     @Override
-    @Transactional
     public void reviewL1Reject(Long id, EcnReviewDTO dto) {
-        Ecn exist = getById(id);
-        assertStatus(exist, EcnStatus.PENDING_L1);
-        exist.setStatus(EcnStatus.REJECTED);
-        exist.setReviewL1By(SecurityUtils.getCurrentRealName());
-        exist.setReviewL1Time(LocalDateTime.now());
-        exist.setReviewL1Comment(dto.getComment());
-        ecnMapper.updateById(exist);
-        recordFlow(exist.getId(), 1, "reject", EcnStatus.PENDING_L1, EcnStatus.REJECTED, dto.getComment());
+        approve(id, ApprovalAction.REJECT, dto.getComment());
     }
 
     @Override
-    @Transactional
     public void reviewL2Approve(Long id, EcnReviewDTO dto) {
-        Ecn exist = getById(id);
-        assertStatus(exist, EcnStatus.PENDING_L2);
-        exist.setStatus(EcnStatus.APPROVED);
-        exist.setReviewL2By(SecurityUtils.getCurrentRealName());
-        exist.setReviewL2Time(LocalDateTime.now());
-        exist.setReviewL2Comment(dto.getComment());
-        exist.setFinalComment(dto.getComment());
-        ecnMapper.updateById(exist);
-        recordFlow(exist.getId(), 2, "approve", EcnStatus.PENDING_L2, EcnStatus.APPROVED, dto.getComment());
+        approve(id, ApprovalAction.APPROVE, dto.getComment());
     }
 
     @Override
-    @Transactional
     public void reviewL2Reject(Long id, EcnReviewDTO dto) {
-        Ecn exist = getById(id);
-        assertStatus(exist, EcnStatus.PENDING_L2);
-        exist.setStatus(EcnStatus.REJECTED);
-        exist.setReviewL2By(SecurityUtils.getCurrentRealName());
-        exist.setReviewL2Time(LocalDateTime.now());
-        exist.setReviewL2Comment(dto.getComment());
-        ecnMapper.updateById(exist);
-        recordFlow(exist.getId(), 2, "reject", EcnStatus.PENDING_L2, EcnStatus.REJECTED, dto.getComment());
+        approve(id, ApprovalAction.REJECT, dto.getComment());
     }
 
     /**
@@ -337,6 +405,12 @@ public class EcnServiceImpl implements EcnService {
         exist.setStatus(EcnStatus.VOID);
         exist.setVoidTime(LocalDateTime.now());
         ecnMapper.updateById(exist);
+        // 作废时同步撤销审批实例，避免待办箱残留
+        try {
+            approvalService.cancelByObject("ECN", exist.getEcnNo(), "ECN作废");
+        } catch (Exception e) {
+            log.warn("cancel approval on void failed: {}", e.getMessage());
+        }
         recordFlow(exist.getId(), 4, "void", from, EcnStatus.VOID, "ECN作废");
     }
 

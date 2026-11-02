@@ -1,5 +1,7 @@
 package com.hjgd.plm.ecn.service;
 
+import com.hjgd.plm.m04.approval.dto.ApprovalProgressVO;
+import com.hjgd.plm.m04.approval.enums.ApprovalAction;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.ecn.dto.EcnDTO;
 import com.hjgd.plm.ecn.dto.EcnQueryDTO;
@@ -24,6 +26,15 @@ public interface EcnService {
     void delete(Long id);
 
     void submit(Long id);
+
+    /**
+     * 通用审批动作：流程节点、级数、驳回走向全部由 plm_approval_* 配置决定。
+     * 无审批实例的在途单自动回落旧的两级逻辑。
+     */
+    void approve(Long id, ApprovalAction action, String comment);
+
+    /** 审批进度（节点 + 动作流水） */
+    ApprovalProgressVO progress(Long id);
 
     void reviewL1Approve(Long id, EcnReviewDTO dto);
 

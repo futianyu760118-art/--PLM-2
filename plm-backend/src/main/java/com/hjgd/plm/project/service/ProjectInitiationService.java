@@ -281,6 +281,10 @@ public class ProjectInitiationService {
         p.setCustomerName(StringUtils.hasText(rec.getCustomerNo()) ? rec.getCustomerNo() : rec.getCustomerType());
         String type = rec.getProjectType() == null ? "" : rec.getProjectType();
         p.setProjectType(type.contains("自研") && !type.contains("客户定制") ? "SELF" : "NEW");
+        // 项目号分类段：客户定制 -> M，功能/性能拓展 -> R，其余 -> V
+        p.setProjectClass(type.contains("客制") || type.contains("定制") ? "M"
+                : (type.contains("改") || type.contains("拓展") || type.contains("升级") ? "R" : "V"));
+        p.setClassVersion(1);
         p.setProjectLevel(StringUtils.hasText(rec.getCustomerLevel()) ? truncate(rec.getCustomerLevel(), 8) : "C");
         p.setOwner(StringUtils.hasText(rec.getOwner()) ? rec.getOwner() : rec.getApplicant());
         p.setDepartment(StringUtils.hasText(rec.getDepartment()) ? rec.getDepartment() : "研发中心");
