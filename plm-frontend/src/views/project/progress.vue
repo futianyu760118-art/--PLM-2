@@ -69,6 +69,11 @@
                 <el-table-column prop="actualDate" label="实际日期" width="110" />
                 <el-table-column prop="owner" label="责任人" width="90" />
                 <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+                <el-table-column label="操作" width="80" align="center" fixed="right">
+                  <template #default="{ row: c }">
+                    <el-button size="small" link type="primary" icon="EditPen" @click="openEditChild(c)">编辑</el-button>
+                  </template>
+                </el-table-column>
               </el-table>
               <p v-else class="std-tip" style="margin-top:4px">无子项（如遇模具重开等，点「追加子项」记录）</p>
 
@@ -232,8 +237,8 @@
       </template>
     </el-dialog>
 
-    <!-- 追加子项节点 -->
-    <el-dialog v-model="childForm.visible" :title="`追加子项 · ${childForm.parentName}`" width="560px">
+    <!-- 追加/编辑子项节点 -->
+    <el-dialog v-model="childForm.visible" :title="(childForm.editMode ? '编辑子项 · ' : '追加子项 · ') + childForm.parentName" width="560px">
       <el-form :model="childForm" label-width="90px">
         <el-form-item label="子项名称" required>
           <el-input v-model="childForm.nodeName" placeholder="如: 模具重开 / 追加工序 / 二次T1" />
@@ -246,12 +251,15 @@
         <el-form-item label="计划日期">
           <el-date-picker v-model="childForm.planDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
         </el-form-item>
+        <el-form-item label="实际日期">
+          <el-date-picker v-model="childForm.actualDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
+        </el-form-item>
         <el-form-item label="责任人"><el-input v-model="childForm.owner" style="width:160px" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="childForm.remark" type="textarea" :rows="2" placeholder="如: 重开原因/维修内容" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="childForm.visible = false">取消</el-button>
-        <el-button type="primary" :loading="childForm.busy" @click="submitChild">追加</el-button>
+        <el-button type="primary" :loading="childForm.busy" @click="submitChild">{{ childForm.editMode ? '保存' : '追加' }}</el-button>
       </template>
     </el-dialog>
 
@@ -501,20 +509,41 @@ async function rejectPlan(row) {
   } catch (e) { /* 取消或失败 */ }
 }
 
-// ===== 追加子项节点（如模具重开记录）=====
-const childForm = reactive({ visible: false, busy: false, parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', owner: '', remark: '' })
+// ===== 追加/编辑子项节点（如模具重开记录）=====
+const childForm = reactive({ visible: false, busy: false, editMode: false, nodeCode: '', parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', actualDate: '', owner: '', remark: '' })
 function openChildForm(row) {
-  Object.assign(childForm, { visible: true, busy: false, parentCode: row.nodeCode, parentName: row.nodeName, nodeName: '', status: 'NOT_SET', planDate: '', owner: row.owner || currentProject()?.owner || '', remark: '' })
+  Object.assign(childForm, { visible: true, busy: false, editMode: false, nodeCode: '', parentCode: row.nodeCode, parentName: row.nodeName, nodeName: '', status: 'NOT_SET', planDate: '', actualDate: '', owner: row.owner || currentProject()?.owner || '', remark: '' })
+}
+function openEditChild(c) {
+  const parent = nodes.value.find(n => n.nodeCode === c.parentCode)
+  Object.assign(childForm, {
+    visible: true, busy: false, editMode: true, nodeCode: c.nodeCode,
+    parentCode: c.parentCode || '', parentName: parent?.nodeName || c.parentCode || '',
+    nodeName: c.nodeName || '', status: c.status || 'NOT_SET',
+    planDate: c.planDate || '', actualDate: c.actualDate || '',
+    owner: c.owner || '', remark: c.remark || ''
+  })
 }
 async function submitChild() {
   if (!childForm.nodeName.trim()) { ElMessage.warning('请填写子项名称(如: 模具重开)'); return }
   childForm.busy = true
   try {
-    await request({ url: `/project/${projectId.value}/nodes/${childForm.parentCode}/child`, method: 'post', data: {
-      nodeName: childForm.nodeName, status: childForm.status,
-      planDate: childForm.planDate || null, owner: childForm.owner, remark: childForm.remark
-    } })
-    ElMessage.success('子项已追加')
+    if (childForm.editMode) {
+      if (childForm.status === 'DONE' && !childForm.actualDate) childForm.actualDate = todayStr()
+      await updateNode(projectId.value, childForm.nodeCode, {
+        nodeName: childForm.nodeName, status: childForm.status,
+        planDate: childForm.planDate || null, actualDate: childForm.actualDate || null,
+        clearPlan: !childForm.planDate, clearActual: !childForm.actualDate,
+        owner: childForm.owner, remark: childForm.remark
+      })
+      ElMessage.success('子项已更新')
+    } else {
+      await request({ url: `/project/${projectId.value}/nodes/${childForm.parentCode}/child`, method: 'post', data: {
+        nodeName: childForm.nodeName, status: childForm.status,
+        planDate: childForm.planDate || null, owner: childForm.owner, remark: childForm.remark
+      } })
+      ElMessage.success('子项已追加')
+    }
     childForm.visible = false
     await load()
   } finally { childForm.busy = false }

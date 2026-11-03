@@ -260,6 +260,7 @@ public class ProjectProgressService {
         }
         if (Boolean.TRUE.equals(req.getClearPlan())) node.setPlanDate(null);
         if (req.getOwner() != null) node.setOwner(req.getOwner());
+        if (StringUtils.hasText(req.getNodeName())) node.setNodeName(req.getNodeName());
         if (req.getDeliveryDesc() != null) node.setDeliveryDesc(req.getDeliveryDesc());
         if (req.getRemark() != null) node.setRemark(req.getRemark());
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
@@ -463,9 +464,11 @@ public class ProjectProgressService {
         if (node.getActualDate() == null) {
             throw new BusinessException("完成节点必须填写「实际完成日期」");
         }
+        // 子项（如模具重开记录）不强制要求上传证据，填实际日期即可完成
+        if (node.getParentCode() != null) return;
         int ev = node.getEvidenceCount() == null ? 0 : node.getEvidenceCount();
         if (ev < 1) {
-            throw new BusinessException("完成节点必须上传至少 1 个证据文件（完成证据标准）");
+            throw new BusinessException("完成节点必须上传至少 1 个资料文件（完成依据标准）");
         }
     }
 
