@@ -139,7 +139,7 @@ const users = ref([])
 
 const refTypes = [
   { v: 'PROJECT', l: '项目NPI' }, { v: 'MOLD', l: '模具' },
-  { v: 'MATERIAL', l: '物料料号' }, { v: 'ECN', l: 'ECN变更' }, { v: 'OTHER', l: '其他' }
+  { v: 'MATERIAL', l: '物料料号' }, { v: 'ECN', l: '设计变更' }, { v: 'OTHER', l: '其他' }
 ]
 const refLabel = (t) => ({ PROJECT: '项目', MOLD: '模具', MATERIAL: '物料', ECN: 'ECN', OTHER: '其他' }[t] || '-')
 const routeLabel = (s) => ({ RUNNING: '进行中', COMPLETED: '已完成', CANCELLED: '已取消' }[s] || s)

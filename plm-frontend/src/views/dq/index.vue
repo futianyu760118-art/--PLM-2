@@ -32,12 +32,12 @@
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover" :body-style="{padding:'14px'}">
-            <el-statistic title="已闭环债务" :value="closedDebts.length" :value-style="{color:'#67c23a'}" />
+            <el-statistic title="已完成债务" :value="closedDebts.length" :value-style="{color:'#67c23a'}" />
           </el-card>
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover" :body-style="{padding:'14px'}">
-            <el-statistic title="修复次数(已闭环)" :value="resolvedAttempts" :value-style="{color:'#409eff'}" />
+            <el-statistic title="修复次数(已完成)" :value="resolvedAttempts" :value-style="{color:'#409eff'}" />
           </el-card>
         </el-col>
       </el-row>

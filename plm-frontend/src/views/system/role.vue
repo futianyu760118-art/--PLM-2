@@ -9,7 +9,7 @@
         <el-table-column prop="roleCode" label="角色编码" min-width="140" />
         <el-table-column prop="roleName" label="角色名称" min-width="140" />
         <el-table-column prop="roleLevel" label="级别" width="80" align="center" />
-        <el-table-column label="数据范围" width="120" align="center">
+        <el-table-column label="可见范围" width="120" align="center">
           <template #default="{row}">{{ scopeMap[row.dataScope] }}</template>
         </el-table-column>
         <el-table-column label="内置" width="80" align="center">
@@ -31,7 +31,7 @@
         <el-form-item label="角色编码"><el-input v-model="form.roleCode" :disabled="!!form.id" /></el-form-item>
         <el-form-item label="角色名称"><el-input v-model="form.roleName" /></el-form-item>
         <el-form-item label="级别"><el-input-number v-model="form.roleLevel" :min="0" :max="9" /></el-form-item>
-        <el-form-item label="数据范围">
+        <el-form-item label="可见范围">
           <el-select v-model="form.dataScope" style="width:100%">
             <el-option v-for="(v,k) in scopeMap" :key="k" :label="v" :value="Number(k)" />
           </el-select>

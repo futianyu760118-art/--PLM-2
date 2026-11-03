@@ -19,7 +19,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="关键字">
-          <el-input v-model="query.keyword" placeholder="证据物/说明/节点" clearable style="width:180px" @keyup.enter="load" />
+          <el-input v-model="query.keyword" placeholder="资料物/说明/节点" clearable style="width:180px" @keyup.enter="load" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="load">查询</el-button>
@@ -28,8 +28,8 @@
       </el-form>
 
       <el-row :gutter="12" class="stat-row">
-        <el-col :span="6"><div class="stat"><div class="num">{{ stats.total || 0 }}</div><div class="lbl">证据总数</div></div></el-col>
-        <el-col :span="6"><div class="stat"><div class="num">{{ stats.bySource?.FILE || 0 }}</div><div class="lbl">文件证据</div></div></el-col>
+        <el-col :span="6"><div class="stat"><div class="num">{{ stats.total || 0 }}</div><div class="lbl">资料总数</div></div></el-col>
+        <el-col :span="6"><div class="stat"><div class="num">{{ stats.bySource?.FILE || 0 }}</div><div class="lbl">文件资料</div></div></el-col>
         <el-col :span="6"><div class="stat"><div class="num">{{ stats.bySource?.TEXT || 0 }}</div><div class="lbl">系统内填写</div></div></el-col>
         <el-col :span="6">
           <div class="stat">
@@ -61,7 +61,7 @@
           <template #default="{ row }">{{ projectName(row.projectId) }}</template>
         </el-table-column>
         <el-table-column prop="nodeCode" label="节点" width="120" />
-        <el-table-column label="证据物" min-width="200" show-overflow-tooltip>
+        <el-table-column label="资料物" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link type="primary" @click="previewEvidence(row)">{{ row.fileName }}</el-link>
           </template>
@@ -93,7 +93,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="preview.visible" :title="'证据 · ' + (preview.name || '')" width="840px" top="5vh">
+    <el-dialog v-model="preview.visible" :title="'资料 · ' + (preview.name || '')" width="840px" top="5vh">
       <div v-if="preview.loading" style="text-align:center;padding:40px;color:#909399">加载中...</div>
       <template v-else>
         <pre v-if="preview.kind === 'text'" class="preview-text">{{ preview.text }}</pre>
@@ -109,12 +109,12 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="evForm.visible" title="编辑证据" width="640px">
+    <el-dialog v-model="evForm.visible" title="编辑资料" width="640px">
       <el-form :model="evForm" label-width="70px">
         <el-form-item label="类型"><el-input v-model="evForm.docType" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="evForm.note" /></el-form-item>
         <el-form-item label="内容"><el-input v-model="evForm.content" type="textarea" :rows="9"
-          placeholder="系统内填写的证据内容(文件类证据可留空)" /></el-form-item>
+          placeholder="系统内填写的资料内容(文件类资料可留空)" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="evForm.visible = false">取消</el-button>

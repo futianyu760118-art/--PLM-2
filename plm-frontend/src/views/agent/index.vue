@@ -5,7 +5,7 @@
       <el-col :span="8">
         <el-card>
           <template #header>
-            <span>智能体</span>
+            <span>AI助手</span>
           </template>
           <el-menu :default-active="currentAgent" @select="selectAgent">
             <el-menu-item v-for="a in agents" :key="a.code" :index="a.code">

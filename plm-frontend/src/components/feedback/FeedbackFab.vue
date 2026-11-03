@@ -66,7 +66,7 @@ function restore() { minimized.value = false; visible.value = true }
 
 <style lang="scss" scoped>
 // 悬浮球：默认右下角，可拖拽到任意位置；尺寸 >= 44x44(AC F1/F2)。
-// z-index 低于 Element Plus 弹层基线(2000)，抽屉为非模态，可同时操作页面其它内容。
+// z-index 低于 Element Plus 弹层基准(2000)，抽屉为非模态，可同时操作页面其它内容。
 .feedback-fab {
   position: fixed;
   right: 24px;

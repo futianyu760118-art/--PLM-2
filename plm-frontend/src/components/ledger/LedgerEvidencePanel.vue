@@ -1,5 +1,5 @@
 <template>
-  <!-- 模块/表单侧「证据区」：与证据台账读同一行数据，不落副本（AC-A3-1/A3-3） -->
+  <!-- 模块/表单侧「资料区」：与资料清单读同一行数据，不落副本（AC-A3-1/A3-3） -->
   <div class="ledger-panel">
     <div class="lp-head">
       <span class="lp-title">
@@ -11,18 +11,18 @@
           <el-icon><Refresh /></el-icon>刷新
         </el-button>
         <el-button v-if="writable" link type="primary" size="small" @click="goCreate">
-          <el-icon><Plus /></el-icon>录入证据
+          <el-icon><Plus /></el-icon>录入资料
         </el-button>
       </span>
     </div>
 
     <el-table v-loading="loading" :data="rows" size="small" border>
-      <el-table-column prop="ledgerNo" label="证据编号" width="170">
+      <el-table-column prop="ledgerNo" label="资料编号" width="170">
         <template #default="{ row }">
           <el-link type="primary" @click="open(row)">{{ row.ledgerNo }}</el-link>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="证据名称" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="name" label="资料名称" min-width="160" show-overflow-tooltip />
       <el-table-column label="类型" width="110">
         <template #default="{ row }">{{ row.typeLabel || row.type || '—' }}</template>
       </el-table-column>
@@ -49,13 +49,13 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-empty v-if="!loading && !rows.length" description="暂无关联证据" :image-size="60" />
+    <el-empty v-if="!loading && !rows.length" description="暂无关联资料" :image-size="60" />
 
-    <!-- 证据详情：附件下载入口与关联清单，与台账页同源 -->
-    <el-drawer v-model="detail.visible" :title="'证据详情 · ' + (detail.ledger?.ledgerNo || '')" size="620px">
+    <!-- 资料详情：附件下载入口与关联清单，与清单页同源 -->
+    <el-drawer v-model="detail.visible" :title="'资料详情 · ' + (detail.ledger?.ledgerNo || '')" size="620px">
       <el-descriptions v-if="detail.ledger" :column="1" border size="small">
-        <el-descriptions-item label="证据名称">{{ detail.ledger.name || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="证据类型">{{ detail.ledger.type || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="资料名称">{{ detail.ledger.name || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="资料类型">{{ detail.ledger.type || '—' }}</el-descriptions-item>
         <el-descriptions-item label="责任人">{{ detail.ledger.ownerId ?? '—' }}</el-descriptions-item>
         <el-descriptions-item label="发生时间">{{ fmtDate(detail.ledger.occurDate) }}</el-descriptions-item>
         <el-descriptions-item label="版本">{{ detail.ledger.version || '—' }}</el-descriptions-item>
@@ -114,7 +114,7 @@ import { ledgerByObject, getLedger, downloadLedgerAttachment, fetchLedgerPreview
 const props = defineProps({
   objectType: { type: String, required: true },
   objectId: { type: [String, Number], default: '' },
-  title: { type: String, default: '关联证据资料' }
+  title: { type: String, default: '关联资料资料' }
 })
 
 const router = useRouter()
@@ -125,7 +125,7 @@ const rows = ref([])
 const detail = ref({ visible: false, ledger: null, attachments: [], links: [] })
 const previewDlg = ref({ visible: false, name: '', kind: '', url: '' })
 
-// 查看人无 ledger:add → 不出现「录入证据」入口（AC-A6-1）
+// 查看人无 ledger:add → 不出现「录入资料」入口（AC-A6-1）
 const writable = computed(() => userStore.hasPermission('ledger:add'))
 
 const statusLabel = (s) => ({ DRAFT: '草稿', SUBMITTED: '已提交', ARCHIVED: '已归档', VOID: '作废' }[s] || s || '—')
@@ -146,7 +146,7 @@ async function load() {
     const res = await ledgerByObject(props.objectType, props.objectId)
     rows.value = res.data || []
   } catch {
-    // 无台账查看权限的模块使用者：证据区静默留空，不阻断模块主流程
+    // 无清单查看权限的模块使用者：资料区静默留空，不阻断模块主流程
     rows.value = []
   } finally { loading.value = false }
 }
@@ -181,7 +181,7 @@ async function download(row) {
 }
 
 function goCreate() {
-  // 带到台账页并预置关联对象，录入仍在台账单一界面内完成（AC-A1-1）
+  // 带到清单页并预置关联对象，录入仍在清单单一界面内完成（AC-A1-1）
   router.push({ path: '/ledger/list', query: { objectType: props.objectType, objectId: String(props.objectId) } })
 }
 

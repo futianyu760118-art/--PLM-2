@@ -4,9 +4,9 @@
       <el-form :inline="true" :model="query" class="filter-bar">
         <el-form-item label="项目号"><el-input v-model="query.projectNo" clearable /></el-form-item>
         <el-form-item label="关键字"><el-input v-model="query.keyword" clearable placeholder="问题/产品/提出人" /></el-form-item>
-        <el-form-item label="闭环">
+        <el-form-item label="完成">
           <el-select v-model="query.closed" clearable style="width:120px">
-            <el-option label="已闭环" :value="1" /><el-option label="未闭环" :value="0" />
+            <el-option label="已完成" :value="1" /><el-option label="未完成" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item><el-button type="primary" icon="Search" @click="loadData">查询</el-button></el-form-item>
@@ -24,8 +24,8 @@
         <el-table-column prop="responsiblePerson" label="责任人" width="90" />
         <el-table-column prop="responsibleDept" label="责任部门" width="100" />
         <el-table-column prop="planCompleteDate" label="计划完成" width="110" />
-        <el-table-column label="闭环" width="80" align="center">
-          <template #default="{row}"><el-tag :type="row.closed ? 'success' : 'warning'" size="small">{{ row.closed ? '已闭环' : '未闭环' }}</el-tag></template>
+        <el-table-column label="完成" width="80" align="center">
+          <template #default="{row}"><el-tag :type="row.closed ? 'success' : 'warning'" size="small">{{ row.closed ? '已完成' : '未完成' }}</el-tag></template>
         </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="{row}">
@@ -57,7 +57,7 @@
           <el-col :span="24"><el-form-item label="临时措施"><el-input v-model="form.tempMeasure" type="textarea" :rows="2" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="原因分析"><el-input v-model="form.causeAnalysis" type="textarea" :rows="2" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="长期措施"><el-input v-model="form.longTermMeasure" type="textarea" :rows="2" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="闭环">
+          <el-col :span="12"><el-form-item label="完成">
             <el-switch v-model="form.closed" :active-value="1" :inactive-value="0" />
           </el-form-item></el-col>
           <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remarks" type="textarea" :rows="2" /></el-form-item></el-col>

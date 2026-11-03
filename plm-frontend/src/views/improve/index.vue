@@ -116,9 +116,9 @@
         </template>
       </el-dialog>
 
-      <!-- 证据区: 问题单(需求)侧引用台账证据(AC-A3-1/A3-5) -->
+      <!-- 资料区: 问题单(需求)侧引用清单资料(AC-A3-1/A3-5) -->
       <LedgerEvidencePanel object-type="REQUIREMENT" :object-id="detailDrawer.issue?.issueNo"
-        title="关联证据资料" />
+        title="关联资料资料" />
     </el-drawer>
   </div>
 </template>

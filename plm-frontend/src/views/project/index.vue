@@ -46,7 +46,7 @@
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-            <el-button link type="success" size="small" @click="openGates(row)">阶段门</el-button>
+            <el-button link type="success" size="small" @click="openGates(row)">阶段检查</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -94,7 +94,7 @@
       </template>
     </el-dialog>
 
-    <el-drawer v-model="gateDrawer.visible" :title="'阶段门 - ' + (gateDrawer.project?.projectName || '')" size="650px">
+    <el-drawer v-model="gateDrawer.visible" :title="'阶段检查 - ' + (gateDrawer.project?.projectName || '')" size="650px">
       <div style="margin-bottom:14px">
         <el-steps :active="gateDrawer.currentStep" align-center finish-status="success">
           <el-step v-for="g in gateList" :key="g.code" :title="g.code" :description="g.name" />
@@ -113,7 +113,7 @@
         </el-timeline-item>
       </el-timeline>
 
-      <!-- 证据区: 项目侧引用台账证据(AC-A3-1/A3-5) -->
+      <!-- 资料区: 项目侧引用清单资料(AC-A3-1/A3-5) -->
       <LedgerEvidencePanel object-type="PROJECT" :object-id="gateDrawer.project?.projectNo" />
     </el-drawer>
   </div>
@@ -197,7 +197,7 @@ async function openGates(row) {
 
 async function handlePassNext() {
   if (!gateDrawer.nextGate || !gateDrawer.project) return
-  await ElMessageBox.confirm(`确认通过阶段门 ${gateDrawer.nextGate}?`, '确认', { type:'success' })
+  await ElMessageBox.confirm(`确认通过阶段检查 ${gateDrawer.nextGate}?`, '确认', { type:'success' })
   await passGate(gateDrawer.project.id, gateDrawer.nextGate, {})
   ElMessage.success(`${gateDrawer.nextGate} 已通过`)
   const res = await getGateLogs(gateDrawer.project.id)
@@ -210,7 +210,7 @@ async function handlePassNext() {
 }
 
 onMounted(() => {
-  // 由证据台账「前往」跳入时按项目编号预置筛选(AC-A4-2 可跳转到该对象)
+  // 由资料清单「前往」跳入时按项目编号预置筛选(AC-A4-2 可跳转到该对象)
   const kw = route.query.keyword
   if (kw) query.keyword = String(kw)
   loadData()

@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <OperationGuide module-key="quality" />
-    <DataIOBar module="quality" name="品质检验标准" />
+    <DataIOBar module="quality" name="质量检验标准" />
     <el-card>
       <el-form :inline="true" :model="query" class="filter-bar">
         <el-form-item label="料号"><el-input v-model="query.partNo" clearable /></el-form-item>

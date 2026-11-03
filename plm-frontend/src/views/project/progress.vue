@@ -73,16 +73,16 @@
               <p v-else class="std-tip" style="margin-top:4px">无子项（如遇模具重开等，点「追加子项」记录）</p>
 
               <el-divider content-position="left">
-                证据文件 ({{ (evidenceMap[row.id] || []).length }})
+                资料文件 ({{ (evidenceMap[row.id] || []).length }})
                 <el-upload style="display:inline-block;margin-left:8px"
                   :show-file-list="false" :http-request="opt => doUpload(row, opt)" :disabled="uploadingId === row.id">
-                  <el-button size="small" type="success" plain icon="Upload" :loading="uploadingId === row.id">上传证据</el-button>
+                  <el-button size="small" type="success" plain icon="Upload" :loading="uploadingId === row.id">上传资料</el-button>
                 </el-upload>
                 <el-button size="small" type="primary" plain icon="EditPen" style="margin-left:6px"
-                  @click="openTextEvidence(row)">填写证据</el-button>
+                  @click="openTextEvidence(row)">填写资料</el-button>
               </el-divider>
-              <el-table :data="evidenceMap[row.id] || []" size="small" border empty-text="暂无证据文件">
-                <el-table-column label="证据物" min-width="200" show-overflow-tooltip>
+              <el-table :data="evidenceMap[row.id] || []" size="small" border empty-text="暂无资料文件">
+                <el-table-column label="资料物" min-width="200" show-overflow-tooltip>
                   <template #default="{ row: ev }">
                     <el-link type="primary" @click="previewEvidence(ev)">{{ ev.fileName }}</el-link>
                   </template>
@@ -107,7 +107,7 @@
                   </template>
                 </el-table-column>
               </el-table>
-              <div class="std-tip">完成标准: 状态=已完成 且 填写实际完成日期 且 证据文件≥1</div>
+              <div class="std-tip">完成标准: 状态=已完成 且 填写实际完成日期 且 资料文件≥1</div>
             </div>
           </template>
         </el-table-column>
@@ -161,7 +161,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="deliveryDesc" label="交付物" min-width="160" show-overflow-tooltip />
-        <el-table-column label="证据" width="80" align="center">
+        <el-table-column label="资料" width="80" align="center">
           <template #default="{ row }">
             <el-badge :value="row.evidenceCount || 0" :type="row.evidenceCount ? 'success' : 'info'" />
           </template>
@@ -215,8 +215,8 @@
       </template>
     </el-dialog>
 
-    <!-- 证据预览/打开 -->
-    <el-dialog v-model="preview.visible" :title="'证据 · ' + (preview.name || '')" width="840px" top="5vh">
+    <!-- 资料预览/打开 -->
+    <el-dialog v-model="preview.visible" :title="'资料 · ' + (preview.name || '')" width="840px" top="5vh">
       <div v-if="preview.loading" style="text-align:center;padding:40px;color:#909399">加载中...</div>
       <template v-else>
         <pre v-if="preview.kind === 'text'" class="preview-text">{{ preview.text }}</pre>
@@ -255,14 +255,14 @@
       </template>
     </el-dialog>
 
-    <!-- 填写/编辑证据 -->
-    <el-dialog v-model="evForm.visible" :title="evForm.id ? '编辑证据' : '填写证据(系统内)'" width="640px">
+    <!-- 填写/编辑资料 -->
+    <el-dialog v-model="evForm.visible" :title="evForm.id ? '编辑资料' : '填写资料(系统内)'" width="640px">
       <el-form :model="evForm" label-width="70px">
         <el-form-item label="类型"><el-input v-model="evForm.docType" placeholder="如 PLAN / BOM / 测试报告" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="evForm.note" placeholder="简要说明" /></el-form-item>
         <el-form-item label="内容">
           <el-input v-model="evForm.content" type="textarea" :rows="9"
-            placeholder="在系统内填写证据内容, 如: 检查记录 / 结论 / 测试数据 / 会议纪要" />
+            placeholder="在系统内填写资料内容, 如: 检查记录 / 结论 / 测试数据 / 会议纪要" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -537,7 +537,7 @@ async function doUpload(row, opt) {
   try {
     await uploadEvidence(row.id, opt.file, 'NODE_EVIDENCE', '')
     opt.onSuccess && opt.onSuccess()
-    ElMessage.success('证据已上传')
+    ElMessage.success('资料已上传')
     await loadEvidences(row)
     await load()
   } catch (e) {
@@ -546,7 +546,7 @@ async function doUpload(row, opt) {
 }
 
 async function removeEvidence(row, ev) {
-  await ElMessageBox.confirm(`删除证据 [${ev.fileName}]?`, '警告', { type: 'warning' })
+  await ElMessageBox.confirm(`删除资料 [${ev.fileName}]?`, '警告', { type: 'warning' })
   await deleteEvidence(ev.id)
   ElMessage.success('已删除')
   await loadEvidences(row)
@@ -613,15 +613,15 @@ function openEditEvidence(ev) {
 }
 
 async function saveEvidenceForm() {
-  if (!evForm.content || !evForm.content.trim()) { ElMessage.warning('请填写证据内容'); return }
+  if (!evForm.content || !evForm.content.trim()) { ElMessage.warning('请填写资料内容'); return }
   evForm.saving = true
   try {
     if (evForm.id) {
       await updateEvidence(evForm.id, { docType: evForm.docType, note: evForm.note, content: evForm.content })
-      ElMessage.success('证据已更新')
+      ElMessage.success('资料已更新')
     } else {
       await createTextEvidence(evForm.nodeId, { docType: evForm.docType, note: evForm.note, content: evForm.content })
-      ElMessage.success('证据已填写')
+      ElMessage.success('资料已填写')
     }
     evForm.visible = false
     if (evForm.node) await loadEvidences(evForm.node)

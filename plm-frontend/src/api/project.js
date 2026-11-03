@@ -125,7 +125,7 @@ export function pageChanges(params) {
   return request({ url: '/v1/rd/changes', method: 'get', params })
 }
 
-// ===== 完成判定汇总 (工作表/台账 -> 项目明细表节点) =====
+// ===== 完成判定汇总 (工作表/清单 -> 项目明细表节点) =====
 export function rollupAll() {
   return request({ url: '/v1/rd/tracking/rollup', method: 'post' })
 }

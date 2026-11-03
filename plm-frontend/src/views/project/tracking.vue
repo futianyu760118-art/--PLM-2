@@ -35,7 +35,7 @@
         <el-form-item>
           <el-button type="primary" icon="Search" @click="loadData">查询</el-button>
           <el-button icon="Refresh" @click="loadData">刷新</el-button>
-          <el-button type="success" plain icon="MagicStick" :loading="syncing" @click="doRollup">同步台账(完成判定)</el-button>
+          <el-button type="success" plain icon="MagicStick" :loading="syncing" @click="doRollup">同步清单(完成判定)</el-button>
           <el-button icon="Grid" @click="openMap">节点↔工作表对照</el-button>
         </el-form-item>
         <el-form-item label="每页">
@@ -239,7 +239,7 @@ async function openMap() {
 }
 
 onActivated(async () => {
-  // 由证据台账「前往」跳入时按关键字预置筛选(AC-A4-2)
+  // 由资料清单「前往」跳入时按关键字预置筛选(AC-A4-2)
   const kw = route.query.keyword
   if (kw) query.keyword = String(kw)
   if (!nodeDefs.value.length) await loadDefs()

@@ -22,14 +22,14 @@ export const MODES = {
     groups: [
       { stage: '产品上下文', icon: 'Box', items: [
         { path: '/project/workspace', title: '产品概览', icon: 'DataBoard' },
-        { path: '/material/list', title: '物料主数据', icon: 'Box' },
+        { path: '/material/list', title: '物料信息', icon: 'Box' },
         { path: '/material/wizard', title: '建档向导', icon: 'MagicStick' },
         { path: '/model3d/list', title: '3D模型', icon: 'View' }
       ] },
       { stage: '研发交付', icon: 'Connection', items: [
         { path: '/bom/list', title: 'BOM结构', icon: 'Connection' },
         { path: '/project/worksheets', title: '项目工作表', icon: 'Document' },
-        { path: '/ecn/list', title: '工程变更', icon: 'Switch' },
+        { path: '/ecn/list', title: '设计变更', icon: 'Switch' },
         { path: '/archive/list', title: '档案', icon: 'FolderOpened' }
       ] },
       { stage: '制造与品质', icon: 'SetUp', items: [
@@ -58,15 +58,15 @@ export const MODES = {
       ] },
       { stage: '工程评审', icon: 'Checked', items: [
         { path: '/project/review', title: '项目复盘', icon: 'Reading' },
-        { path: '/ecn/list', title: '工程变更', icon: 'Switch' },
+        { path: '/ecn/list', title: '设计变更', icon: 'Switch' },
         { path: '/project/changes', title: '变更列表', icon: 'DocumentCopy' }
       ] },
       { stage: '工具画廊', icon: 'MagicStick', items: [
-        { path: '/agent/list', title: '智能体中心', icon: 'MagicStick' },
+        { path: '/agent/list', title: 'AI助手中心', icon: 'MagicStick' },
         { path: '/improve/skills', title: '技能库', icon: 'Collection' },
         { path: '/dq/debts', title: '数据自检', icon: 'DataLine' },
-        { path: '/metric/list', title: '度量KPI', icon: 'TrendCharts' },
-        { path: '/analytics/list', title: '分析驾驶舱', icon: 'DataAnalysis' }
+        { path: '/metric/list', title: '指标看板', icon: 'TrendCharts' },
+        { path: '/analytics/list', title: '分析看板', icon: 'DataAnalysis' }
       ] }
     ]
   },
@@ -107,10 +107,10 @@ export const MODES = {
       { stage: '工作区', icon: 'Files', items: [
         { path: '/project/collab-home', title: '项目', icon: 'Files' },
         { path: '/project/tracking', title: '跟踪', icon: 'DataBoard' },
-        { path: '/metric/list', title: '度量', icon: 'TrendCharts' }
+        { path: '/metric/list', title: '指标', icon: 'TrendCharts' }
       ] },
       { stage: '配置', icon: 'Setting', items: [
-        { path: '/agent/list', title: '智能体', icon: 'MagicStick' },
+        { path: '/agent/list', title: 'AI助手', icon: 'MagicStick' },
         { path: '/improve/skills', title: '技能库', icon: 'Collection' },
         { path: '/help', title: '帮助与学习', icon: 'QuestionFilled' }
       ] }

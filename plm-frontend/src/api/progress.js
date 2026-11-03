@@ -33,7 +33,7 @@ export async function fetchPreview(fileId) {
   return { blob, url: window.URL.createObjectURL(blob), type, text }
 }
 
-/** 取文本证据内容 */
+/** 取文本资料内容 */
 export async function fetchTextEvidence(evidenceId) {
   const res = await request({ url: `/project/nodes/evidence/${evidenceId}`, method: 'get' })
   return res.data

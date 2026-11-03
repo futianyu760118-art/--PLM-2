@@ -10,7 +10,7 @@
       </el-col>
       <el-col :span="12">
         <el-card>
-          <template #header><span>ECN 闭环时长</span></template>
+          <template #header><span>ECN 完成时长</span></template>
           <div ref="ecnChartRef" style="height:280px"></div>
         </el-card>
       </el-col>

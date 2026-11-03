@@ -44,7 +44,7 @@
             <el-button link type="info" size="small" v-if="row.status==='RELEASED'" @click="handleBuildSbom(row)">构建SBOM</el-button>
             <el-button link size="small" @click="openWhereUsed(row.rootPartNo)">反查</el-button>
             <el-button link size="small" type="primary" @click="openCbom(row.rootPartNo)">CBOM</el-button>
-            <el-button link size="small" @click="openLedger(row)">证据</el-button>
+            <el-button link size="small" @click="openLedger(row)">资料</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -130,8 +130,8 @@
       </template>
     </el-dialog>
 
-    <!-- 证据区: BOM 侧引用台账证据(AC-A3-1/A3-5) -->
-    <el-drawer v-model="ledgerDrawer.visible" :title="'关联证据 - ' + (ledgerDrawer.bomNo || '')" size="820px">
+    <!-- 资料区: BOM 侧引用清单资料(AC-A3-1/A3-5) -->
+    <el-drawer v-model="ledgerDrawer.visible" :title="'关联资料 - ' + (ledgerDrawer.bomNo || '')" size="820px">
       <LedgerEvidencePanel object-type="BOM" :object-id="ledgerDrawer.bomNo" />
     </el-drawer>
 

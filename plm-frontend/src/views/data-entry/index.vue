@@ -27,7 +27,7 @@
             <el-table-column prop="projectName" label="项目名称" min-width="180" show-overflow-tooltip />
             <el-table-column prop="owner" label="负责人" width="100" />
             <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag size="small">{{ row.status }}</el-tag></template></el-table-column>
-            <el-table-column label="阶段门" width="90"><template #default="{ row }">{{ row.currentGate || '—' }}</template></el-table-column>
+            <el-table-column label="阶段检查" width="90"><template #default="{ row }">{{ row.currentGate || '—' }}</template></el-table-column>
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="物料" name="material">
@@ -62,11 +62,11 @@ const router = useRouter()
 
 const categories = [
   { key: 'initiation', title: '项目立项', desc: '新建研发项目立项申请', path: '/project/initiation', icon: 'DocumentAdd' },
-  { key: 'tracking', title: '研发项目跟踪', desc: '节点进度 / 台账统一填报', path: '/project/tracking', icon: 'DataBoard' },
-  { key: 'progress', title: '项目明细表', desc: '22 节点明细 / 证据', path: '/project/progress', icon: 'Tickets' },
+  { key: 'tracking', title: '研发项目跟踪', desc: '节点进度 / 清单统一填报', path: '/project/tracking', icon: 'DataBoard' },
+  { key: 'progress', title: '项目明细表', desc: '22 节点明细 / 资料', path: '/project/progress', icon: 'Tickets' },
   { key: 'worksheets', title: '项目工作表', desc: '规格书/配置表/评审/试产/出货', path: '/project/worksheets', icon: 'Memo' },
   { key: 'material', title: '物料建档', desc: '料号 / 参数 / 图纸', path: '/material/wizard', icon: 'Box' },
-  { key: 'ledger', title: '证据台账', desc: '统一证据上传 / 归档', path: '/ledger/list', icon: 'Document' },
+  { key: 'ledger', title: '资料清单', desc: '统一资料上传 / 归档', path: '/ledger/list', icon: 'Document' },
   { key: 'changes', title: '变更列表', desc: '项目变更留痕', path: '/project/changes', icon: 'Switch' },
   { key: 'bom', title: 'BOM结构', desc: '多级 BOM / 爆炸', path: '/bom/list', icon: 'Connection' },
   { key: 'model3d', title: '3D模型', desc: '3D 档案上传', path: '/model3d/list', icon: 'View' },
@@ -82,7 +82,7 @@ const loadingProject = ref(false)
 const loadingMaterial = ref(false)
 const loadingFeedback = ref(false)
 
-const fLabel = s => ({ pending: '待分析', proposed: '待确认方案', approved: '待实现', implementing: '实现中', implemented: '待闭环', resolved: '待管理员确认', verified: '待合并', merged: '已合并', closed: '已关闭' }[s] || s)
+const fLabel = s => ({ pending: '待分析', proposed: '待确认方案', approved: '待实现', implementing: '实现中', implemented: '待完成', resolved: '待管理员确认', verified: '待合并', merged: '已合并', closed: '已关闭' }[s] || s)
 const fTag = s => ({ pending: 'warning', proposed: 'warning', approved: 'primary', implementing: 'primary', implemented: 'primary', resolved: 'warning', verified: 'primary', merged: 'success', closed: 'info' }[s] || 'info')
 
 function go(path) { router.push(path) }

@@ -103,7 +103,7 @@
 
         <div v-if="hasAudit" class="audit-box">
           <div v-if="detail.data.approved_by" class="audit-line">方案确认：{{ detail.data.approved_by }} · {{ fmt(detail.data.approved_at) }}</div>
-          <div v-if="detail.data.closed_by" class="audit-line">确认闭环：{{ detail.data.closed_by }} · {{ fmt(detail.data.closed_at) }}</div>
+          <div v-if="detail.data.closed_by" class="audit-line">确认完成：{{ detail.data.closed_by }} · {{ fmt(detail.data.closed_at) }}</div>
           <div v-if="detail.data.verified_by" class="audit-line">管理员确认：{{ detail.data.verified_by }} · {{ fmt(detail.data.verified_at) }}</div>
           <div v-if="detail.data.merged_by" class="audit-line">代码合并：{{ detail.data.merged_by }} · {{ fmt(detail.data.merged_at) }}{{ detail.data.merged_branch ? ' · ' + detail.data.merged_branch : '' }}</div>
         </div>
@@ -161,7 +161,7 @@ const STATUS_META = {
   proposed: { label: '待确认方案', type: 'warning' },
   approved: { label: '待实现', type: 'primary' },
   implementing: { label: '实现中', type: 'primary' },
-  implemented: { label: '待闭环', type: 'primary' },
+  implemented: { label: '待完成', type: 'primary' },
   resolved: { label: '待管理员确认', type: 'warning' },
   verified: { label: '待合并', type: 'primary' },
   merged: { label: '已合并', type: 'success' },
@@ -187,7 +187,7 @@ const kpis = [
   { key: 'proposed', label: '待确认方案', accent: 'warn', filter: 'proposed' },
   { key: 'approved', label: '待实现', accent: 'info', filter: 'approved' },
   { key: 'implementing', label: '实现中', accent: 'info', filter: 'implementing' },
-  { key: 'implemented', label: '待闭环', accent: 'info', filter: 'implemented' },
+  { key: 'implemented', label: '待完成', accent: 'info', filter: 'implemented' },
   { key: 'resolved', label: '待终审', accent: 'warn', filter: 'resolved' },
   { key: 'verified', label: '待合并', accent: 'info', filter: 'verified' },
   { key: 'merged', label: '已合并', accent: 'ok', filter: 'merged' },

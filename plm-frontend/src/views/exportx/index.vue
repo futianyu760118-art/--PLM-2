@@ -7,7 +7,7 @@
         <el-button type="primary" @click="quickExport('part')">导出物料清单</el-button>
         <el-button type="success" @click="exportReleasedFinished">导出已发布成品清单</el-button>
         <el-button @click="quickExport('ecn')">导出ECN清单</el-button>
-        <el-button @click="quickExport('metric')">导出度量值</el-button>
+        <el-button @click="quickExport('metric')">导出指标值</el-button>
         <el-button @click="loadList">刷新</el-button>
       </div>
       <el-table v-loading="loading" :data="tasks" border stripe size="small">
@@ -50,7 +50,7 @@ async function loadList() {
 }
 
 async function quickExport(type) {
-  const nameMap = { part: '物料清单', ecn: 'ECN清单', metric: '度量值' }
+  const nameMap = { part: '物料清单', ecn: 'ECN清单', metric: '指标值' }
   const res = await createExport({ exportType: type === 'metric' ? 'METRIC' : 'RESOURCE', format: 'csv', name: nameMap[type], spec: { resource: type } })
   if (res.data.status === 'DONE') {
     ElMessage.success(`导出完成: ${res.data.rowCount} 行`)

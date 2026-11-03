@@ -108,7 +108,7 @@ async function handleDelete(row) {
 }
 
 onMounted(() => {
-  // 由证据台账「前往」跳入时按关键字预置筛选(AC-A4-2)
+  // 由资料清单「前往」跳入时按关键字预置筛选(AC-A4-2)
   const kw = route.query.keyword
   if (kw) query.keyword = String(kw)
   loadData()

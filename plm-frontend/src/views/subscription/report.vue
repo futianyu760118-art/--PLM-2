@@ -84,7 +84,7 @@
         点资料名称即回到资料汇总处并定位该条记录
       </div>
       <el-table :data="detail.items" size="small" border>
-        <el-table-column label="来源证据编号" width="170">
+        <el-table-column label="来源资料编号" width="170">
           <template #default="{ row }">
             <el-button link type="primary" @click="locate(row)">{{ row.ledgerNo }}</el-button>
           </template>

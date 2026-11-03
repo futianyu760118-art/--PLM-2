@@ -14,7 +14,7 @@
         <el-form-item><el-button type="primary" icon="Search" @click="loadData">查询</el-button></el-form-item>
       </el-form>
       <div class="table-toolbar">
-        <el-button type="primary" icon="Plus" @click="openDialog()" v-if="userStore.hasPermission('mold:add')">新增台账</el-button>
+        <el-button type="primary" icon="Plus" @click="openDialog()" v-if="userStore.hasPermission('mold:add')">新增清单</el-button>
       </div>
       <el-table v-loading="loading" :data="tableData" border stripe>
         <el-table-column prop="moldNo" label="模具编号" min-width="160" fixed />

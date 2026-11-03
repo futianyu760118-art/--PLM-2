@@ -72,14 +72,14 @@
               <el-icon :size="16"><QuestionFilled /></el-icon>
             </button>
           </el-tooltip>
-          <el-tooltip content="恒剑PLM智能体" placement="bottom">
+          <el-tooltip content="恒剑PLMAI助手" placement="bottom">
             <button class="agent-entry" @click="agentChatVisible = true">
               <el-icon :size="16"><ChatDotRound /></el-icon>
-              <span class="agent-entry-label">PLM智能体</span>
+              <span class="agent-entry-label">PLMAI助手</span>
             </button>
           </el-tooltip>
           <el-dropdown v-if="!isAdminRole" @command="switchScope">
-            <button class="agent-entry" aria-label="数据范围">
+            <button class="agent-entry" aria-label="可见范围">
               <el-icon :size="16"><View /></el-icon>
               <span class="agent-entry-label">{{ scopeLabel }}</span>
             </button>
@@ -120,7 +120,7 @@
 
     <!-- 全局反馈入口:单点注入,所有走 Layout 的页面自动覆盖(AC F1) -->
     <FeedbackFab />
-    <!-- 恒剑PLM智能体对话抽屉(右上角入口) -->
+    <!-- 恒剑PLMAI助手对话抽屉(右上角入口) -->
     <AgentChat v-model="agentChatVisible" />
     <!-- 外观设置抽屉 -->
     <ThemePanel v-model="themeVisible" />
@@ -180,18 +180,18 @@ loadScope()
 
 // 工序前后顺序(上游 → 下游)
 const STAGE_ORDER = [
-  '工作台', '研发自治中心', '项目与物料', '产品结构', '3D与档案', '证据台账',
-  '订阅与报告', '工程变更', '模具与工序', '品质检验', '外协协同', '数据治理', '度量分析',
-  '导出集成', '智能改善', '系统管理'
+  '工作台', '研发项目', '项目与物料', '产品结构', '3D与文件', '项目资料',
+  '订阅提醒', '设计变更', '模具与工序', '质量检验', '外协管理', '数据检查', '数据分析',
+  '导入导出', '智能助手', '系统设置'
 ]
 const STAGE_ICONS = {
-  '工作台': 'HomeFilled', '研发自治中心': 'DataBoard', '项目与物料': 'Flag',
+  '工作台': 'HomeFilled', '研发项目': 'DataBoard', '项目与物料': 'Flag',
   '产品结构': 'Connection',
-  '3D与档案': 'FolderOpened', '证据台账': 'Document', '订阅与报告': 'Bell',
-  '工程变更': 'Switch', '模具与工序': 'SetUp',
-  '品质检验': 'CircleCheckFilled', '外协协同': 'Promotion', '数据治理': 'DataLine',
-  '度量分析': 'TrendCharts', '导出集成': 'Upload', '智能改善': 'MagicStick',
-  '系统管理': 'Setting'
+  '3D与文件': 'FolderOpened', '项目资料': 'Document', '订阅提醒': 'Bell',
+  '设计变更': 'Switch', '模具与工序': 'SetUp',
+  '质量检验': 'CircleCheckFilled', '外协管理': 'Promotion', '数据检查': 'DataLine',
+  '数据分析': 'TrendCharts', '导入导出': 'Upload', '智能助手': 'MagicStick',
+  '系统设置': 'Setting'
 }
 
 const activeMenu = computed(() => route.meta?.activeMenu || route.path)

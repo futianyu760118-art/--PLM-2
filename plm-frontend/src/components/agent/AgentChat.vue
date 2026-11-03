@@ -1,5 +1,5 @@
 <template>
-  <el-drawer v-model="visible" title="恒剑PLM智能体" size="500px" :append-to-body="true">
+  <el-drawer v-model="visible" title="恒剑PLMAI助手" size="500px" :append-to-body="true">
     <div class="agent-chat">
       <div class="chat-head">
         <span class="hint">用大白话说需求，我来办；办不了我会给你选项</span>
@@ -9,7 +9,7 @@
       <div ref="chatArea" class="chat-area">
         <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
           <div class="bubble">{{ m.text }}</div>
-          <!-- 智能体分析解读 -->
+          <!-- AI助手分析解读 -->
           <div v-if="m.analysis" class="result-analysis">
             <span class="result-analysis-tag">分析</span>
             <p>{{ m.analysis }}</p>
@@ -53,7 +53,7 @@
         </div>
         <div v-if="!messages.length" class="chat-empty">
           <el-icon :size="30"><MagicStick /></el-icon>
-          <p>你好，我是恒剑PLM智能体</p>
+          <p>你好，我是恒剑PLMAI助手</p>
           <div class="quick-asks">
             <el-button v-for="q in QUICK" :key="q" size="small" round @click="send(q)">{{ q }}</el-button>
           </div>

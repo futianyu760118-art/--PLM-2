@@ -9,7 +9,7 @@ raw.interceptors.request.use(cfg => {
   return cfg
 }, e => Promise.reject(e))
 
-// ---------- 查询(证据台账 / 资料汇总处 共用, AC-A5-1~A5-5) ----------
+// ---------- 查询(资料清单 / 资料汇总处 共用, AC-A5-1~A5-5) ----------
 
 export function pageLedger(params) {
   return request({ url: '/ledger/list', method: 'get', params })
@@ -19,7 +19,7 @@ export function getLedger(id) {
   return request({ url: `/ledger/${id}`, method: 'get' })
 }
 
-/** 模块/表单侧证据区: 按关联对象取引用条目(AC-A3-1/A3-5/A3-6) */
+/** 模块/表单侧资料区: 按关联对象取引用条目(AC-A3-1/A3-5/A3-6) */
 export function ledgerByObject(objectType, objectId) {
   return request({ url: '/ledger/by-object', method: 'get', params: { objectType, objectId } })
 }
@@ -38,7 +38,7 @@ export function searchLedgerOwners(keyword, limit = 20) {
   return request({ url: '/ledger/owners', method: 'get', params: { keyword, limit } })
 }
 
-/** 按证据编号还原完整变更轨迹(AC-A6-7) */
+/** 按资料编号还原完整变更轨迹(AC-A6-7) */
 export function ledgerTrail(ledgerNo) {
   return request({ url: `/ledger/trail/${encodeURIComponent(ledgerNo)}`, method: 'get' })
 }
@@ -58,7 +58,7 @@ export function deleteLedger(id) {
 }
 
 /**
- * 批量上传: N 个文件合并为 1 条多附件证据(AC-A5-6)。
+ * 批量上传: N 个文件合并为 1 条多附件资料(AC-A5-6)。
  * meta 以 JSON part 提交, 与后端 @RequestPart("meta") 对应。
  */
 export function batchUploadLedger(meta, files) {
@@ -120,17 +120,17 @@ export function addLedgerLink(id, data) {
   return request({ url: `/ledger/${id}/links`, method: 'post', data })
 }
 
-/** 解除关联: 只解除引用, 台账本体保留(AC-A4-3) */
+/** 解除关联: 只解除引用, 清单本体保留(AC-A4-3) */
 export function removeLedgerLink(id, linkId) {
   return request({ url: `/ledger/${id}/links/${linkId}`, method: 'delete' })
 }
 
-/** 批量关联: N 条证据关联到同一对象(AC-A5-7/A5-8) */
+/** 批量关联: N 条资料关联到同一对象(AC-A5-7/A5-8) */
 export function batchLinkLedger(ledgerIds, objectType, objectId) {
   return request({ url: '/ledger/batch-link', method: 'post', data: { ledgerIds, objectType, objectId } })
 }
 
-/** 模块/表单侧回写台账(双向同步, AC-A3-2) */
+/** 模块/表单侧回写清单(双向同步, AC-A3-2) */
 export function syncLedger(data) {
   return request({ url: '/ledger/sync', method: 'post', data })
 }

@@ -21,7 +21,7 @@
           <el-descriptions-item label="当前阶段">{{ project.currentGate }}</el-descriptions-item>
           <el-descriptions-item label="关联料号">{{ project.partNo || '—' }}</el-descriptions-item>
           <el-descriptions-item label="节点进度">{{ card ? `${card.nodes.done}/${card.nodes.total} 完成` : '—' }}</el-descriptions-item>
-          <el-descriptions-item label="证据">{{ card ? `${card.evidenceCount} 条` : '—' }}</el-descriptions-item>
+          <el-descriptions-item label="资料">{{ card ? `${card.evidenceCount} 条` : '—' }}</el-descriptions-item>
         </el-descriptions>
 
         <template v-if="card">
@@ -49,14 +49,14 @@
               </div>
             </el-col>
             <el-col :xs="24" :md="12">
-              <h4 class="sec">阶段门流转（最近）</h4>
+              <h4 class="sec">阶段检查流转（最近）</h4>
               <el-timeline v-if="card.gates.length" class="gates">
                 <el-timeline-item v-for="g in card.gates" :key="g.gate_code + g.actual_date"
                   :type="g.result === 'PASS' ? 'success' : 'danger'" :timestamp="g.actual_date" placement="top">
                   {{ g.gate_code }} {{ g.gate_name }} — {{ g.result }} <span class="op">/ {{ g.operator }}</span>
                 </el-timeline-item>
               </el-timeline>
-              <p v-else class="muted">暂无阶段门流转记录</p>
+              <p v-else class="muted">暂无阶段检查流转记录</p>
             </el-col>
           </el-row>
         </template>
@@ -103,11 +103,11 @@ const sheetHint = computed(() => {
 })
 
 const QUICK = [
-  { label: '项目明细表', to: '/project/progress' },
-  { label: '研发项目跟踪', to: '/project/tracking' },
+  { label: '项目进度明细', to: '/project/progress' },
+  { label: '项目跟踪表', to: '/project/tracking' },
   { label: '项目工作表', to: '/project/worksheets' },
-  { label: 'BOM结构', to: '/bom/list' },
-  { label: '工程变更', to: '/ecn/list' },
+  { label: '产品结构', to: '/bom/list' },
+  { label: '设计变更', to: '/ecn/list' },
   { label: '档案', to: '/archive/list' }
 ]
 

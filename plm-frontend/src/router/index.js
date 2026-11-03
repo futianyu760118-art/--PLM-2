@@ -12,7 +12,7 @@ const Layout = () => import('@/layout/index.vue')
  * 路由按"工序前后"顺序分组(严格遵循产品研发/制造流程的上游→下游):
  *   工作台 → 项目与物料(立项/建档) → 产品结构(BOM) → 3D与档案
  *     → 工程变更(ECN) → 模具与工序(模具开发/工序流转) → 品质检验
- *     → 外协协同 → 数据治理 → 度量分析 → 导出集成 → 智能改善 → 系统管理
+ *     → 外协协同 → 数据治理 → 指标分析 → 导出集成 → 智能改善 → 系统管理
  *
  * 每个路由通过 meta.workflowStage 指定所属工序阶段,Sidebar 按 stage 分组渲染。
  */
@@ -27,8 +27,8 @@ const routes = [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/dashboard.vue'),
         meta: { title: '工作台', icon: 'HomeFilled', workflowStage: '工作台' } },
       { path: 'lifecycle', name: 'Lifecycle', component: () => import('@/views/lifecycle/index.vue'),
-        meta: { title: '全生命周期', workflowStage: '工作台' } },
-      { path: 'poms', name: 'Poms', component: () => import('@/views/poms/index.vue'), meta: { title: '06 微系统', icon: 'Monitor' } },
+        meta: { title: '全流程总览', workflowStage: '工作台' } },
+      { path: 'poms', name: 'Poms', component: () => import('@/views/poms/index.vue'), meta: { title: '工作台(新版)', icon: 'Monitor' } },
       { path: 'help', name: 'HelpCenter', component: () => import('@/views/help/index.vue'),
         meta: { title: '帮助与学习', workflowStage: '工作台' } },
       { path: 'data-entry', name: 'DataEntry', component: () => import('@/views/data-entry/index.vue'),
@@ -42,34 +42,34 @@ const routes = [
     path: '/project',
     component: Layout,
     redirect: '/project/list',
-    meta: { title: '研发自治中心', icon: 'DataBoard', workflowStage: '研发自治中心' },
+    meta: { title: '研发项目', icon: 'DataBoard', workflowStage: '研发项目' },
     children: [
       { path: 'list', name: 'ProjectList', component: () => import('@/views/project/index.vue'),
         meta: { title: '研发项目' } },
       { path: 'progress', name: 'ProjectProgress', component: () => import('@/views/project/progress.vue'),
-        meta: { title: '项目明细表' } },
+        meta: { title: '项目进度明细' } },
       { path: 'tracking', name: 'ProjectTracking', component: () => import('@/views/project/tracking.vue'),
-        meta: { title: '研发项目跟踪' } },
+        meta: { title: '项目跟踪表' } },
       { path: 'gantt', name: 'ProjectGantt', component: () => import('@/views/collab/gantt.vue'),
-        meta: { title: '项目甘特图' } },
+        meta: { title: '项目时间表' } },
       { path: 'gantt-demo', name: 'ProjectGanttDemo', component: () => import('@/views/collab/gantt-demo.vue'),
-        meta: { title: '甘特图Demo套装', hidden: true } },
+        meta: { title: '时间表示例', hidden: true } },
       { path: 'worksheets', name: 'ProjectWorksheets', component: () => import('@/views/project/worksheets.vue'),
         meta: { title: '项目工作表' } },
       { path: 'changes', name: 'ProjectChanges', component: () => import('@/views/project/changes.vue'),
-        meta: { title: '变更列表' } },
+        meta: { title: '变更记录' } },
       { path: 'supply', name: 'ProjectSupply', component: () => import('@/views/project/supply.vue'),
-        meta: { title: '供应链品质异常' } },
+        meta: { title: '供应品质问题' } },
       { path: 'sales', name: 'ProjectSales', component: () => import('@/views/project/sales.vue'),
-        meta: { title: '销售推广进度' } },
+        meta: { title: '销售推广' } },
       { path: 'review', name: 'ProjectReview', component: () => import('@/views/project/review.vue'),
-        meta: { title: '项目复盘' } },
+        meta: { title: '项目总结' } },
       { path: 'initiation', name: 'ProjectInitiation', component: () => import('@/views/project/initiation.vue'),
         meta: { title: '立项申请' } },
       { path: 'analysis', name: 'ProjectAnalysis', component: () => import('@/views/project/analysis.vue'),
-        meta: { title: '统计分析' } },
+        meta: { title: '统计' } },
       { path: 'evidence', name: 'ProjectEvidence', component: () => import('@/views/project/evidence.vue'),
-        meta: { title: '证据台账' } },
+        meta: { title: '项目资料' } },
       { path: 'tasks', name: 'CollabTasks', component: () => import('@/views/collab/tasks.vue'),
         meta: { title: '协同任务', hidden: true } },
       { path: 'collab-home', name: 'CollabHome', component: () => import('@/views/collab/home.vue'),
@@ -86,10 +86,10 @@ const routes = [
     path: '/material',
     component: Layout,
     redirect: '/material/list',
-    meta: { title: '物料主数据', icon: 'Box', permission: 'material', workflowStage: '项目与物料' },
+    meta: { title: '物料信息', icon: 'Box', permission: 'material', workflowStage: '项目与物料' },
     children: [
       { path: 'list', name: 'MaterialList', component: () => import('@/views/material/index.vue'),
-        meta: { title: '物料主数据' } },
+        meta: { title: '物料信息' } },
       { path: 'wizard', name: 'MaterialWizard', component: () => import('@/views/material/wizard.vue'),
         meta: { title: '建档向导', activeMenu: '/material/list' } }
     ]
@@ -99,12 +99,12 @@ const routes = [
     path: '/bom',
     component: Layout,
     redirect: '/bom/list',
-    meta: { title: 'BOM产品结构', icon: 'Connection', permission: 'bom', workflowStage: '产品结构' },
+    meta: { title: '产品结构', icon: 'Connection', permission: 'bom', workflowStage: '产品结构' },
     children: [
       { path: 'list', name: 'BomList', component: () => import('@/views/bom/index.vue'),
-        meta: { title: '多级爆炸' } },
+        meta: { title: '结构展开' } },
       { path: 'tree/:bomId', name: 'BomTree', component: () => import('@/views/bom/tree.vue'),
-        meta: { title: 'BOM树形', activeMenu: '/bom/list' }, props: true }
+        meta: { title: '产品结构明细', activeMenu: '/bom/list' }, props: true }
     ]
   },
   {
@@ -112,34 +112,34 @@ const routes = [
     path: '/model3d',
     component: Layout,
     redirect: '/model3d/list',
-    meta: { title: '3D模型库', icon: 'View', permission: 'model3d', workflowStage: '3D与档案' },
+    meta: { title: '3D模型', icon: 'View', permission: 'model3d', workflowStage: '3D与文件' },
     children: [
       { path: 'list', name: 'Model3DList', component: () => import('@/views/model3d/index.vue'),
-        meta: { title: '3D模型管理' } }
+        meta: { title: '3D模型维护' } }
     ]
   },
   {
     path: '/archive',
     component: Layout,
     redirect: '/archive/list',
-    meta: { title: '档案管理', icon: 'FolderOpened', permission: 'archive', workflowStage: '3D与档案' },
+    meta: { title: '文件档案', icon: 'FolderOpened', permission: 'archive', workflowStage: '3D与文件' },
     children: [
       { path: 'list', name: 'ArchiveList', component: () => import('@/views/archive/index.vue'),
-        meta: { title: '档案目录树' } }
+        meta: { title: '档案目录' } }
     ]
   },
   {
-    // ===== 工序阶段: 证据台账 (能力线 A: 统一上传 + 双向同步) =====
-    // 台账页与资料汇总处是同一行 plm_ledger 数据的两个视图, 不落副本(AC-A3-3)
+    // ===== 工序阶段: 资料清单 (能力线 A: 统一上传 + 双向同步) =====
+    // 清单页与资料汇总处是同一行 plm_ledger 数据的两个视图, 不落副本(AC-A3-3)
     path: '/ledger',
     component: Layout,
     redirect: '/ledger/list',
-    meta: { title: '证据台账', icon: 'Document', permission: 'ledger', workflowStage: '证据台账' },
+    meta: { title: '项目资料', icon: 'Document', permission: 'ledger', workflowStage: '项目资料' },
     children: [
       { path: 'list', name: 'LedgerList', component: () => import('@/views/ledger/index.vue'),
-        meta: { title: '证据台账录入' } },
+        meta: { title: '资料录入' } },
       { path: 'repository', name: 'LedgerRepository', component: () => import('@/views/ledger/repository.vue'),
-        meta: { title: '资料汇总处' } },
+        meta: { title: '资料汇总' } },
       { path: 'notification', name: 'LedgerNotification', component: () => import('@/views/ledger/notification.vue'),
         meta: { title: '变更通知' } }
     ]
@@ -150,11 +150,11 @@ const routes = [
     path: '/subscription',
     component: Layout,
     redirect: '/subscription/category',
-    meta: { title: '订阅与报告', icon: 'Bell', permission: 'subscription', workflowStage: '订阅与报告' },
+    meta: { title: '订阅提醒', icon: 'Bell', permission: 'subscription', workflowStage: '订阅提醒' },
     children: [
       { path: 'category', name: 'SubscriptionCategory',
         component: () => import('@/views/subscription/category.vue'),
-        meta: { title: '分类管理' } },
+        meta: { title: '资料分类' } },
       { path: 'list', name: 'SubscriptionList',
         component: () => import('@/views/subscription/subscription.vue'),
         meta: { title: '我的订阅' } },
@@ -168,10 +168,10 @@ const routes = [
     path: '/ecn',
     component: Layout,
     redirect: '/ecn/list',
-    meta: { title: 'ECN变更', icon: 'Switch', permission: 'ecn', workflowStage: '工程变更' },
+    meta: { title: '设计变更', icon: 'Switch', permission: 'ecn', workflowStage: '设计变更' },
     children: [
       { path: 'list', name: 'EcnList', component: () => import('@/views/ecn/index.vue'),
-        meta: { title: '工程变更' } }
+        meta: { title: '设计变更' } }
     ]
   },
   {
@@ -179,20 +179,20 @@ const routes = [
     path: '/mold',
     component: Layout,
     redirect: '/mold/list',
-    meta: { title: '模具资产', icon: 'Grid', permission: 'mold', workflowStage: '模具与工序' },
+    meta: { title: '模具管理', icon: 'Grid', permission: 'mold', workflowStage: '模具与工序' },
     children: [
       { path: 'list', name: 'MoldList', component: () => import('@/views/mold/index.vue'),
-        meta: { title: '模具台账' } }
+        meta: { title: '模具清单' } }
     ]
   },
   {
     path: '/process',
     component: Layout,
     redirect: '/process/list',
-    meta: { title: '工序流转', icon: 'SetUp', workflowStage: '模具与工序' },
+    meta: { title: '生产工序', icon: 'SetUp', workflowStage: '模具与工序' },
     children: [
       { path: 'list', name: 'ProcessList', component: () => import('@/views/process/index.vue'),
-        meta: { title: '工序自动化' } }
+        meta: { title: '工序流转' } }
     ]
   },
   {
@@ -200,10 +200,10 @@ const routes = [
     path: '/quality',
     component: Layout,
     redirect: '/quality/list',
-    meta: { title: '品质标准', icon: 'CircleCheckFilled', permission: 'quality', workflowStage: '品质检验' },
+    meta: { title: '质量检验', icon: 'CircleCheckFilled', permission: 'quality', workflowStage: '质量检验' },
     children: [
       { path: 'list', name: 'QualityList', component: () => import('@/views/quality/index.vue'),
-        meta: { title: 'IQC/IPQC检验' } }
+        meta: { title: '来料/制程检验' } }
     ]
   },
   {
@@ -211,10 +211,10 @@ const routes = [
     path: '/outsourcing',
     component: Layout,
     redirect: '/outsourcing/list',
-    meta: { title: '外协发图', icon: 'Promotion', permission: 'outsourcing', workflowStage: '外协协同' },
+    meta: { title: '外协管理', icon: 'Promotion', permission: 'outsourcing', workflowStage: '外协管理' },
     children: [
       { path: 'list', name: 'OutsourceList', component: () => import('@/views/outsourcing/index.vue'),
-        meta: { title: '发图审批' } }
+        meta: { title: '图纸外发' } }
     ]
   },
   {
@@ -222,43 +222,43 @@ const routes = [
     path: '/dq',
     component: Layout,
     redirect: '/dq/debts',
-    meta: { title: '数据自检', icon: 'DataAnalysis', permission: 'dq', workflowStage: '数据治理' },
+    meta: { title: '数据检查', icon: 'DataAnalysis', permission: 'dq', workflowStage: '数据检查' },
     children: [
       { path: 'debts', name: 'DqDebts', component: () => import('@/views/dq/index.vue'),
-        meta: { title: '自检与修复' } },
+        meta: { title: '问题检查与修复' } },
       { path: 'check', name: 'SysCheck', component: () => import('@/views/system/check.vue'),
-        meta: { title: '系统健康自检' } }
+        meta: { title: '系统自检' } }
     ]
   },
   {
-    // ===== 工序阶段 9: 度量分析 =====
+    // ===== 工序阶段 9: 指标分析 =====
     path: '/metric',
     component: Layout,
     redirect: '/metric/list',
-    meta: { title: '度量与KPI', icon: 'TrendCharts', workflowStage: '度量分析' },
+    meta: { title: '数据分析', icon: 'TrendCharts', workflowStage: '数据分析' },
     children: [
       { path: 'list', name: 'MetricList', component: () => import('@/views/metric/index.vue'),
-        meta: { title: '度量KPI' } }
+        meta: { title: '指标看板' } }
     ]
   },
   {
     path: '/okr',
     component: Layout,
     redirect: '/okr/list',
-    meta: { title: 'OKR管理', icon: 'Trophy', workflowStage: '度量分析' },
+    meta: { title: '目标管理', icon: 'Trophy', workflowStage: '数据分析' },
     children: [
       { path: 'list', name: 'OkrList', component: () => import('@/views/okr/index.vue'),
-        meta: { title: '目标与KR' } }
+        meta: { title: '目标与关键结果' } }
     ]
   },
   {
     path: '/analytics',
     component: Layout,
     redirect: '/analytics/list',
-    meta: { title: '分析驾驶舱', icon: 'DataAnalysis', workflowStage: '度量分析' },
+    meta: { title: '数据看板', icon: 'DataAnalysis', workflowStage: '数据分析' },
     children: [
       { path: 'list', name: 'AnalyticsList', component: () => import('@/views/analytics/index.vue'),
-        meta: { title: '图表驾驶舱' } }
+        meta: { title: '数据图表' } }
     ]
   },
   {
@@ -266,20 +266,20 @@ const routes = [
     path: '/exportx',
     component: Layout,
     redirect: '/exportx/list',
-    meta: { title: '导出中心', icon: 'Download', workflowStage: '导出集成' },
+    meta: { title: '导出数据', icon: 'Download', workflowStage: '导入导出' },
     children: [
       { path: 'list', name: 'ExportList', component: () => import('@/views/exportx/index.vue'),
-        meta: { title: '数据导出' } }
+        meta: { title: '导出' } }
     ]
   },
   {
     path: '/integration',
     component: Layout,
     redirect: '/integration/status',
-    meta: { title: '系统对接', icon: 'Connection', permission: 'integration', workflowStage: '导出集成', roles: ['ADMIN'] },
+    meta: { title: '系统连接', icon: 'Connection', permission: 'integration', workflowStage: '导入导出', roles: ['ADMIN'] },
     children: [
       { path: 'status', name: 'SysIntegration', component: () => import('@/views/system/integration.vue'),
-        meta: { title: '对接状态' } }
+        meta: { title: '连接设置' } }
     ]
   },
   {
@@ -287,22 +287,22 @@ const routes = [
     path: '/agent',
     component: Layout,
     redirect: '/agent/list',
-    meta: { title: '智能体中心', icon: 'MagicStick', workflowStage: '智能改善' },
+    meta: { title: 'AI助手', icon: 'MagicStick', workflowStage: '智能助手' },
     children: [
       { path: 'list', name: 'AgentCenter', component: () => import('@/views/agent/index.vue'),
-        meta: { title: '智能体对话' } }
+        meta: { title: 'AI对话' } }
     ]
   },
   {
     path: '/improve',
     component: Layout,
     redirect: '/improve/list',
-    meta: { title: '改善闭环', icon: 'Aim', workflowStage: '智能改善' },
+    meta: { title: '问题改进', icon: 'Aim', workflowStage: '智能助手' },
     children: [
       { path: 'list', name: 'ImproveList', component: () => import('@/views/improve/index.vue'),
-        meta: { title: '问题与洞察' } },
+        meta: { title: '问题与建议' } },
       { path: 'skills', name: 'SkillLibrary', component: () => import('@/views/skills/index.vue'),
-        meta: { title: '技能库', workflowStage: '智能改善' } }
+        meta: { title: '技能', workflowStage: '智能助手' } }
     ]
   },
   {
@@ -310,24 +310,24 @@ const routes = [
     path: '/admin',
     component: Layout,
     redirect: '/admin/user',
-    meta: { title: '系统管理', icon: 'Setting', roles: ['ADMIN'], workflowStage: '系统管理' },
+    meta: { title: '系统设置', icon: 'Setting', roles: ['ADMIN'], workflowStage: '系统设置' },
     children: [
       { path: 'user', name: 'SysUser', component: () => import('@/views/system/user.vue'),
         meta: { title: '用户管理' } },
       { path: 'role', name: 'SysRole', component: () => import('@/views/system/role.vue'),
-        meta: { title: '角色权限' } },
+        meta: { title: '角色与权限' } },
       { path: 'permission', name: 'SysPermission', component: () => import('@/views/system/permission.vue'),
-        meta: { title: '权限菜单' } },
+        meta: { title: '菜单权限' } },
       { path: 'dict', name: 'SysDict', component: () => import('@/views/system/dict.vue'),
-        meta: { title: '字典管理' } },
+        meta: { title: '选项字典' } },
       { path: 'base', name: 'SysBaseData', component: () => import('@/views/system/baseData.vue'),
-        meta: { title: '基础数据' } },
+        meta: { title: '基础资料' } },
       { path: 'log', name: 'SysLog', component: () => import('@/views/system/log.vue'),
-        meta: { title: '操作日志' } },
+        meta: { title: '操作记录' } },
       { path: 'share', name: 'ShareList', component: () => import('@/views/share/index.vue'),
-        meta: { title: '分享链接' } },
+        meta: { title: '分享' } },
       { path: 'feedback', name: 'SysFeedback', component: () => import('@/views/feedback/manage.vue'),
-        meta: { title: '反馈管理' } }
+        meta: { title: '问题反馈' } }
     ]
   }
 ]

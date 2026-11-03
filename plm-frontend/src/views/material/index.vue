@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <OperationGuide module-key="material" />
-    <DataIOBar module="material" name="物料主数据" />
+    <DataIOBar module="material" name="物料信息" />
 
     <el-dialog v-model="importVisible" title="批量导入物料" width="660px">
       <BatchImport endpoint="/v1/parts/import-file" @done="onImported" />
@@ -217,8 +217,8 @@
           </el-timeline>
           <el-empty v-if="!historyList.length" description="暂无变更记录" />
         </el-tab-pane>
-        <!-- 证据区: 与证据台账读同一行数据, 模块侧只做引用展示(AC-A3-1/A3-5) -->
-        <el-tab-pane label="关联证据" name="ledger">
+        <!-- 资料区: 与资料清单读同一行数据, 模块侧只做引用展示(AC-A3-1/A3-5) -->
+        <el-tab-pane label="关联资料" name="ledger">
           <LedgerEvidencePanel object-type="MATERIAL" :object-id="detailsDrawer.partNo" />
         </el-tab-pane>
       </el-tabs>
@@ -229,7 +229,7 @@
         <el-timeline-item v-for="v in versionDrawer.list" :key="v.id" :timestamp="v.createdAt" placement="top">
           <el-card>
             <p><b>{{ v.versionNo }}</b> · {{ v.changeReason || '—' }}</p>
-            <p v-if="v.ecnNo" style="color:#e6a23c">ECN: {{ v.ecnNo }}</p>
+            <p v-if="v.ecnNo" style="color:#e6a23c">变更单号：{{ v.ecnNo }}</p>
             <p style="color:#999;font-size:12px">by {{ v.createdBy }}</p>
           </el-card>
         </el-timeline-item>
@@ -411,7 +411,7 @@ async function handleReview(row) {
 }
 
 async function handleRelease(row) {
-  await ElMessageBox.confirm(`确认发布物料 [${row.partNo}]? 发布后基础信息锁定,需走ECN变更`, '确认', { type: 'warning' })
+  await ElMessageBox.confirm(`确认发布物料 [${row.partNo}]? 发布后基础信息锁定,需走设计变更`, '确认', { type: 'warning' })
   await releaseMaterial(row.id)
   ElMessage.success('发布成功')
   loadData()
@@ -463,7 +463,7 @@ async function handleExport() {
 }
 
 onMounted(() => {
-  // 由证据台账「前往」跳入时按料号预置筛选(AC-A4-2)
+  // 由资料清单「前往」跳入时按料号预置筛选(AC-A4-2)
   const kw = route.query.keyword
   if (kw) query.partNo = String(kw)
   loadData()

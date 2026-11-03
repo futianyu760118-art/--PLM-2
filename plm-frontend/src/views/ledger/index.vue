@@ -9,7 +9,7 @@
           <el-input v-model="query.keyword" placeholder="名称/编号/备注" clearable style="width:180px"
             @keyup.enter="search" />
         </el-form-item>
-        <el-form-item label="证据类型">
+        <el-form-item label="资料类型">
           <el-select v-model="query.type" placeholder="全部" clearable style="width:130px">
             <el-option v-for="t in options.types" :key="t.value" :label="t.label" :value="t.value" />
           </el-select>
@@ -52,18 +52,18 @@
       </el-form>
 
       <div class="table-toolbar">
-        <el-button v-if="can('ledger:add')" type="primary" icon="Plus" @click="openForm()">新建证据</el-button>
+        <el-button v-if="can('ledger:add')" type="primary" icon="Plus" @click="openForm()">新建资料</el-button>
         <el-button v-if="can('ledger:edit')" icon="Link" :disabled="!selectedIds.length" @click="openBatchLink">
           批量关联<span v-if="selectedIds.length">（{{ selectedIds.length }}）</span>
         </el-button>
-        <span class="tb-tip">单条证据附件上限 {{ limits.maxAttachments }} 个 / 单文件 {{ limits.maxFileSizeMb }}MB</span>
+        <span class="tb-tip">单条资料附件上限 {{ limits.maxAttachments }} 个 / 单文件 {{ limits.maxFileSizeMb }}MB</span>
       </div>
 
       <el-table v-loading="loading" :data="tableData" border stripe @selection-change="onSelectionChange">
         <el-table-column v-if="can('ledger:edit')" type="selection" width="46" />
-        <el-table-column prop="ledgerNo" label="证据编号" width="175" fixed sortable />
-        <el-table-column prop="name" label="证据名称" min-width="170" show-overflow-tooltip />
-        <el-table-column label="证据类型" width="110">
+        <el-table-column prop="ledgerNo" label="资料编号" width="175" fixed sortable />
+        <el-table-column prop="name" label="资料名称" min-width="170" show-overflow-tooltip />
+        <el-table-column label="资料类型" width="110">
           <template #default="{ row }">{{ typeLabel(row.type) }}</template>
         </el-table-column>
         <el-table-column label="责任人" width="90">
@@ -106,12 +106,12 @@
     </el-card>
 
     <!-- ===== 统一录入：信息 → 附件 → 关联 → 提交，全过程零页面跳转（AC-A1-1/A1-2） ===== -->
-    <el-dialog v-model="form.visible" :title="form.id ? '编辑证据' : '新建证据'" width="880px" top="5vh"
+    <el-dialog v-model="form.visible" :title="form.id ? '编辑资料' : '新建资料'" width="880px" top="5vh"
       :close-on-click-modal="false">
       <el-form :model="form.data" label-width="90px">
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="证据编号">
+            <el-form-item label="资料编号">
               <el-input :model-value="form.id ? form.data.ledgerNo : '提交后由系统生成'" disabled />
             </el-form-item>
           </el-col>
@@ -121,13 +121,13 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="证据名称" :required="!isDraft">
+            <el-form-item label="资料名称" :required="!isDraft">
               <el-input v-model="form.data.name" :maxlength="limits.nameMax" show-word-limit
                 placeholder="不超过 100 字" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="证据类型" :required="!isDraft">
+            <el-form-item label="资料类型" :required="!isDraft">
               <el-select v-model="form.data.type" placeholder="请选择" clearable style="width:100%">
                 <el-option v-for="t in options.types" :key="t.value" :label="t.label" :value="t.value" />
               </el-select>
@@ -192,7 +192,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <div v-if="form.id" class="file-tip">编辑时新增的附件将在保存后追加到本条证据。</div>
+        <div v-if="form.id" class="file-tip">编辑时新增的附件将在保存后追加到本条资料。</div>
 
         <!-- 关联对象 -->
         <el-divider content-position="left">关联业务对象（{{ form.links.length }} / {{ limits.maxLinks }}）</el-divider>
@@ -233,10 +233,10 @@
     </el-dialog>
 
     <!-- ===== 详情：附件 + 关联清单 + 变更轨迹 ===== -->
-    <el-drawer v-model="detail.visible" :title="'证据详情 · ' + (detail.ledger?.ledgerNo || '')" size="760px">
+    <el-drawer v-model="detail.visible" :title="'资料详情 · ' + (detail.ledger?.ledgerNo || '')" size="760px">
       <el-descriptions v-if="detail.ledger" :column="2" border size="small">
-        <el-descriptions-item label="证据名称" :span="2">{{ detail.ledger.name || '—' }}</el-descriptions-item>
-        <el-descriptions-item label="证据类型">{{ typeLabel(detail.ledger.type) }}</el-descriptions-item>
+        <el-descriptions-item label="资料名称" :span="2">{{ detail.ledger.name || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="资料类型">{{ typeLabel(detail.ledger.type) }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ statusLabel(detail.ledger.status) }}</el-descriptions-item>
         <el-descriptions-item label="责任人">{{ ownerLabel(detail.ledger.ownerId) }}</el-descriptions-item>
         <el-descriptions-item label="来源部门">{{ deptLabel(detail.ledger.deptId) }}</el-descriptions-item>
@@ -295,7 +295,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <div class="file-tip">解除关联只解除引用，证据记录本身保留。</div>
+          <div class="file-tip">解除关联只解除引用，资料记录本身保留。</div>
         </el-tab-pane>
 
         <el-tab-pane label="变更轨迹" name="trail">
@@ -317,7 +317,7 @@
     <!-- ===== 批量关联（AC-A5-7/A5-8） ===== -->
     <el-dialog v-model="batch.visible" title="批量关联" width="640px">
       <el-alert type="info" :closable="false" show-icon
-        :title="`已选 ${selectedIds.length} 条证据，单次批量关联上限 ${limits.batchLinkMax} 条`" style="margin-bottom:12px" />
+        :title="`已选 ${selectedIds.length} 条资料，单次批量关联上限 ${limits.batchLinkMax} 条`" style="margin-bottom:12px" />
       <div class="link-bar">
         <el-select v-model="linkPick.objectType" placeholder="对象类型" style="width:130px">
           <el-option v-for="o in options.objectTypes" :key="o.value" :label="o.label" :value="o.value" />
@@ -532,7 +532,7 @@ async function openForm(row) {
     form.data = { status: 'SUBMITTED', occurDate: today, ownerId: userStore.userId || null }
     form.links = []
     form.existingAttachments = []
-    // 从模块侧「录入证据」入口带入的预置关联（AC-A1-1 入口）
+    // 从模块侧「录入资料」入口带入的预置关联（AC-A1-1 入口）
     if (route.query.objectType && route.query.objectId) {
       form.links.push({ objectType: String(route.query.objectType), objectId: String(route.query.objectId),
         objectNo: String(route.query.objectId) })
@@ -560,7 +560,7 @@ function acceptFiles(picked) {
     }
   }
   if (form.files.length + picked.length > limits.maxAttachments) {
-    return `单条证据附件最多 ${limits.maxAttachments} 个`
+    return `单条资料附件最多 ${limits.maxAttachments} 个`
   }
   form.files = form.files.concat(picked)
   return null
@@ -574,7 +574,7 @@ async function searchObjects() {
 
 function addLink(row) {
   if (form.links.length >= limits.maxLinks) {
-    ElMessage.warning(`单条证据关联对象最多 ${limits.maxLinks} 个`)
+    ElMessage.warning(`单条资料关联对象最多 ${limits.maxLinks} 个`)
     return
   }
   if (form.links.some(l => l.objectType === linkPick.objectType && String(l.objectId) === String(row.objectId))) {
@@ -589,16 +589,16 @@ function addLink(row) {
 function validateForm(status) {
   const draft = status === 'DRAFT'
   const d = form.data
-  if (d.name && d.name.length > limits.nameMax) return `证据名称不得超过 ${limits.nameMax} 字`
+  if (d.name && d.name.length > limits.nameMax) return `资料名称不得超过 ${limits.nameMax} 字`
   if (d.remark && d.remark.length > limits.remarkMax) return `备注不得超过 ${limits.remarkMax} 字`
   if (d.version && d.version.length > limits.versionMax) return `版本不得超过 ${limits.versionMax} 字`
   if (d.occurDate && d.occurDate > today) return '发生时间不得晚于当前日期'
-  if (form.files.length > limits.maxAttachments) return `单条证据附件最多 ${limits.maxAttachments} 个`
-  if (form.links.length > limits.maxLinks) return `单条证据关联对象最多 ${limits.maxLinks} 个`
+  if (form.files.length > limits.maxAttachments) return `单条资料附件最多 ${limits.maxAttachments} 个`
+  if (form.links.length > limits.maxLinks) return `单条资料关联对象最多 ${limits.maxLinks} 个`
   if (draft) return null
   const missing = []
-  if (!d.name || !d.name.trim()) missing.push('证据名称')
-  if (!d.type) missing.push('证据类型')
+  if (!d.name || !d.name.trim()) missing.push('资料名称')
+  if (!d.type) missing.push('资料类型')
   if (!d.ownerId) missing.push('责任人')
   if (!d.occurDate) missing.push('发生时间')
   if (!d.deptId) missing.push('来源部门')
@@ -627,7 +627,7 @@ async function submit(status) {
       if (form.files.length) await appendFiles(form.id, form.files)
       ElMessage.success('保存成功')
     } else if (form.files.length) {
-      // N 个文件合并为 1 条多附件证据（AC-A5-6）
+      // N 个文件合并为 1 条多附件资料（AC-A5-6）
       await batchUploadLedger(metaOf(status), form.files)
       ElMessage.success('提交成功')
     } else {
@@ -650,7 +650,7 @@ async function appendFiles(id, files) {
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`删除证据 [${row.ledgerNo}]？删除后不可恢复。`, '警告', { type: 'warning' })
+  await ElMessageBox.confirm(`删除资料 [${row.ledgerNo}]？删除后不可恢复。`, '警告', { type: 'warning' })
   await deleteLedger(row.id)
   ElMessage.success('已删除')
   load()
@@ -708,7 +708,7 @@ async function previewAttachment(row) {
 }
 
 async function unlink(row) {
-  await ElMessageBox.confirm('解除关联只解除引用，证据记录本身保留。是否继续？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm('解除关联只解除引用，资料记录本身保留。是否继续？', '提示', { type: 'warning' })
   await removeLedgerLink(detail.ledger.id, row.id)
   ElMessage.success('已解除关联')
   await openDetail({ id: detail.ledger.id, ledgerNo: detail.ledger.ledgerNo })
@@ -746,7 +746,7 @@ onMounted(async () => {
   await loadOwners()
   if (route.query.keyword) query.keyword = String(route.query.keyword)
   await load()
-  // 模块侧「录入证据」直达：进入即打开录入表单，录入仍在台账单一界面内（AC-A1-1/A1-2）
+  // 模块侧「录入资料」直达：进入即打开录入表单，录入仍在清单单一界面内（AC-A1-1/A1-2）
   if (route.query.objectType && can('ledger:add')) {
     await nextTick()
     openForm()

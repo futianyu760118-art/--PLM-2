@@ -81,7 +81,7 @@
             </div>
 
             <div v-if="isSubmitter(r) && r.status === 'implemented'" class="fb-acts">
-              <el-button size="small" type="success" @click="closeLoop(r)">确认问题已解决（闭环）</el-button>
+              <el-button size="small" type="success" @click="closeLoop(r)">确认问题已解决（完成）</el-button>
             </div>
           </div>
           <el-empty v-if="!records.length" description="暂无反馈记录" :image-size="70" />
@@ -134,7 +134,7 @@ const SEVERITY_OPTS = [
 
 const STATUS_META = {
   pending: ['待分析', 'warning'], proposed: ['待确认方案', 'warning'], approved: ['待实现', 'primary'],
-  implementing: ['实现中', 'primary'], implemented: ['待闭环', 'primary'], resolved: ['待管理员确认', 'warning'],
+  implementing: ['实现中', 'primary'], implemented: ['待完成', 'primary'], resolved: ['待管理员确认', 'warning'],
   verified: ['待合并', 'primary'], merged: ['已合并', 'success'], closed: ['已关闭', 'info']
 }
 const AI_META = { none: ['未派单', 'info'], queued: ['排队中', 'warning'], running: ['实现中', 'primary'], done: ['已实现', 'success'], failed: ['失败', 'danger'] }
@@ -210,7 +210,7 @@ async function closeLoop(r) {
   try {
     const res = await changeFeedbackStatus(r.id, 'resolved')
     Object.assign(r, res.data)
-    ElMessage.success('已闭环，等待管理员终审')
+    ElMessage.success('已完成，等待管理员终审')
     loadRecords()
   } catch (e) { /* 拦截器已提示 */ }
 }

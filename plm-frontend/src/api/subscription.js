@@ -55,7 +55,7 @@ export function assignLedgerCategory(ledgerId, items) {
 // ---------- 资料汇总处(B6) ----------
 
 /**
- * 汇总处组合检索: 比台账列表多返回分类标签与附件清单。
+ * 汇总处组合检索: 比清单列表多返回分类标签与附件清单。
  *
  * 分类条件按 bracket 键展开、值是数组(见 repository.vue 的 buildParams)，
  * 形如 categoryFilter.dims[0].valueIds=[12,13]。axios 默认会把数组写成

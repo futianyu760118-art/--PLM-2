@@ -2,7 +2,7 @@
   <div class="page-container">
     <el-card v-loading="loading">
       <h3 class="title">产品全生命周期（12 环节 · 真实数据）</h3>
-      <p class="sub">业务导航视图：以下数字均来自系统各模块实时统计{{ isAdmin ? '' : '（项目类口径=我的）' }}；不改变后端阶段门（G0–G8 以后端为准）。</p>
+      <p class="sub">业务导航视图：以下数字均来自系统各模块实时统计{{ isAdmin ? '' : '（项目类口径=我的）' }}；不改变后端阶段检查（G0–G8 以后端为准）。</p>
       <el-row :gutter="12">
         <el-col v-for="(s, i) in stages" :key="s.name" :xs="24" :sm="12" :md="8" :lg="6">
           <div class="stage-card">

@@ -6,7 +6,7 @@
         <el-input v-model="query.keyword" placeholder="搜索技能名称/标签" clearable style="width:220px" @keyup.enter="search" @clear="search" />
         <el-button type="primary" icon="Search" @click="search">搜索</el-button>
         <el-button icon="Plus" @click="openCreate">新建技能</el-button>
-        <el-button type="primary" plain icon="MagicStick" :loading="generating" @click="genVisible = true">智能体生成</el-button>
+        <el-button type="primary" plain icon="MagicStick" :loading="generating" @click="genVisible = true">AI助手生成</el-button>
       </div>
 
       <el-table v-loading="loading" :data="rows" border stripe>
@@ -22,7 +22,7 @@
           </template>
         </el-table-column>
         <el-table-column label="来源" width="90" align="center">
-          <template #default="{ row }"><el-tag size="small" :type="row.source === 'AGENT' ? 'success' : 'info'">{{ row.source === 'AGENT' ? '智能体' : '手工' }}</el-tag></template>
+          <template #default="{ row }"><el-tag size="small" :type="row.source === 'AGENT' ? 'success' : 'info'">{{ row.source === 'AGENT' ? 'AI助手' : '手工' }}</el-tag></template>
         </el-table-column>
         <el-table-column prop="usageCount" label="调用" width="70" align="center" />
         <el-table-column label="操作" width="150" fixed="right">
@@ -42,7 +42,7 @@
     <!-- 详情/调用 -->
     <el-drawer v-model="detail.visible" :title="detail.data?.name" size="520px">
       <template v-if="detail.data">
-        <el-tag v-if="detail.data.source === 'AGENT'" type="success" size="small">智能体生成</el-tag>
+        <el-tag v-if="detail.data.source === 'AGENT'" type="success" size="small">AI助手生成</el-tag>
         <p class="d-desc">{{ detail.data.description }}</p>
         <h4>经验/步骤</h4>
         <pre class="d-content">{{ detail.data.content || '（无）' }}</pre>
@@ -67,9 +67,9 @@
       </template>
     </el-dialog>
 
-    <!-- 智能体生成 -->
-    <el-dialog v-model="genVisible" title="智能体自动制作技能" width="560px">
-      <p class="tip">用大白话描述你刚完成的任务，智能体会总结成一条可复用技能。</p>
+    <!-- AI助手生成 -->
+    <el-dialog v-model="genVisible" title="AI助手自动制作技能" width="560px">
+      <p class="tip">用大白话描述你刚完成的任务，AI助手会总结成一条可复用技能。</p>
       <el-input v-model="genDesc" type="textarea" :rows="4" placeholder="例如：处理物料料号重复的检查，先按名称模糊匹配，再人工确认，最后更新规范" />
       <template #footer>
         <el-button @click="genVisible = false">取消</el-button>

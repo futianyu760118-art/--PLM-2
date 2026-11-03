@@ -3,18 +3,18 @@
     <OperationGuide module-key="ledgerRepository" />
 
     <el-card>
-      <!-- 资料汇总处与台账同源同筛选：同一行数据的另一视图（AC-A3-3、AC-B6-7） -->
+      <!-- 资料汇总处与清单同源同筛选：同一行数据的另一视图（AC-A3-3、AC-B6-7） -->
       <el-form :inline="true" :model="query">
         <el-form-item label="关键字">
           <el-input v-model="query.keyword" placeholder="名称/编号/备注" clearable style="width:180px"
             @keyup.enter="search" />
         </el-form-item>
-        <el-form-item label="证据类型">
+        <el-form-item label="资料类型">
           <el-select v-model="query.type" placeholder="全部" clearable style="width:130px">
             <el-option v-for="t in options.types" :key="t.value" :label="t.label" :value="t.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="来源证据编号">
+        <el-form-item label="来源资料编号">
           <el-input v-model="query.ledgerNoLike" placeholder="EV-…" clearable style="width:150px"
             @keyup.enter="search" />
         </el-form-item>
@@ -102,7 +102,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="ledgerNo" label="来源证据编号" width="180" fixed sortable />
+        <el-table-column prop="ledgerNo" label="来源资料编号" width="180" fixed sortable />
         <el-table-column prop="name" label="资料名称" min-width="170" show-overflow-tooltip />
         <el-table-column label="资料类型" width="110">
           <template #default="{ row }">{{ typeLabel(row.type) }}</template>
@@ -446,7 +446,7 @@ async function openDetail(row) {
   try {
     const res = await getLedger(row.ledgerId)
     detail.links = res.data.links || []
-    // 详情里的附件沿用台账口径(含上传人等信息), 覆盖列表带来的精简版
+    // 详情里的附件沿用清单口径(含上传人等信息), 覆盖列表带来的精简版
     detail.files = (res.data.attachments || []).map(a => ({
       attachmentId: a.id, fileName: a.fileName, fileSize: a.fileSize, previewable: isPreviewable(a.fileName)
     }))

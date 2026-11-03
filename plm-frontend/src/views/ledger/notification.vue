@@ -109,10 +109,10 @@ import {
 } from '@/api/ledger'
 
 const TYPES = [
-  { value: 'LEDGER_CREATED', label: '证据新建', desc: '有人新增了与你相关的证据记录' },
-  { value: 'LEDGER_CHANGED', label: '证据变更', desc: '证据字段被修改（含前后值）' },
-  { value: 'LEDGER_DELETED', label: '证据删除', desc: '证据记录被删除' },
-  { value: 'LEDGER_LINK', label: '关联变更', desc: '证据与业务对象的关联新增或解除' },
+  { value: 'LEDGER_CREATED', label: '资料新建', desc: '有人新增了与你相关的资料记录' },
+  { value: 'LEDGER_CHANGED', label: '资料变更', desc: '资料字段被修改（含前后值）' },
+  { value: 'LEDGER_DELETED', label: '资料删除', desc: '资料记录被删除' },
+  { value: 'LEDGER_LINK', label: '关联变更', desc: '资料与业务对象的关联新增或解除' },
   { value: 'OBJ_INVALID', label: '关联失效', desc: '被关联对象已删除或已作废' }
 ]
 

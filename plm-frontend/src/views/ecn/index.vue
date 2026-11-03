@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <OperationGuide module-key="ecn" />
-    <DataIOBar module="ecn" name="ECN工程变更" />
+    <DataIOBar module="ecn" name="设计变更" />
     <el-card>
       <el-form :inline="true" :model="query" class="filter-bar">
         <el-form-item label="ECN单号"><el-input v-model="query.ecnNo" placeholder="ECN单号" clearable /></el-form-item>
@@ -151,7 +151,7 @@
         <el-table-column prop="handledAt" label="处理时间" width="160" />
       </el-table>
 
-      <!-- 证据区: 与证据台账同源, 模块侧只做引用展示(AC-A3-1/A3-5) -->
+      <!-- 资料区: 与资料清单同源, 模块侧只做引用展示(AC-A3-1/A3-5) -->
       <LedgerEvidencePanel object-type="ECN" :object-id="detail.data?.ecnNo" />
     </el-drawer>
   </div>
@@ -277,7 +277,7 @@ function actionLabel(log) {
 }
 
 onMounted(() => {
-  // 由证据台账「前往」跳入时按 ECN 单号预置筛选(AC-A4-2)
+  // 由资料清单「前往」跳入时按 ECN 单号预置筛选(AC-A4-2)
   const kw = route.query.keyword
   if (kw) query.ecnNo = String(kw)
   loadData()

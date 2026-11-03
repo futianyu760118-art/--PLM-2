@@ -32,7 +32,7 @@
     </el-row>
 
     <el-card style="margin-top:16px">
-      <template #header><span>ECN 变更趋势 (近7天)</span></template>
+      <template #header><span>设计变更趋势 (近7天)</span></template>
       <div ref="trendChartRef" style="height:280px"></div>
     </el-card>
 
@@ -73,7 +73,7 @@
         </router-link>
         <router-link class="me-cell" :to="{ path: '/project/evidence', query: { keyword: me.realName } }">
           <span class="n">{{ me.evidence }}</span>
-          <span class="t">我上传的证据</span>
+          <span class="t">我上传的资料</span>
           <span class="s">计划表(我负责) {{ me.planSheets }}</span>
         </router-link>
         <router-link class="me-cell" :to="{ path: '/admin/feedback', query: {} }">
@@ -149,8 +149,8 @@
       </el-col>
     </el-row>
 
-    <!-- 待办(工作项)侧的引用证据区: 与证据台账同源(AC-A3-1/A3-5) -->
-    <el-drawer v-model="ledgerDrawer.visible" :title="'关联证据 - ' + (ledgerDrawer.title || '')" size="820px">
+    <!-- 待办(工作项)侧的引用资料区: 与资料清单同源(AC-A3-1/A3-5) -->
+    <el-drawer v-model="ledgerDrawer.visible" :title="'关联资料 - ' + (ledgerDrawer.title || '')" size="820px">
       <LedgerEvidencePanel object-type="TASK" :object-id="ledgerDrawer.id" />
     </el-drawer>
   </div>
@@ -174,7 +174,7 @@ const statusChartRef = ref(null)
 const trendChartRef = ref(null)
 let typeChart, statusChart, trendChart
 
-const modules = ['物料主数据', 'ECN变更', 'BOM爆炸', '品质检验', '外协发图', 'RBAC权限', '日志溯源', '档案生命周期']
+const modules = ['物料信息', '设计变更', '产品结构展开', '质量检验', '图纸外发', '账号权限', '操作记录', '档案管理']
 
 const kpiList = ref([])
 const kpiLoading = ref(false)
@@ -211,8 +211,8 @@ const workItemTag = (s) => ({ OPEN: 'warning', ESCALATED: 'danger', DONE: 'succe
 
 const statCards = ref([
   { title: '物料料号', num: 0, sub: '', icon: 'Box', color: '#409eff' },
-  { title: 'ECN变更单', num: 0, sub: '', icon: 'Switch', color: '#e6a23c' },
-  { title: 'BOM清单', num: 0, sub: '', icon: 'Connection', color: '#67c23a' },
+  { title: '设计变更单', num: 0, sub: '', icon: 'Switch', color: '#e6a23c' },
+  { title: '物料清单', num: 0, sub: '', icon: 'Connection', color: '#67c23a' },
   { title: '模具资产', num: 0, sub: '', icon: 'Grid', color: '#f56c6c' }
 ])
 
