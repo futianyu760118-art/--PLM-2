@@ -3,7 +3,7 @@ package com.hjgd.plm.material;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hjgd.plm.archive.service.ArchiveTreeService;
 import com.hjgd.plm.auth.security.LoginUser;
-import com.hjgd.plm.codegen.service.CodeGenService;
+import com.hjgd.plm.m04.codegen.service.CodeGenService;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.dq.dto.DqRunResult;
 import com.hjgd.plm.dq.service.DataQualityService;

@@ -3,6 +3,7 @@ package com.hjgd.plm.project.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hjgd.plm.auth.security.SecurityUtils;
+import com.hjgd.plm.m04.codegen.service.ProjectCodeGenerator;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.ResultCode;
@@ -32,6 +33,8 @@ public class ProjectService {
     private final ProjectMapper projectMapper;
     private final ProjectGateLogMapper gateLogMapper;
     private final SequenceService sequenceService;
+    private final ProjectCodeGenerator projectCodeGenerator;
+
     private final ProjectProgressService progressService;
     private final DomainEventService domainEventService;
     private final com.hjgd.plm.project.mapper.ProjectNodeMapper projectNodeMapper;
@@ -77,7 +80,18 @@ public class ProjectService {
         String autoNo = sequenceService.nextNo("PROJECT_NO");
         p.setAutoNo(autoNo);
         if (!StringUtils.hasText(p.getProjectNo())) {
-            p.setProjectNo(autoNo);
+            // 规则 HJ.AAXXX.Y1.ZZZ：年份 yy + 年度序号 + 分类版本 + 客户码
+            String cls = ProjectCodeGenerator.normalizeClass(
+                    StringUtils.hasText(p.getProjectClass()) ? p.getProjectClass() : p.getProjectType());
+            p.setProjectClass(cls);
+            if (p.getClassVersion() == null) p.setClassVersion(1);
+            p.setProjectNo(projectCodeGenerator.next(p.getCustomerCode(), cls, p.getClassVersion()));
+        } else {
+            // 手工录入走严格校验，避免再产生 HJ.26013.R1.46 这类不合规编号
+            ProjectCodeGenerator.validateManual(p.getProjectNo());
+            if (!StringUtils.hasText(p.getProjectClass())) {
+                p.setProjectClass(ProjectCodeGenerator.normalizeClass(p.getProjectType()));
+            }
         }
         if (!StringUtils.hasText(p.getStatus())) p.setStatus("ACTIVE");
         if (!StringUtils.hasText(p.getCurrentGate())) p.setCurrentGate("G0");

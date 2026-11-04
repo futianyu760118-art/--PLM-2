@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hjgd.plm.archive.service.ArchiveTreeService;
 import com.hjgd.plm.auth.security.SecurityUtils;
-import com.hjgd.plm.codegen.service.CodeGenService;
+import com.hjgd.plm.m04.codegen.service.CodeGenService;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.ResultCode;

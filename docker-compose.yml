@@ -81,6 +81,14 @@ services:
       - ./database/58_node_parent.sql:/docker-entrypoint-initdb.d/58_node_parent.sql:ro
       - ./database/59_node_plan_approval.sql:/docker-entrypoint-initdb.d/59_node_plan_approval.sql:ro
       - ./database/60_wecom_app.sql:/docker-entrypoint-initdb.d/60_wecom_app.sql:ro
+      - ./database/67_m04_core_gap.sql:/docker-entrypoint-initdb.d/67_m04_core_gap.sql:ro
+      - ./database/68_code_rule_legacy_align.sql:/docker-entrypoint-initdb.d/68_code_rule_legacy_align.sql:ro
+      - ./database/69_m04_project_code_rule.sql:/docker-entrypoint-initdb.d/69_m04_project_code_rule.sql:ro
+      - ./database/70_m04_project_code_fields.sql:/docker-entrypoint-initdb.d/70_m04_project_code_fields.sql:ro
+      - ./database/71_m04_customer_code_branch.sql:/docker-entrypoint-initdb.d/71_m04_customer_code_branch.sql:ro
+      - ./database/72_m04_codegen_rule_engine.sql:/docker-entrypoint-initdb.d/72_m04_codegen_rule_engine.sql:ro
+      - ./database/73_m04_document_center.sql:/docker-entrypoint-initdb.d/73_m04_document_center.sql:ro
+      - ./database/74_m04_approval_flow_seed.sql:/docker-entrypoint-initdb.d/74_m04_approval_flow_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s

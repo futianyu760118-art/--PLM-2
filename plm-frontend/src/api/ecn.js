@@ -24,6 +24,15 @@ export function submitEcn(id) {
   return request({ url: `/ecn/${id}/submit`, method: 'put' })
 }
 
+/** 流程引擎驱动的审批：action = APPROVE / REJECT / BACK / TERMINATE */
+export function approveEcn(id, data) {
+  return request({ url: `/ecn/${id}/approve`, method: 'put', data })
+}
+
+export function getEcnProgress(id) {
+  return request({ url: `/ecn/${id}/progress`, method: 'get' })
+}
+
 export function reviewL1Approve(id, data) {
   return request({ url: `/ecn/${id}/l1/approve`, method: 'put', data })
 }

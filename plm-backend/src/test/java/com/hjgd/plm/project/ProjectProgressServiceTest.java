@@ -81,10 +81,10 @@ class ProjectProgressServiceTest {
         assertTrue(assertThrows(BusinessException.class, () -> service.updateNode(1L, "PROD_TRIAL", req))
                 .getMessage().contains("实际完成日期"));
 
-        // 有实际日期但无证据
+        // 有实际日期但无资料
         req.setActualDate(LocalDate.now());
         assertTrue(assertThrows(BusinessException.class, () -> service.updateNode(1L, "PROD_TRIAL", req))
-                .getMessage().contains("证据"));
+                .getMessage().contains("资料"));
     }
 
     @Test

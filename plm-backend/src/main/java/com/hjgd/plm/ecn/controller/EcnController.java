@@ -1,5 +1,7 @@
 package com.hjgd.plm.ecn.controller;
 
+import com.hjgd.plm.m04.approval.dto.ApprovalActionDTO;
+import com.hjgd.plm.m04.approval.dto.ApprovalProgressVO;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.Result;
 import com.hjgd.plm.ecn.dto.EcnDTO;
@@ -118,5 +120,18 @@ public class EcnController {
     @GetMapping("/{id}/logs")
     public Result<List<EcnFlowLog>> flowLogs(@PathVariable Long id) {
         return Result.success(ecnService.getFlowLogs(id));
+    }
+
+    @Operation(summary = "ECN审批动作（流程引擎驱动，与级数无关）")
+    @PutMapping("/{id}/approve")
+    public Result<Void> approve(@PathVariable Long id, @RequestBody ApprovalActionDTO dto) {
+        ecnService.approve(id, dto.getAction(), dto.getComment());
+        return Result.success();
+    }
+
+    @Operation(summary = "ECN审批进度")
+    @GetMapping("/{id}/progress")
+    public Result<ApprovalProgressVO> progress(@PathVariable Long id) {
+        return Result.success(ecnService.progress(id));
     }
 }

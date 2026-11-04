@@ -12,6 +12,7 @@ import com.hjgd.plm.ecn.enums.EcnStatus;
 import com.hjgd.plm.ecn.mapper.EcnFlowLogMapper;
 import com.hjgd.plm.ecn.mapper.EcnMapper;
 import com.hjgd.plm.ecn.service.EcnImpactService;
+import com.hjgd.plm.m04.approval.service.ApprovalService;
 import com.hjgd.plm.ecn.service.impl.EcnServiceImpl;
 import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.file.mapper.PlmFileMapper;
@@ -49,6 +50,7 @@ class EcnServiceTest {
     @Mock private DomainEventService domainEventService;
     @Mock private EcnImpactService ecnImpactService;
     @Mock private BomService bomService;
+    @Mock private ApprovalService approvalService;
 
     @InjectMocks
     private EcnServiceImpl ecnService;
@@ -152,13 +154,14 @@ class EcnServiceTest {
         }
 
         @Test
-        @DisplayName("二审驳回但 ECN 不在 PENDING_L2 → 抛异常")
+        @DisplayName("无审批实例的在途单：按旧两级逻辑处理(状态PENDING_L1时驳回置REJECTED)")
         void shouldRejectL2RejectWhenWrongStatus() {
             EcnReviewDTO dto = new EcnReviewDTO();
             dto.setComment("test");
             testEcn.setStatus(EcnStatus.PENDING_L1);
             when(ecnMapper.selectById(1L)).thenReturn(testEcn);
-            assertThrows(BusinessException.class, () -> ecnService.reviewL2Reject(1L, dto));
+            ecnService.reviewL2Reject(1L, dto);
+            assertEquals(EcnStatus.REJECTED, testEcn.getStatus());
         }
 
         @Test

@@ -37,6 +37,12 @@ export const MODES = {
         { path: '/process/list', title: '工序流转', icon: 'SetUp' },
         { path: '/mold/list', title: '模具资产', icon: 'Grid' }
       ] },
+      { stage: 'M04 研发数据', icon: 'Coin', items: [
+        { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' },
+        { path: '/m04/coderule', title: '编码规则', icon: 'Coin' }
+      ] },
       { stage: '生命周期', icon: 'Timer', items: [
         { path: '/lifecycle', title: '全生命周期(12环节)', icon: 'Timer' },
         { path: '/help', title: '使用说明与学习', icon: 'QuestionFilled' }
@@ -59,6 +65,9 @@ export const MODES = {
       { stage: '工程评审', icon: 'Checked', items: [
         { path: '/project/review', title: '项目复盘', icon: 'Reading' },
         { path: '/ecn/list', title: '设计变更', icon: 'Switch' },
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' },
+        { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
         { path: '/project/changes', title: '变更列表', icon: 'DocumentCopy' }
       ] },
       { stage: '工具画廊', icon: 'MagicStick', items: [
@@ -89,6 +98,11 @@ export const MODES = {
         { path: '/project/gantt-demo', title: '甘特图Demo套装', icon: 'Histogram' },
         { path: '/project/worksheets', title: '项目工作表', icon: 'Document' },
         { path: '/project/initiation', title: '立项申请', icon: 'EditPen' }
+      ] },
+      { stage: 'M04 研发数据', icon: 'Coin', items: [
+        { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
       ] }
     ]
   },
@@ -108,6 +122,11 @@ export const MODES = {
         { path: '/project/collab-home', title: '项目', icon: 'Files' },
         { path: '/project/tracking', title: '跟踪', icon: 'DataBoard' },
         { path: '/metric/list', title: '指标', icon: 'TrendCharts' }
+      ] },
+      { stage: 'M04 研发数据', icon: 'Coin', items: [
+        { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
       ] },
       { stage: '配置', icon: 'Setting', items: [
         { path: '/agent/list', title: 'AI助手', icon: 'MagicStick' },

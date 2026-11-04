@@ -1,6 +1,6 @@
-package com.hjgd.plm.codegen.controller;
+package com.hjgd.plm.m04.codegen.controller;
 
-import com.hjgd.plm.codegen.service.CodeGenService;
+import com.hjgd.plm.m04.codegen.service.CodeGenService;
 import com.hjgd.plm.common.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
