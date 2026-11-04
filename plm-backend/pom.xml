@@ -27,7 +27,22 @@
         <knife4j.version>4.5.0</knife4j.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <bouncycastle.version>1.78.1</bouncycastle.version>
+        <!-- CVE-2024-47535: Netty 资源管理错误(DoS)，统一升级到修复版 -->
+        <netty.version>4.1.116.Final</netty.version>
+        <!-- CVE-2021-35517: easyexcel->poi-ooxml 传递引入 commons-compress 1.19，钉到修复版 -->
+        <commons-compress.version>1.26.0</commons-compress.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- 覆盖 easyexcel -> poi-ooxml 传递引入的 commons-compress 1.19(存在 TAR DoS) -->
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>${commons-compress.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Web -->
