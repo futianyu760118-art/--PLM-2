@@ -49,7 +49,7 @@
                 <el-form-item label="交付物"><el-input v-model="row.deliveryDesc" style="width:180px" /></el-form-item>
                 <el-form-item label="备注"><el-input v-model="row.remark" style="width:200px" /></el-form-item>
                 <el-form-item>
-                  <el-button type="success" size="small" :loading="savingId === row.id" @click="confirmDone(row)">确认完成</el-button>
+                  <el-button type="success" size="small" :loading="savingId === row.id" @click="confirmDone(row)">提交完成审批</el-button>
                   <el-button type="primary" size="small" :loading="savingId === row.id" @click="saveNode(row)">保存节点</el-button>
                 </el-form-item>
               </el-form>
@@ -444,6 +444,7 @@ async function load() {
     nodes.value = (res.data.nodes || []).map(n => {
       if (!n.owner) n.owner = projOwner
       if (!n.deliveryDesc) n.deliveryDesc = deliverableOf(n.nodeCode)
+      n.__origStatus = n.status
       return n
     })
     summary.value = res.data.summary || null
@@ -466,6 +467,12 @@ async function loadEvidences(row) {
 async function saveNode(row) {
   if (row.status === 'PENDING' && !row.planDate) {
     ElMessage.warning('待办必须填写计划日期')
+    return
+  }
+  // 禁止直接置完成：必须走“提交完成审批”
+  if (row.status === 'DONE' && row.__origStatus !== 'DONE' && row.completionApprovalStatus !== 'APPROVED') {
+    ElMessage.warning('请点击「提交完成审批」，由经理审批通过后自动完成')
+    await load()
     return
   }
   if (!row.owner) row.owner = currentProject()?.owner || ''
@@ -597,10 +604,8 @@ async function submitChild() {
 const childNodes = (parentCode) => nodes.value.filter(n => n.parentCode === parentCode)
 
 async function confirmDone(row) {
-  row.status = 'DONE'
-  row.actualDate = todayStr()
-  if (!row.owner) row.owner = currentProject()?.owner || ''
-  await saveNode(row)
+  // 不再直接置完成：走“提交完成审批”，由经理审批通过后自动完成
+  return submitCompletion(row)
 }
 
 function onStatusChange(row) {
