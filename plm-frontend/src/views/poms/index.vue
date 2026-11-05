@@ -26,12 +26,19 @@ const host = window.location.hostname || '127.0.0.1'
 // 云端走 HTTPS 子域名反代（避免混合内容与端口差异）；本地 HTTP 仍用 4173。
 // 可用 VITE_POMS_BASE_URL 显式覆盖。
 const envBase = (import.meta.env.VITE_POMS_BASE_URL || '').trim()
-const base = envBase || (window.location.protocol === 'https:'
+const isHttps = window.location.protocol === 'https:'
+const base = (envBase || (isHttps
   ? `${window.location.protocol}//poms.${host.replace(/^plm\./, '')}`
-  : `http://${host}:4173`)
+  : `http://${host}:4173`)).replace(/\/$/, '')
 const frameUrl = computed(() => {
   const t = tabs.find(x => x.key === tab.value) || tabs[0]
-  return base.replace(/\/$/, '') + t.path
+  const path = t.path
+  const token = localStorage.getItem('plm_token') || ''
+  // HTTPS 下带 PLM 令牌走免密 SSO，微系统自动以当前 PLM 账号/角色登录
+  if (isHttps && token) {
+    return `${base}/sso/plm?token=${encodeURIComponent(token)}&next=${encodeURIComponent(path)}`
+  }
+  return base + path
 })
 </script>
 
