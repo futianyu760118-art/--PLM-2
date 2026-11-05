@@ -43,6 +43,13 @@ public class ProjectNode {
     private String planApprovedBy;
     private LocalDateTime planApprovedAt;
     private String planRejectNote;
+    /** 完成审批：null 未提交, PENDING_APPROVAL 待审批, APPROVED 通过, REJECTED 驳回 */
+    private String completionApprovalStatus;
+    private String completionSubmittedBy;
+    private LocalDateTime completionSubmittedAt;
+    private String completionApprovedBy;
+    private LocalDateTime completionApprovedAt;
+    private String completionRejectNote;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

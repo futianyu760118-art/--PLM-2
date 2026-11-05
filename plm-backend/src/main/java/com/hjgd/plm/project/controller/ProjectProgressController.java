@@ -69,6 +69,29 @@ public class ProjectProgressController {
         return Result.success(service.rejectPlan(projectId, code, note));
     }
 
+    @Operation(summary = "提交完成审批(工程师, 需先有证据)")
+    @OperationLog(value = "提交完成审批")
+    @PostMapping("/{projectId}/nodes/{code}/completion/submit")
+    public Result<ProjectNode> submitCompletion(@PathVariable Long projectId, @PathVariable String code) {
+        return Result.success(service.submitCompletion(projectId, code));
+    }
+
+    @Operation(summary = "完成审批通过(经理)")
+    @OperationLog(value = "完成审批通过")
+    @PostMapping("/{projectId}/nodes/{code}/completion/approve")
+    public Result<ProjectNode> approveCompletion(@PathVariable Long projectId, @PathVariable String code) {
+        return Result.success(service.approveCompletion(projectId, code));
+    }
+
+    @Operation(summary = "完成审批驳回(经理)")
+    @OperationLog(value = "完成审批驳回")
+    @PostMapping("/{projectId}/nodes/{code}/completion/reject")
+    public Result<ProjectNode> rejectCompletion(@PathVariable Long projectId, @PathVariable String code,
+                                                @RequestBody(required = false) java.util.Map<String, String> body) {
+        String note = body == null ? null : body.get("note");
+        return Result.success(service.rejectCompletion(projectId, code, note));
+    }
+
     @Operation(summary = "节点证据文件列表")
     @GetMapping("/nodes/{nodeId}/evidence")
     public Result<List<ProjectNodeEvidence>> evidence(@PathVariable Long nodeId) {

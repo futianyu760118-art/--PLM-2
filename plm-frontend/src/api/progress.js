@@ -13,6 +13,9 @@ export function updateNode(projectId, code, data) { return request({ url: `/proj
 export function submitNodePlan(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/plan/submit`, method: 'post' }) }
 export function approveNodePlan(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/plan/approve`, method: 'post' }) }
 export function rejectNodePlan(projectId, code, note) { return request({ url: `/project/${projectId}/nodes/${code}/plan/reject`, method: 'post', data: { note } }) }
+export function submitNodeCompletion(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/completion/submit`, method: 'post' }) }
+export function approveNodeCompletion(projectId, code) { return request({ url: `/project/${projectId}/nodes/${code}/completion/approve`, method: 'post' }) }
+export function rejectNodeCompletion(projectId, code, note) { return request({ url: `/project/${projectId}/nodes/${code}/completion/reject`, method: 'post', data: { note } }) }
 export function listEvidence(nodeId) { return request({ url: `/project/nodes/${nodeId}/evidence`, method: 'get' }) }
 export function deleteEvidence(id) { return request({ url: `/project/nodes/evidence/${id}`, method: 'delete' }) }
 export function progressCheck(projectId) { return request({ url: `/project/${projectId}/progress-check`, method: 'get' }) }

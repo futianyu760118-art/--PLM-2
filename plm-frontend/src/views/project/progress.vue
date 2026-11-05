@@ -78,13 +78,22 @@
               <p v-else class="std-tip" style="margin-top:4px">无子项（如遇模具重开等，点「追加子项」记录）</p>
 
               <el-divider content-position="left">
-                资料文件 ({{ (evidenceMap[row.id] || []).length }})
+                资料文件 ({{ row.evidenceCount || (evidenceMap[row.id] || []).length }})
                 <el-upload style="display:inline-block;margin-left:8px"
                   :show-file-list="false" :http-request="opt => doUpload(row, opt)" :disabled="uploadingId === row.id">
                   <el-button size="small" type="success" plain icon="Upload" :loading="uploadingId === row.id">上传资料</el-button>
                 </el-upload>
                 <el-button size="small" type="primary" plain icon="EditPen" style="margin-left:6px"
                   @click="openTextEvidence(row)">填写资料</el-button>
+                <el-tag v-if="completionApprovalTag(row.completionApprovalStatus)" size="small"
+                  :type="completionApprovalTag(row.completionApprovalStatus).type" style="margin-left:8px"
+                  :title="row.completionRejectNote || ''">{{ completionApprovalTag(row.completionApprovalStatus).text }}</el-tag>
+                <el-button v-if="canSubmitCompletion(row)" size="small" type="warning" plain icon="Stamp"
+                  style="margin-left:6px" @click="submitCompletion(row)">提交完成审批</el-button>
+                <template v-if="row.completionApprovalStatus === 'PENDING_APPROVAL' && isManager">
+                  <el-button size="small" type="success" plain style="margin-left:6px" @click="approveCompletion(row)">通过</el-button>
+                  <el-button size="small" type="danger" plain @click="rejectCompletion(row)">驳回</el-button>
+                </template>
               </el-divider>
               <el-table :data="evidenceMap[row.id] || []" size="small" border empty-text="暂无资料文件">
                 <el-table-column label="资料物" min-width="200" show-overflow-tooltip>
@@ -293,7 +302,7 @@ import { nodeSheet, UNMAPPED_NODES } from '@/config/nodeSheetLinks'
 
 const route = useRoute()
 const router = useRouter()
-import { getNodeMatrix, updateNode, listEvidence, uploadEvidence, deleteEvidence, progressCheck, downloadEvidence, createTextEvidence, updateEvidence, fetchPreview, fetchTextEvidence, submitNodePlan, approveNodePlan, rejectNodePlan } from '@/api/progress'
+import { getNodeMatrix, updateNode, listEvidence, uploadEvidence, deleteEvidence, progressCheck, downloadEvidence, createTextEvidence, updateEvidence, fetchPreview, fetchTextEvidence, submitNodePlan, approveNodePlan, rejectNodePlan, submitNodeCompletion, approveNodeCompletion, rejectNodeCompletion } from '@/api/progress'
 import { useUserStore } from '@/stores/user'
 
 const projects = ref([])
@@ -509,6 +518,43 @@ async function rejectPlan(row) {
   } catch (e) { /* 取消或失败 */ }
 }
 
+// ===== 完成审批流：上传证据后工程师提交，经理审批通过才完成 =====
+const completionApprovalTag = (s) => ({
+  PENDING_APPROVAL: { type: 'warning', text: '完成待审批' },
+  APPROVED: { type: 'success', text: '完成已通过' },
+  REJECTED: { type: 'danger', text: '完成已驳回' }
+}[s] || null)
+function canSubmitCompletion(row) {
+  return (row.evidenceCount || 0) >= 1
+    && row.status !== 'DONE' && row.status !== 'NO_NODE'
+    && row.completionApprovalStatus !== 'PENDING_APPROVAL'
+    && row.completionApprovalStatus !== 'APPROVED'
+}
+async function submitCompletion(row) {
+  try {
+    await submitNodeCompletion(projectId.value, row.nodeCode)
+    ElMessage.success('已提交完成审批')
+    await load()
+  } catch (e) { /* 错误已由 request 弹出 */ }
+}
+async function approveCompletion(row) {
+  try {
+    await approveNodeCompletion(projectId.value, row.nodeCode)
+    ElMessage.success('完成审批通过')
+    await load()
+  } catch (e) { /* ignore */ }
+}
+async function rejectCompletion(row) {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回完成审批', {
+      inputPlaceholder: '如：证据不完整', confirmButtonText: '驳回', cancelButtonText: '取消'
+    })
+    await rejectNodeCompletion(projectId.value, row.nodeCode, value)
+    ElMessage.success('已驳回')
+    await load()
+  } catch (e) { /* 取消或失败 */ }
+}
+
 // ===== 追加/编辑子项节点（如模具重开记录）=====
 const childForm = reactive({ visible: false, busy: false, editMode: false, nodeCode: '', parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', actualDate: '', owner: '', remark: '' })
 function openChildForm(row) {
@@ -567,8 +613,8 @@ async function doUpload(row, opt) {
     await uploadEvidence(row.id, opt.file, 'NODE_EVIDENCE', '')
     opt.onSuccess && opt.onSuccess()
     ElMessage.success('资料已上传')
-    await loadEvidences(row)
     await load()
+    await loadEvidences(row)
   } catch (e) {
     opt.onError && opt.onError(e)
   } finally { uploadingId.value = null }
@@ -653,12 +699,12 @@ async function saveEvidenceForm() {
       ElMessage.success('资料已填写')
     }
     evForm.visible = false
+    await load()
     if (evForm.node) await loadEvidences(evForm.node)
     else {
       const row = nodes.value.find(n => n.id === evForm.nodeId)
       if (row) await loadEvidences(row)
     }
-    await load()
   } finally { evForm.saving = false }
 }
 

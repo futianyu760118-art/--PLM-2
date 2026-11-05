@@ -445,8 +445,87 @@ public class ProjectProgressService {
                 || com.hjgd.plm.auth.security.SecurityUtils.hasRole("project_manager")
                 || com.hjgd.plm.auth.security.SecurityUtils.hasRole("hr_manager")
                 || com.hjgd.plm.auth.security.SecurityUtils.hasRole("cw1");
-        if (!ok) throw new BusinessException("仅经理/管理员可审批计划");
+        if (!ok) throw new BusinessException("仅经理/管理员可审批");
     }
+
+    // ===== 完成审批：上传证据后，工程师提交，经理审批通过才置为已完成 =====
+
+    /** 提交完成审批（工程师）：节点必须已上传/填写资料证据。 */
+    @Transactional
+    public ProjectNode submitCompletion(Long projectId, String code) {
+        ProjectNode node = findNode(projectId, code);
+        if (DONE_LIKE.contains(node.getStatus())) throw new BusinessException("节点已完成，无需提交");
+        int ev = node.getEvidenceCount() == null ? 0 : node.getEvidenceCount();
+        if (ev < 1) throw new BusinessException("请先上传或填写资料证据，再提交完成审批");
+        String me = com.hjgd.plm.common.DataScope.name();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getCompletionApprovalStatus, "PENDING_APPROVAL")
+                .set(ProjectNode::getCompletionSubmittedBy, me)
+                .set(ProjectNode::getCompletionSubmittedAt, LocalDateTime.now())
+                .set(ProjectNode::getCompletionRejectNote, null)
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "COMPLETION_SUBMIT", "completionApproval", node.getCompletionApprovalStatus(), "PENDING_APPROVAL", "UI");
+        weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 由 " + me + " 提交完成审批（证据 " + ev + " 份），待经理审批。");
+        Project p = projectMapper.selectById(projectId);
+        if (p != null && p.getOwner() != null) {
+            todoPushService.pushUser(p.getOwner(), "【PLM待审批】" + node.getProjectNo() + " " + node.getNodeName()
+                    + " 完成审批待处理（证据 " + ev + " 份）。");
+        }
+        return findNode(projectId, code);
+    }
+
+    /** 完成审批通过（经理）：置为已完成并回填实际日期。 */
+    @Transactional
+    public ProjectNode approveCompletion(Long projectId, String code) {
+        requireManager();
+        ProjectNode node = findNode(projectId, code);
+        if (!"PENDING_APPROVAL".equals(node.getCompletionApprovalStatus()))
+            throw new BusinessException("该节点未处于完成待审批状态");
+        String me = com.hjgd.plm.common.DataScope.name();
+        LocalDate actual = node.getActualDate() != null ? node.getActualDate() : LocalDate.now();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getCompletionApprovalStatus, "APPROVED")
+                .set(ProjectNode::getCompletionApprovedBy, me)
+                .set(ProjectNode::getCompletionApprovedAt, LocalDateTime.now())
+                .set(ProjectNode::getStatus, "DONE")
+                .set(ProjectNode::getActualDate, actual)
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "COMPLETION_APPROVE", "status", node.getStatus(), "DONE", "UI");
+        gateAdvanceService.autoAdvance(projectId);
+        weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 完成审批已由 " + me + " 通过，节点已完成。");
+        todoPushService.pushUser(node.getOwner(), "【PLM审批通过】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 完成审批已通过。");
+        return findNode(projectId, code);
+    }
+
+    /** 完成审批驳回（经理）。 */
+    @Transactional
+    public ProjectNode rejectCompletion(Long projectId, String code, String note) {
+        requireManager();
+        ProjectNode node = findNode(projectId, code);
+        String me = com.hjgd.plm.common.DataScope.name();
+        nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
+                .eq(ProjectNode::getId, node.getId())
+                .set(ProjectNode::getCompletionApprovalStatus, "REJECTED")
+                .set(ProjectNode::getCompletionRejectNote, note)
+                .set(ProjectNode::getCompletionApprovedBy, me)
+                .set(ProjectNode::getCompletionApprovedAt, LocalDateTime.now())
+                .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                code, "COMPLETION_REJECT", "completionApproval", node.getCompletionApprovalStatus(), "REJECTED", "UI");
+        weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 完成审批被 " + me + " 驳回：" + (note == null ? "" : note));
+        todoPushService.pushUser(node.getOwner(), "【PLM审批驳回】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 完成审批被驳回：" + (note == null ? "" : note));
+        return findNode(projectId, code);
+    }
+
 
     private ProjectNode findNode(Long projectId, String code) {
         ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
@@ -507,14 +586,14 @@ public class ProjectProgressService {
         evidenceMapper.insert(ev);
         registerUnifiedEvidence(node, ev, "file", pf.getId() == null ? null : String.valueOf(pf.getId()));
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
-        // 上传证据后自动完成(标绿): 状态置 DONE 并回填实际日期(若未填)
+        // 上传证据后不再自动完成；置为进行中，等待「提交完成审批」→ 经理通过后才置 DONE
         if (!DONE_LIKE.contains(node.getStatus())) {
-            node.setStatus("DONE");
-            if (node.getActualDate() == null) node.setActualDate(LocalDate.now());
+            if (!"IN_PROGRESS".equals(node.getStatus())) node.setStatus("IN_PROGRESS");
+            node.setCompletionApprovalStatus(null);
+            node.setCompletionRejectNote(null);
         }
         node.setUpdatedAt(LocalDateTime.now());
         nodeMapper.updateById(node);
-        gateAdvanceService.autoAdvance(node.getProjectId());
         return ev;
     }
 

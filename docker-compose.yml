@@ -89,6 +89,7 @@ services:
       - ./database/72_m04_codegen_rule_engine.sql:/docker-entrypoint-initdb.d/72_m04_codegen_rule_engine.sql:ro
       - ./database/73_m04_document_center.sql:/docker-entrypoint-initdb.d/73_m04_document_center.sql:ro
       - ./database/74_m04_approval_flow_seed.sql:/docker-entrypoint-initdb.d/74_m04_approval_flow_seed.sql:ro
+      - ./database/75_node_completion_approval.sql:/docker-entrypoint-initdb.d/75_node_completion_approval.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_v4"]
       interval: 10s
