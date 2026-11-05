@@ -466,7 +466,7 @@ public class ProjectProgressService {
                 .set(ProjectNode::getCompletionRejectNote, null)
                 .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
-                code, "COMPLETION_SUBMIT", "completionApproval", node.getCompletionApprovalStatus(), "PENDING_APPROVAL", "UI");
+                code, "CMPL_SUBMIT", "completionApproval", node.getCompletionApprovalStatus(), "PENDING_APPROVAL", "UI");
         weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 由 " + me + " 提交完成审批（证据 " + ev + " 份），待经理审批。");
         Project p = projectMapper.selectById(projectId);
@@ -495,7 +495,7 @@ public class ProjectProgressService {
                 .set(ProjectNode::getActualDate, actual)
                 .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
-                code, "COMPLETION_APPROVE", "status", node.getStatus(), "DONE", "UI");
+                code, "CMPL_APPROVE", "status", node.getStatus(), "DONE", "UI");
         gateAdvanceService.autoAdvance(projectId);
         weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 完成审批已由 " + me + " 通过，节点已完成。");
@@ -518,7 +518,7 @@ public class ProjectProgressService {
                 .set(ProjectNode::getCompletionApprovedAt, LocalDateTime.now())
                 .set(ProjectNode::getUpdatedAt, LocalDateTime.now()));
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
-                code, "COMPLETION_REJECT", "completionApproval", node.getCompletionApprovalStatus(), "REJECTED", "UI");
+                code, "CMPL_REJECT", "completionApproval", node.getCompletionApprovalStatus(), "REJECTED", "UI");
         weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
                 + " 完成审批被 " + me + " 驳回：" + (note == null ? "" : note));
         todoPushService.pushUser(node.getOwner(), "【PLM审批驳回】" + node.getProjectNo() + " " + node.getNodeName()
