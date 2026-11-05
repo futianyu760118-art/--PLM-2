@@ -23,9 +23,15 @@ const tabs = [
 ]
 const tab = ref('plm2')
 const host = window.location.hostname || '127.0.0.1'
+// 云端走 HTTPS 子域名反代（避免混合内容与端口差异）；本地 HTTP 仍用 4173。
+// 可用 VITE_POMS_BASE_URL 显式覆盖。
+const envBase = (import.meta.env.VITE_POMS_BASE_URL || '').trim()
+const base = envBase || (window.location.protocol === 'https:'
+  ? `${window.location.protocol}//poms.${host.replace(/^plm\./, '')}`
+  : `http://${host}:4173`)
 const frameUrl = computed(() => {
   const t = tabs.find(x => x.key === tab.value) || tabs[0]
-  return `http://${host}:4173${t.path}`
+  return base.replace(/\/$/, '') + t.path
 })
 </script>
 
