@@ -143,6 +143,9 @@ import router from '@/router'
 const agentChatVisible = ref(false)
 const themeVisible = ref(false)
 const appearance = useAppearanceStore()
+// route/router 必须在下面的 watch(immediate) 之前初始化，否则触发 TDZ
+const route = useRoute()
+const routerPush = useRouter()
 
 // 其它页面（如 Multica 风格首页）请求打开总控对话
 window.addEventListener('plm-open-agent-chat', () => { agentChatVisible.value = true })
@@ -160,8 +163,6 @@ function switchMode(key) {
   if (route.path !== home) routerPush.push(home)
 }
 
-const route = useRoute()
-const routerPush = useRouter()
 const userStore = useUserStore()
 const isCollapse = ref(false)
 const navKeyword = ref('')
