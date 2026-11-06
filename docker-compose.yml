@@ -132,8 +132,8 @@ services:
       PLM_FILE_INTRANET_DIR: /data/files/intranet
       PLM_FILE_EXTRANET_DIR: /data/files/extranet
       PLM_ALGORITHM_BASE_URL: http://algorithm:8001
-      # PLM → EBMS 即时同步(事件 webhook 推送)
-      WEBHOOK_ENABLED: "true"
+      # EBMS 同步已停用（以腾讯云为主）
+      WEBHOOK_ENABLED: "false"
       PLM_EBMS_WEBHOOK_URL: ${PLM_EBMS_WEBHOOK_URL:-http://192.168.0.71:5000/api/sync/events}
       # 大模型(OpenAI 兼容)：恒剑PLM智能体回复 + AEOS 执行面推理；key 为空时回落模板回复
       PLM_LLM_BASE_URL: ${PLM_LLM_BASE_URL:-}
