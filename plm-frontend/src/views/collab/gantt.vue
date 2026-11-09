@@ -39,8 +39,8 @@
         </div>
       </div>
 
-      <div v-loading="loading" class="gantt">
-        <div class="g-left">
+      <div v-loading="loading" class="gantt" ref="ganttRef">
+        <div class="g-left" ref="leftRef">
           <div class="gl-head">项目 / 节点</div>
           <div v-for="r in rows" :key="r.id" class="gl-row" :class="r.type === 'node' ? 'gl-node' : 'st-' + r.project.status">
             <template v-if="r.type === 'project'">
@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { getGantt } from '@/api/project'
 
 const loading = ref(false)
@@ -179,6 +179,7 @@ function barStyle(p) {
 function msLeft(d) { return x(d) - 4 + 'px' }
 
 function nd(n) {
+  if (n.status === 'NO_NODE') return null
   const p = d2d(n.plan_date), a = d2d(n.actual_date)
   if (!p && !a) return null
   const start = p || a
@@ -258,9 +259,25 @@ const gridTicks = computed(() => {
   return arr
 })
 
-const SCALE_WIDTH = { day: 22, week: 6, month: 2 }
-function onScaleChange(s) { dayWidth.value = SCALE_WIDTH[s] || 6 }
-function setZoom(d) { dayWidth.value = Math.max(1, Math.min(30, dayWidth.value + d)) }
+const SCALE_MIN = { day: 22, week: 6, month: 2.2 }
+const SCALE_MAX = { day: 90, week: 26, month: 7 }
+const ganttRef = ref(null)
+const leftRef = ref(null)
+// 自动适配：按可视宽度与(筛选后)日期跨度计算每日像素，保证铺满且日期可读
+function computeDayWidth() {
+  const N = Math.max(1, range.value.end - range.value.start + 1)
+  const total = ganttRef.value ? ganttRef.value.clientWidth : 900
+  const leftW = leftRef.value ? leftRef.value.offsetWidth : 240
+  const W = Math.max(240, total - leftW - 16)
+  const sc = scale.value
+  const fit = W / N
+  dayWidth.value = Math.max(SCALE_MIN[sc] || 6, Math.min(SCALE_MAX[sc] || 20, fit))
+}
+function onScaleChange(s) { scale.value = s; nextTick(computeDayWidth) }
+function setZoom(d) {
+  const sc = scale.value
+  dayWidth.value = Math.max(SCALE_MIN[sc] || 6, Math.min(SCALE_MAX[sc] || 20, dayWidth.value + d))
+}
 
 async function load() {
   loading.value = true
@@ -270,7 +287,13 @@ async function load() {
   } finally { loading.value = false }
 }
 
-onMounted(load)
+watch([range, scale], () => nextTick(computeDayWidth))
+onMounted(async () => {
+  await load()
+  nextTick(computeDayWidth)
+  window.addEventListener('resize', computeDayWidth)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', computeDayWidth))
 </script>
 
 <style scoped lang="scss">

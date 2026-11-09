@@ -150,10 +150,11 @@
         <el-table-column label="计划时间(开始~结束)" width="270" sortable prop="planStartDate">
           <template #default="{ row }">
             <div style="display:flex;flex-direction:column;gap:2px">
-              <el-date-picker type="daterange" :model-value="planRange(row)" size="small" value-format="YYYY-MM-DD"
+              <el-date-picker v-if="row.status !== 'NO_NODE'" type="daterange" :model-value="planRange(row)" size="small" value-format="YYYY-MM-DD"
                 range-separator="~" start-placeholder="开始" end-placeholder="结束"
                 style="width:235px" :clearable="true"
                 @update:model-value="v => { row.planStartDate = v?.[0] || ''; row.planEndDate = v?.[1] || ''; row.planDate = row.planStartDate; saveNode(row) }" />
+              <span v-else style="color:#909399">—</span>
               <div v-if="planApprovalTag(row.planApprovalStatus)" style="display:flex;align-items:center;gap:4px">
                 <el-tooltip v-if="row.planApprovalStatus === 'REJECTED' && row.planRejectNote" :content="row.planRejectNote" placement="top">
                   <el-tag size="small" :type="planApprovalTag(row.planApprovalStatus).type">{{ planApprovalTag(row.planApprovalStatus).text }}</el-tag>
