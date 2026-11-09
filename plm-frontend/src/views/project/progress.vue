@@ -19,11 +19,12 @@
       </el-form>
 
       <div v-if="summary" class="sum-bar">
-        <el-tag type="success">完成 {{ summary.done }}/{{ summary.total }}</el-tag>
-        <el-tag type="primary">关键节点 {{ summary.keyDone }}/{{ summary.keyTotal }}</el-tag>
-        <el-tag type="warning">逾期 {{ summary.overdue }}</el-tag>
-        <el-tag type="info">未设置 {{ summary.notSet }}</el-tag>
-        <el-tag v-if="summary.noNode" type="info" effect="plain">无节点 {{ summary.noNode }}</el-tag>
+        <el-tag type="success" :effect="summaryFilter === 'DONE' ? 'dark' : 'light'" style="cursor:pointer" @click="toggleSummary('DONE')">完成 {{ summary.done }}/{{ summary.total }}</el-tag>
+        <el-tag type="primary" :effect="summaryFilter === 'KEY' ? 'dark' : 'light'" style="cursor:pointer" @click="toggleSummary('KEY')">关键节点 {{ summary.keyDone }}/{{ summary.keyTotal }}</el-tag>
+        <el-tag type="warning" :effect="summaryFilter === 'OVERDUE' ? 'dark' : 'light'" style="cursor:pointer" @click="toggleSummary('OVERDUE')">逾期 {{ summary.overdue }}</el-tag>
+        <el-tag type="info" :effect="summaryFilter === 'NOT_SET' ? 'dark' : 'light'" style="cursor:pointer" @click="toggleSummary('NOT_SET')">未设置 {{ summary.notSet }}</el-tag>
+        <el-tag v-if="summary.noNode" type="info" :effect="summaryFilter === 'NO_NODE' ? 'dark' : 'plain'" style="cursor:pointer" @click="toggleSummary('NO_NODE')">无节点 {{ summary.noNode }}</el-tag>
+        <el-tag v-if="summaryFilter" type="danger" effect="plain" style="cursor:pointer" @click="summaryFilter = ''">筛选中：{{ summaryFilterLabel }} ✕</el-tag>
         <span class="rate">节点完成率 <b>{{ Math.round((summary.nodeRate || 0) * 100) }}%</b></span>
       </div>
 
@@ -327,12 +328,25 @@ const userStore = useUserStore()
 const MANAGER_ROLES = ['ADMIN', 'admin', 'rd_manager', 'sales_manager', 'sales_director', 'project_manager', 'gm', 'hr_manager', 'cw1']
 const isManager = computed(() => (userStore.roles || []).some(r => MANAGER_ROLES.includes(r)))
 
-// ===== 表格：查找 + 排序 =====
+// ===== 表格：查找 + 排序 + 统计穿透 =====
 const nodeKeyword = ref('')
+const summaryFilter = ref('')
+const summaryFilterLabel = computed(() => ({ DONE: '已完成', KEY: '关键节点', OVERDUE: '逾期', NOT_SET: '未设置', NO_NODE: '无节点' }[summaryFilter.value] || ''))
+function toggleSummary(f) { summaryFilter.value = summaryFilter.value === f ? '' : f }
+function isOverdueNode(n) {
+  return n.planDate && n.status !== 'DONE' && n.status !== 'NO_NODE' && String(n.planDate).slice(0, 10) < todayStr()
+}
 const filteredNodes = computed(() => {
+  let list = nodes.value
+  const f = summaryFilter.value
+  if (f === 'DONE') list = list.filter(n => n.status === 'DONE')
+  else if (f === 'NOT_SET') list = list.filter(n => n.status === 'NOT_SET')
+  else if (f === 'NO_NODE') list = list.filter(n => n.status === 'NO_NODE')
+  else if (f === 'KEY') list = list.filter(n => n.isKey)
+  else if (f === 'OVERDUE') list = list.filter(n => isOverdueNode(n))
   const kw = nodeKeyword.value.trim().toLowerCase()
-  if (!kw) return nodes.value
-  return nodes.value.filter(n =>
+  if (!kw) return list
+  return list.filter(n =>
     (n.nodeName || '').toLowerCase().includes(kw) ||
     (n.owner || '').toLowerCase().includes(kw) ||
     (n.nodeCode || '').toLowerCase().includes(kw))

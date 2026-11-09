@@ -258,9 +258,9 @@ const gridTicks = computed(() => {
   return arr
 })
 
-const SCALE_WIDTH = { day: 8, week: 3, month: 1 }
-function onScaleChange(s) { dayWidth.value = SCALE_WIDTH[s] || 3 }
-function setZoom(d) { dayWidth.value = Math.max(0.3, Math.min(24, dayWidth.value + d)) }
+const SCALE_WIDTH = { day: 22, week: 6, month: 2 }
+function onScaleChange(s) { dayWidth.value = SCALE_WIDTH[s] || 6 }
+function setZoom(d) { dayWidth.value = Math.max(1, Math.min(30, dayWidth.value + d)) }
 
 async function load() {
   loading.value = true
@@ -282,9 +282,9 @@ onMounted(load)
     .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
     .ms { width: 8px; height: 8px; transform: rotate(45deg); background: #f56c6c; display: inline-block; } }
 }
-.gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
-.g-left { flex: 0 0 min(260px, 34vw); border-right: 1px solid #e4e7ed; background: #fafbfc; }
-.gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 48px; box-sizing: border-box; line-height: 28px; }
+.gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: auto; max-height: calc(100vh - 240px); scrollbar-gutter: stable; }
+.g-left { flex: 0 0 min(260px, 34vw); border-right: 1px solid #e4e7ed; background: #fafbfc; position: sticky; left: 0; z-index: 6; }
+.gl-head { padding: 10px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e4e7ed; height: 48px; box-sizing: border-box; line-height: 28px; position: sticky; top: 0; z-index: 7; background: #fafbfc; }
 .gl-row { padding: 8px 12px; border-bottom: 1px solid #f0f2f5; height: 44px; box-sizing: border-box; overflow: hidden; }
 .gl-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; }
 .gl-exp { font-size: 13px; color: #909399; transition: transform .15s; flex: 0 0 auto; }
@@ -292,7 +292,7 @@ onMounted(load)
 .gl-meta { font-size: 11px; color: #909399; }
 .gl-node { padding-left: 26px; height: 34px; }
 .gl-node-name { font-size: 12px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.g-right { flex: 1; overflow-x: auto; }
+.g-right { flex: 0 0 auto; }
 .gr-scroll { position: relative; }
 .gr-axis { position: sticky; top: 0; z-index: 3; height: 48px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
 .gr-month-row { position: relative; height: 24px; border-bottom: 1px solid #e4e7ed; }

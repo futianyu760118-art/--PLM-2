@@ -410,14 +410,14 @@ function msStyle(m, i) { return { left: x(m.d) - 6 + 'px', top: i * ROWH + 11 + 
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-.gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: hidden; }
-.g-left { flex: 0 0 auto; border-right: 1px solid #e4e7ed; background: #fafbfc; overflow: hidden; }
-.gl-head-row { display: flex; height: 50px; border-bottom: 1px solid #e4e7ed; background: #f5f7fa; }
+.gantt { display: flex; border: 1px solid #e4e7ed; border-radius: 8px; overflow: auto; max-height: calc(100vh - 250px); scrollbar-gutter: stable; }
+.g-left { flex: 0 0 auto; border-right: 1px solid #e4e7ed; background: #fafbfc; position: sticky; left: 0; z-index: 6; }
+.gl-head-row { display: flex; height: 50px; border-bottom: 1px solid #e4e7ed; background: #f5f7fa; position: sticky; top: 0; z-index: 7; }
 .gl-hcell { height: 50px; line-height: 50px; padding: 0 6px; font-weight: 600; font-size: 12px; border-right: 1px solid #e4e7ed; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
 .gl-row { display: flex; height: 34px; border-bottom: 1px solid #f0f2f5; }
 .gl-row.stage { font-weight: 700; background: #f5f7fa; }
 .gl-cell { height: 34px; line-height: 34px; padding: 0 6px; font-size: 12px; border-right: 1px solid #f0f2f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
-.g-right { flex: 1; overflow-x: auto; }
+.g-right { flex: 0 0 auto; }
 .gr { position: relative; }
 .gr-axis { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid #e4e7ed; }
 .gr-month-row { position: relative; height: 25px; border-bottom: 1px solid #e4e7ed; }
