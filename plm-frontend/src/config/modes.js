@@ -37,10 +37,12 @@ export const MODES = {
         { path: '/process/list', title: '工序流转', icon: 'SetUp' },
         { path: '/mold/list', title: '模具资产', icon: 'Grid' }
       ] },
+      { stage: '个人', icon: 'User', items: [
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
+      ] },
       { stage: 'M04 研发数据', icon: 'Coin', items: [
         { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
         { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
-        { path: '/approval/pending', title: '审批待办', icon: 'Bell' },
         { path: '/m04/coderule', title: '编码规则', icon: 'Coin' }
       ] },
       { stage: '生命周期', icon: 'Timer', items: [
@@ -62,11 +64,13 @@ export const MODES = {
         { path: '/project/tasks', title: '我的待办', icon: 'Tickets' },
         { path: '/project/tracking', title: '研发项目跟踪', icon: 'DataBoard' }
       ] },
+      { stage: '个人', icon: 'User', items: [
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
+      ] },
       { stage: '工程评审', icon: 'Checked', items: [
         { path: '/project/review', title: '项目复盘', icon: 'Reading' },
         { path: '/ecn/list', title: '设计变更', icon: 'Switch' },
         { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
-        { path: '/approval/pending', title: '审批待办', icon: 'Bell' },
         { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
         { path: '/project/changes', title: '变更列表', icon: 'DocumentCopy' }
       ] },
@@ -99,10 +103,12 @@ export const MODES = {
         { path: '/project/worksheets', title: '项目工作表', icon: 'Document' },
         { path: '/project/initiation', title: '立项申请', icon: 'EditPen' }
       ] },
+      { stage: '个人', icon: 'User', items: [
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
+      ] },
       { stage: 'M04 研发数据', icon: 'Coin', items: [
         { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
-        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
-        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' }
       ] }
     ]
   },
@@ -116,7 +122,8 @@ export const MODES = {
     groups: [
       { stage: '个人', icon: 'User', items: [
         { path: '/project/mcore-home', title: '收件箱/工作项', icon: 'Bell' },
-        { path: '/project/tasks', title: '我的待办', icon: 'Tickets' }
+        { path: '/project/tasks', title: '我的待办', icon: 'Tickets' },
+        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
       ] },
       { stage: '工作区', icon: 'Files', items: [
         { path: '/project/collab-home', title: '项目', icon: 'Files' },
@@ -125,8 +132,7 @@ export const MODES = {
       ] },
       { stage: 'M04 研发数据', icon: 'Coin', items: [
         { path: '/document/list', title: '文档中心', icon: 'FolderOpened' },
-        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' },
-        { path: '/approval/pending', title: '审批待办', icon: 'Bell' }
+        { path: '/ecr/list', title: 'ECR 变更申请', icon: 'DocumentAdd' }
       ] },
       { stage: '配置', icon: 'Setting', items: [
         { path: '/agent/list', title: 'AI助手', icon: 'MagicStick' },

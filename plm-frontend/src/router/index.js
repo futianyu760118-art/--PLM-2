@@ -203,7 +203,7 @@ const routes = [
     path: '/approval',
     component: Layout,
     redirect: '/approval/pending',
-    meta: { title: '我的待办', icon: 'Bell', workflowStage: 'M04 研发数据中台' },
+    meta: { title: '我的待办', icon: 'Bell', workflowStage: '个人' },
     children: [
       { path: 'pending', name: 'ApprovalPending', component: () => import('@/views/m04/approval/pending.vue'),
         meta: { title: '审批待办' } }
