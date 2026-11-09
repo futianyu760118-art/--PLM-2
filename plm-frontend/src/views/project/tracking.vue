@@ -78,12 +78,25 @@
         <el-table-column label="完成" width="80" align="center" fixed="right">
           <template #default="{row}">{{ row.nodeDone }}/{{ row.nodeTotal }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{row}">
             <el-button link type="primary" size="small" @click="openProgress(row)">明细</el-button>
+            <el-button link type="info" size="small" @click="openHistory(row)">修改记录</el-button>
           </template>
         </el-table-column>
       </el-table>
+
+      <el-dialog v-model="histVisible" :title="`修改记录 · ${histProject}`" width="920px" top="8vh">
+        <el-table :data="histRows" border stripe size="small" max-height="520" v-loading="histLoading">
+          <el-table-column prop="createdAt" label="时间" width="170" />
+          <el-table-column prop="nodeCode" label="节点" width="120" />
+          <el-table-column prop="action" label="动作" width="90" />
+          <el-table-column prop="fieldName" label="字段" width="120" />
+          <el-table-column prop="oldValue" label="原值" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="newValue" label="新值" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="operator" label="操作人" width="100" />
+        </el-table>
+      </el-dialog>
 
       <div class="pagination-wrap">
         <el-pagination v-model:current-page="query.pageNum" v-model:page-size="query.pageSize" :total="total"
@@ -112,7 +125,7 @@
 import { ref, reactive, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll, updateProject } from '@/api/project'
+import { getTrackingNodeDefs, pageTracking, saveTrackingCell, getNodeSheetMap, rollupAll, updateProject, pageChanges } from '@/api/project'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,6 +228,22 @@ async function saveCell(row, code) {
     flash(row, code)
   } catch (e) { /* 拦截器已提示 */ }
   cancelEdit()
+}
+
+// ===== 修改记录（变更日志）=====
+const histVisible = ref(false)
+const histRows = ref([])
+const histProject = ref('')
+const histLoading = ref(false)
+async function openHistory(row) {
+  histProject.value = row.projectNo
+  histRows.value = []
+  histVisible.value = true
+  histLoading.value = true
+  try {
+    const res = await pageChanges({ projectNo: row.projectNo, pageNum: 1, pageSize: 200 })
+    histRows.value = (res.data && (res.data.records || res.data.list)) || []
+  } finally { histLoading.value = false }
 }
 
 function openProgress(row) {

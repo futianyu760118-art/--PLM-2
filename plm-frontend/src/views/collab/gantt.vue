@@ -13,6 +13,11 @@
           <el-option label="已关闭" value="CLOSED" />
           <el-option label="暂停" value="ON_HOLD" />
         </el-select>
+        <el-select v-model="engineerFilter" clearable filterable placeholder="全部工程师" style="width:150px">
+          <el-option v-for="o in engineers" :key="o" :label="o" :value="o" />
+        </el-select>
+        <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD"
+          start-placeholder="开始日期" end-placeholder="结束日期" style="width:250px" />
         <el-button icon="Refresh" @click="load">刷新</el-button>
         <el-button :disabled="!rows.some(r => r.type === 'project')" @click="expandAll">全部展开</el-button>
         <el-button @click="collapseAll">全部收起</el-button>
@@ -98,11 +103,30 @@ const selectedIds = ref([])
 const expandedIds = ref([])
 const dayWidth = ref(3)
 const scale = ref('week')
+const engineerFilter = ref('')
+const dateRange = ref(null)
+
+const engineers = computed(() =>
+  [...new Set(projects.value.map(p => p.owner).filter(Boolean))].sort())
 
 const displayProjects = computed(() => {
-  if (!selectedIds.value.length) return projects.value
-  const set = new Set(selectedIds.value)
-  return projects.value.filter(p => set.has(String(p.id)))
+  let list = projects.value
+  if (selectedIds.value.length) {
+    const set = new Set(selectedIds.value)
+    list = list.filter(p => set.has(String(p.id)))
+  }
+  if (engineerFilter.value) {
+    list = list.filter(p => (p.owner || '') === engineerFilter.value)
+  }
+  if (Array.isArray(dateRange.value) && dateRange.value[0] && dateRange.value[1]) {
+    const [rs, re] = dateRange.value
+    list = list.filter(p => {
+      const s = d2d(p.start_date), e = d2d(p.end_date)
+      if (!s || !e) return false
+      return s <= re && e >= rs
+    })
+  }
+  return list
 })
 
 const rows = computed(() => {

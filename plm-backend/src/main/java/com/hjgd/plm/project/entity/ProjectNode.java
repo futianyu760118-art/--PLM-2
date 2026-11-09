@@ -27,6 +27,8 @@ public class ProjectNode {
     private Integer isKey;
     private String status;
     private LocalDate planDate;
+    private LocalDate planStartDate;
+    private LocalDate planEndDate;
     private LocalDate actualDate;
     private String owner;
     private String deliveryDesc;

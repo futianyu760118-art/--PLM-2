@@ -249,34 +249,51 @@ public class ProjectProgressService {
         if (node == null) throw new BusinessException("节点不存在: " + code);
         String oldStatus = node.getStatus();
         LocalDate oldPlanDate = node.getPlanDate();
+        LocalDate oldPlanStart = node.getPlanStartDate();
+        LocalDate oldPlanEnd = node.getPlanEndDate();
         String oldOwner = node.getOwner();
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
+        if (req.getPlanStartDate() != null) node.setPlanStartDate(req.getPlanStartDate());
+        if (req.getPlanEndDate() != null) node.setPlanEndDate(req.getPlanEndDate());
         if (req.getActualDate() != null) node.setActualDate(req.getActualDate());
         // 显式清空日期：clearActual/clearPlan=true 时清掉；清实际日期时 DONE 自动降级为进行中
         if (Boolean.TRUE.equals(req.getClearActual())) {
             node.setActualDate(null);
             if ("DONE".equals(node.getStatus())) node.setStatus("IN_PROGRESS");
         }
-        if (Boolean.TRUE.equals(req.getClearPlan())) node.setPlanDate(null);
+        if (Boolean.TRUE.equals(req.getClearPlan())) {
+            node.setPlanDate(null);
+            node.setPlanStartDate(null);
+            node.setPlanEndDate(null);
+        }
+        // 兼容旧字段：plan_date 取计划开始
+        if (req.getPlanStartDate() != null) node.setPlanDate(req.getPlanStartDate());
+        if (node.getPlanStartDate() != null && node.getPlanEndDate() != null
+                && node.getPlanStartDate().isAfter(node.getPlanEndDate())) {
+            throw new BusinessException("计划开始日期不能晚于计划结束日期");
+        }
         if (req.getOwner() != null) node.setOwner(req.getOwner());
         if (StringUtils.hasText(req.getNodeName())) node.setNodeName(req.getNodeName());
         if (req.getDeliveryDesc() != null) node.setDeliveryDesc(req.getDeliveryDesc());
         if (req.getRemark() != null) node.setRemark(req.getRemark());
         if (StringUtils.hasText(req.getStatus())) node.setStatus(req.getStatus());
 
-        // 计划日期变更后，原审批结论失效，需重新提交审批
+        // 计划时间变更后，原审批结论失效，需重新提交审批
         boolean resetApproval = false;
-        if (!java.util.Objects.equals(oldPlanDate, node.getPlanDate())
-                && !"PENDING_APPROVAL".equals(node.getPlanApprovalStatus())) {
+        boolean planChanged = !java.util.Objects.equals(oldPlanDate, node.getPlanDate())
+                || !java.util.Objects.equals(oldPlanStart, node.getPlanStartDate())
+                || !java.util.Objects.equals(oldPlanEnd, node.getPlanEndDate());
+        if (planChanged && !"PENDING_APPROVAL".equals(node.getPlanApprovalStatus())) {
             node.setPlanApprovalStatus(null);
             node.setPlanRejectNote(null);
             resetApproval = true;
         }
 
         // 计划日期自动推断状态：未到计划日期→已计划，已到/过了→进行中（不覆盖 DONE/FAILED 等明确状态）
-        if (node.getPlanDate() != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()) || "PENDING".equals(node.getStatus()))) {
-            node.setStatus(node.getPlanDate().isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
+        LocalDate effectivePlan = node.getPlanEndDate() != null ? node.getPlanEndDate() : node.getPlanDate();
+        if (effectivePlan != null && ("NOT_SET".equals(node.getStatus()) || "PLANNED".equals(node.getStatus()) || "PENDING".equals(node.getStatus()))) {
+            node.setStatus(effectivePlan.isAfter(LocalDate.now()) ? "PLANNED" : "IN_PROGRESS");
         }
 
         validateFacts(node);

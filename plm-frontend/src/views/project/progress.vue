@@ -32,15 +32,21 @@
         v-loading="loading" @expand-change="onExpand">
         <el-table-column type="expand">
           <template #default="{ row }">
-            <div class="node-form">
+            <div v-if="row.status === 'NO_NODE'" class="std-tip" style="padding:10px 14px;color:#909399">
+              无节点：本环节不适用，无需填报进度、上传资料或提交审批。
+            </div>
+            <div v-else class="node-form">
               <el-form :inline="true" :model="row" label-width="90px">
                 <el-form-item label="状态">
                   <el-select v-model="row.status" style="width:140px" @change="onStatusChange(row)">
                     <el-option v-for="s in statusList" :key="s.v" :label="s.l" :value="s.v" />
                   </el-select>
                 </el-form-item>
-                <el-form-item label="计划日期">
-                  <el-date-picker v-model="row.planDate" type="date" value-format="YYYY-MM-DD" style="width:150px" />
+                <el-form-item label="计划开始">
+                  <el-date-picker v-model="row.planStartDate" type="date" value-format="YYYY-MM-DD" style="width:140px" />
+                </el-form-item>
+                <el-form-item label="计划结束">
+                  <el-date-picker v-model="row.planEndDate" type="date" value-format="YYYY-MM-DD" style="width:140px" />
                 </el-form-item>
                 <el-form-item label="实际日期">
                   <el-date-picker v-model="row.actualDate" type="date" value-format="YYYY-MM-DD" style="width:150px" />
@@ -140,11 +146,13 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column label="计划日期" width="190" sortable prop="planDate">
+        <el-table-column label="计划时间(开始~结束)" width="270" sortable prop="planStartDate">
           <template #default="{ row }">
             <div style="display:flex;flex-direction:column;gap:2px">
-              <el-date-picker :model-value="row.planDate" type="date" size="small" value-format="YYYY-MM-DD"
-                style="width:135px" :clearable="true" @update:model-value="v => { row.planDate = v; saveNode(row) }" />
+              <el-date-picker type="daterange" :model-value="planRange(row)" size="small" value-format="YYYY-MM-DD"
+                range-separator="~" start-placeholder="开始" end-placeholder="结束"
+                style="width:235px" :clearable="true"
+                @update:model-value="v => { row.planStartDate = v?.[0] || ''; row.planEndDate = v?.[1] || ''; row.planDate = row.planStartDate; saveNode(row) }" />
               <div v-if="planApprovalTag(row.planApprovalStatus)" style="display:flex;align-items:center;gap:4px">
                 <el-tooltip v-if="row.planApprovalStatus === 'REJECTED' && row.planRejectNote" :content="row.planRejectNote" placement="top">
                   <el-tag size="small" :type="planApprovalTag(row.planApprovalStatus).type">{{ planApprovalTag(row.planApprovalStatus).text }}</el-tag>
@@ -152,7 +160,7 @@
                 <el-tag v-else size="small" :type="planApprovalTag(row.planApprovalStatus).type">{{ planApprovalTag(row.planApprovalStatus).text }}</el-tag>
               </div>
               <div style="display:flex;gap:4px">
-                <el-button v-if="row.planDate && row.planApprovalStatus !== 'PENDING_APPROVAL' && row.planApprovalStatus !== 'APPROVED'"
+                <el-button v-if="(row.planStartDate || row.planDate) && row.planApprovalStatus !== 'PENDING_APPROVAL' && row.planApprovalStatus !== 'APPROVED'"
                   size="small" link type="primary" @click="submitPlan(row)">提交审批</el-button>
                 <template v-if="row.planApprovalStatus === 'PENDING_APPROVAL' && isManager">
                   <el-button size="small" link type="success" @click="approvePlan(row)">通过</el-button>
@@ -464,8 +472,16 @@ async function loadEvidences(row) {
   evidenceMap.value = { ...evidenceMap.value, [row.id]: res.data || [] }
 }
 
+function planRange(row) {
+  const s = row.planStartDate || row.planDate || ''
+  const e = row.planEndDate || row.planDate || ''
+  return (s || e) ? [s || e, e || s] : []
+}
+
 async function saveNode(row) {
-  if (row.status === 'PENDING' && !row.planDate) {
+  const planStart = row.planStartDate || row.planDate || ''
+  const planEnd = row.planEndDate || row.planDate || ''
+  if (row.status === 'PENDING' && !planStart) {
     ElMessage.warning('待办必须填写计划日期')
     return
   }
@@ -480,8 +496,10 @@ async function saveNode(row) {
   savingId.value = row.id
   try {
     await updateNode(projectId.value, row.nodeCode, {
-      status: row.status, planDate: row.planDate, actualDate: row.actualDate,
-      clearPlan: !row.planDate, clearActual: !row.actualDate,
+      status: row.status, planDate: planStart || null,
+      planStartDate: planStart || null, planEndDate: planEnd || null,
+      actualDate: row.actualDate,
+      clearPlan: !planStart && !planEnd, clearActual: !row.actualDate,
       owner: row.owner, deliveryDesc: row.deliveryDesc, remark: row.remark
     })
     ElMessage.success('节点已保存')
@@ -497,7 +515,7 @@ const planApprovalTag = (s) => ({
 }[s] || null)
 
 async function submitPlan(row) {
-  if (!row.planDate) { ElMessage.warning('请先填写计划日期'); return }
+  if (!row.planDate && !row.planStartDate) { ElMessage.warning('请先填写计划日期'); return }
   await saveNode(row)
   try {
     await submitNodePlan(projectId.value, row.nodeCode)

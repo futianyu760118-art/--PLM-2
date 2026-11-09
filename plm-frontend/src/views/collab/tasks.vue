@@ -71,7 +71,7 @@
       </div>
 
       <!-- 列表：三块纵向同页 -->
-      <TodoSections v-else :data="activeData" :show-owner="isDept" @open="open" @save="onTodoSave" />
+      <TodoSections v-else :data="activeData" :show-owner="isDept" @open="open" @save="onTodoSave" @submit="onTodoSubmit" />
     </el-card>
   </div>
 </template>
@@ -82,7 +82,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { myTodos, deptTodos } from '@/api/me'
 import { pageProject } from '@/api/project'
-import { updateNode } from '@/api/progress'
+import { updateNode, submitNodePlan } from '@/api/progress'
 import TodoSections from '@/components/collab/TodoSections.vue'
 
 const router = useRouter()
@@ -185,6 +185,19 @@ async function onTodoSave(row, patch) {
     if ('actual_date' in patch) row.actual_date = patch.actual_date
     refresh()
   } finally { savingTodo.value = false }
+}
+
+// 提交审批：先保存计划日期，再走计划审批（提交后进入审批人待办）
+async function onTodoSubmit(row) {
+  const pid = pidMap.value[row.project_no]
+  if (!pid) { ElMessage.warning('未找到项目，无法提交'); return }
+  if (!row.plan_date) { ElMessage.warning('请先填写计划日期再提交审批'); return }
+  try {
+    await updateNode(pid, row.node_code, { planDate: row.plan_date })
+    await submitNodePlan(pid, row.node_code)
+    ElMessage.success('已提交经理审批')
+    refresh()
+  } catch (e) { /* 错误已由 request 弹出 */ }
 }
 
 function clearProject() {

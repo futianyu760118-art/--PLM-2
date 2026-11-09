@@ -14,7 +14,10 @@
               style="width:140px" clearable @update:model-value="v => $emit('save', row, { plan_date: v })" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button></template></el-table-column>
+        <el-table-column label="操作" width="150"><template #default="{ row }">
+          <el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button>
+          <el-button link type="success" size="small" @click="$emit('submit', row)">提交审批</el-button>
+        </template></el-table-column>
       </el-table>
       <p v-else class="muted">无逾期</p>
     </section>
@@ -33,7 +36,10 @@
               style="width:140px" clearable @update:model-value="v => $emit('save', row, { plan_date: v })" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="90"><template #default="{ row }"><el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button></template></el-table-column>
+        <el-table-column label="操作" width="150"><template #default="{ row }">
+          <el-button link type="primary" size="small" @click="$emit('open', row)">处理</el-button>
+          <el-button link type="success" size="small" @click="$emit('submit', row)">提交审批</el-button>
+        </template></el-table-column>
       </el-table>
       <p v-else class="muted">无待办</p>
     </section>
@@ -61,7 +67,7 @@
 
 <script setup>
 defineProps({ data: { type: Object, required: true }, showOwner: { type: Boolean, default: false } })
-defineEmits(['open', 'save'])
+defineEmits(['open', 'save', 'submit'])
 function fmt(dt) { return dt ? String(dt).slice(0, 10) : '—' }
 </script>
 
