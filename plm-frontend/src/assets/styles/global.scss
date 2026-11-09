@@ -42,3 +42,18 @@ html, body, #app {
 
 /* 卡片阴影过渡 */
 .el-card { transition: box-shadow 0.2s ease; }
+
+/* ============ 统一可见滚动条（避免 Windows 覆盖式自动隐藏导致“看不到”） ============ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b6c0cd #eef2f7;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #eef2f7; }
+::-webkit-scrollbar-thumb {
+  background: #b6c0cd;
+  border-radius: 5px;
+  border: 2px solid #eef2f7;
+}
+::-webkit-scrollbar-thumb:hover { background: #8a97a8; }
+::-webkit-scrollbar-corner { background: #eef2f7; }

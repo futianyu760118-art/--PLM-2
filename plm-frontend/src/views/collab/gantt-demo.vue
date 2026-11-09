@@ -83,8 +83,8 @@ const scale = ref('day')
 const DAY = 86400000
 const D = (s) => Math.floor(new Date(s + 'T00:00:00Z').getTime() / DAY)
 const RANGE_START = D('2026-09-28')
-const RANGE_END = D('2027-01-03')
-const TODAY = '2026-10-20'
+const TODAY = new Date().toISOString().slice(0, 10)
+const RANGE_END = Math.max(D('2027-01-03'), D(TODAY))
 const x = (date) => (D(date) - RANGE_START) * dayWidth.value
 const w = (s, e) => (D(e) - D(s) + 1) * dayWidth.value
 const dur = (s, e) => D(e) - D(s) + 1
