@@ -72,7 +72,12 @@
                 <el-table-column label="状态" width="90" align="center">
                   <template #default="{ row: c }"><el-tag size="small" :type="statusTag(c.status)">{{ statusLabel(c.status) }}</el-tag></template>
                 </el-table-column>
-                <el-table-column prop="planDate" label="计划日期" width="110" />
+                <el-table-column label="计划开始" width="110">
+                  <template #default="{ row: c }">{{ c.planStartDate || c.planDate || '—' }}</template>
+                </el-table-column>
+                <el-table-column label="计划完成" width="110">
+                  <template #default="{ row: c }">{{ c.planEndDate || c.planDate || '—' }}</template>
+                </el-table-column>
                 <el-table-column prop="actualDate" label="实际日期" width="110" />
                 <el-table-column prop="owner" label="责任人" width="90" />
                 <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
@@ -87,6 +92,7 @@
               <el-divider content-position="left">
                 资料文件 ({{ row.evidenceCount || (evidenceMap[row.id] || []).length }})
                 <el-upload style="display:inline-block;margin-left:8px"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.bmp,.webp,.zip,.rar,.7z,.dwg,.dxf,.stp,.step"
                   :show-file-list="false" :http-request="opt => doUpload(row, opt)" :disabled="uploadingId === row.id">
                   <el-button size="small" type="success" plain icon="Upload" :loading="uploadingId === row.id">上传资料</el-button>
                 </el-upload>
@@ -267,8 +273,11 @@
             <el-option v-for="s in statusList" :key="s.v" :label="s.l" :value="s.v" />
           </el-select>
         </el-form-item>
-        <el-form-item label="计划日期">
+        <el-form-item label="计划开始">
           <el-date-picker v-model="childForm.planDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
+        </el-form-item>
+        <el-form-item label="计划完成">
+          <el-date-picker v-model="childForm.planEndDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
         </el-form-item>
         <el-form-item label="实际日期">
           <el-date-picker v-model="childForm.actualDate" type="date" value-format="YYYY-MM-DD" style="width:180px" />
@@ -596,9 +605,9 @@ async function rejectCompletion(row) {
 }
 
 // ===== 追加/编辑子项节点（如模具重开记录）=====
-const childForm = reactive({ visible: false, busy: false, editMode: false, nodeCode: '', parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', actualDate: '', owner: '', remark: '' })
+const childForm = reactive({ visible: false, busy: false, editMode: false, nodeCode: '', parentCode: '', parentName: '', nodeName: '', status: 'NOT_SET', planDate: '', planEndDate: '', actualDate: '', owner: '', remark: '' })
 function openChildForm(row) {
-  Object.assign(childForm, { visible: true, busy: false, editMode: false, nodeCode: '', parentCode: row.nodeCode, parentName: row.nodeName, nodeName: '', status: 'NOT_SET', planDate: '', actualDate: '', owner: row.owner || currentProject()?.owner || '', remark: '' })
+  Object.assign(childForm, { visible: true, busy: false, editMode: false, nodeCode: '', parentCode: row.nodeCode, parentName: row.nodeName, nodeName: '', status: 'NOT_SET', planDate: '', planEndDate: '', actualDate: '', owner: row.owner || currentProject()?.owner || '', remark: '' })
 }
 function openEditChild(c) {
   const parent = nodes.value.find(n => n.nodeCode === c.parentCode)
@@ -606,27 +615,34 @@ function openEditChild(c) {
     visible: true, busy: false, editMode: true, nodeCode: c.nodeCode,
     parentCode: c.parentCode || '', parentName: parent?.nodeName || c.parentCode || '',
     nodeName: c.nodeName || '', status: c.status || 'NOT_SET',
-    planDate: c.planDate || '', actualDate: c.actualDate || '',
+    planDate: c.planStartDate || c.planDate || '', planEndDate: c.planEndDate || c.planDate || '',
+    actualDate: c.actualDate || '',
     owner: c.owner || '', remark: c.remark || ''
   })
 }
 async function submitChild() {
   if (!childForm.nodeName.trim()) { ElMessage.warning('请填写子项名称(如: 模具重开)'); return }
+  if (childForm.planDate && childForm.planEndDate && childForm.planDate > childForm.planEndDate) {
+    ElMessage.warning('计划开始不能晚于计划完成'); return
+  }
   childForm.busy = true
   try {
     if (childForm.editMode) {
       if (childForm.status === 'DONE' && !childForm.actualDate) childForm.actualDate = todayStr()
       await updateNode(projectId.value, childForm.nodeCode, {
         nodeName: childForm.nodeName, status: childForm.status,
-        planDate: childForm.planDate || null, actualDate: childForm.actualDate || null,
-        clearPlan: !childForm.planDate, clearActual: !childForm.actualDate,
+        planDate: childForm.planDate || null, planStartDate: childForm.planDate || null,
+        planEndDate: childForm.planEndDate || childForm.planDate || null,
+        actualDate: childForm.actualDate || null,
+        clearPlan: !childForm.planDate && !childForm.planEndDate, clearActual: !childForm.actualDate,
         owner: childForm.owner, remark: childForm.remark
       })
       ElMessage.success('子项已更新')
     } else {
       await request({ url: `/project/${projectId.value}/nodes/${childForm.parentCode}/child`, method: 'post', data: {
         nodeName: childForm.nodeName, status: childForm.status,
-        planDate: childForm.planDate || null, owner: childForm.owner, remark: childForm.remark
+        planDate: childForm.planDate || null, planStartDate: childForm.planDate || null,
+        planEndDate: childForm.planEndDate || childForm.planDate || null, owner: childForm.owner, remark: childForm.remark
       } })
       ElMessage.success('子项已追加')
     }

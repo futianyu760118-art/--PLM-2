@@ -52,6 +52,7 @@ public class ProjectProgressService {
     private final com.hjgd.plm.common.WeComNotifyService weComNotifyService;
     /** 企业微信按人即时推送。 */
     private final com.hjgd.plm.common.TodoPushService todoPushService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     /** 22 节点定义: {编码, 名称, 是否关键} (D1: 补 APPEARANCE/STRUCTURE/ELECTRONICS) */
     public static final String[][] NODES = {
@@ -365,6 +366,9 @@ public class ProjectProgressService {
         child.setIsKey(0);
         child.setStatus(StringUtils.hasText(req.getStatus()) ? req.getStatus() : "NOT_SET");
         if (req.getPlanDate() != null) child.setPlanDate(req.getPlanDate());
+        if (req.getPlanStartDate() != null) child.setPlanStartDate(req.getPlanStartDate());
+        else if (req.getPlanDate() != null) child.setPlanStartDate(req.getPlanDate());
+        if (req.getPlanEndDate() != null) child.setPlanEndDate(req.getPlanEndDate());
         if (req.getActualDate() != null) child.setActualDate(req.getActualDate());
         if (StringUtils.hasText(req.getOwner())) child.setOwner(req.getOwner());
         if (StringUtils.hasText(req.getDeliveryDesc())) child.setDeliveryDesc(req.getDeliveryDesc());
@@ -485,20 +489,20 @@ public class ProjectProgressService {
         changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
                 code, "CMPL_SUBMIT", "completionApproval", node.getCompletionApprovalStatus(), "PENDING_APPROVAL", "UI");
         weComNotifyService.send("【PLM完成审批】" + node.getProjectNo() + " " + node.getNodeName()
-                + " 由 " + me + " 提交完成审批（证据 " + ev + " 份），待经理审批。");
-        Project p = projectMapper.selectById(projectId);
-        if (p != null && p.getOwner() != null) {
-            todoPushService.pushUser(p.getOwner(), "【PLM待审批】" + node.getProjectNo() + " " + node.getNodeName()
+                + " 由 " + me + " 提交完成审批（证据 " + ev + " 份），待审批。");
+        String approver = completionApprover(node);
+        if (approver != null) {
+            todoPushService.pushUser(approver, "【PLM待审批】" + node.getProjectNo() + " " + node.getNodeName()
                     + " 完成审批待处理（证据 " + ev + " 份）。");
         }
         return findNode(projectId, code);
     }
 
-    /** 完成审批通过（经理）：置为已完成并回填实际日期。 */
+    /** 完成审批通过（经理或主项负责人）：置为已完成并回填实际日期。 */
     @Transactional
     public ProjectNode approveCompletion(Long projectId, String code) {
-        requireManager();
         ProjectNode node = findNode(projectId, code);
+        assertCanApproveCompletion(node);
         if (!"PENDING_APPROVAL".equals(node.getCompletionApprovalStatus()))
             throw new BusinessException("该节点未处于完成待审批状态");
         String me = com.hjgd.plm.common.DataScope.name();
@@ -524,8 +528,8 @@ public class ProjectProgressService {
     /** 完成审批驳回（经理）。 */
     @Transactional
     public ProjectNode rejectCompletion(Long projectId, String code, String note) {
-        requireManager();
         ProjectNode node = findNode(projectId, code);
+        assertCanApproveCompletion(node);
         String me = com.hjgd.plm.common.DataScope.name();
         nodeMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ProjectNode>()
                 .eq(ProjectNode::getId, node.getId())
@@ -543,6 +547,56 @@ public class ProjectProgressService {
         return findNode(projectId, code);
     }
 
+
+    /** 计划/完成待审批节点（审批待办） */
+    public java.util.List<java.util.Map<String, Object>> pendingApprovals() {
+        boolean mgr = managerOrAdmin();
+        String me = com.hjgd.plm.common.DataScope.name();
+        String sql = "SELECT n.project_id AS projectId, n.project_no AS projectNo, p.project_name AS projectName, " +
+                "n.node_code AS nodeCode, n.node_name AS nodeName, n.owner, n.plan_date AS planDate, " +
+                "n.plan_approval_status AS planApprovalStatus, n.completion_approval_status AS completionApprovalStatus, " +
+                "COALESCE(n.completion_submitted_by, n.plan_submitted_by) AS submittedBy, " +
+                "n.plan_submitted_at AS planSubmittedAt, n.completion_submitted_at AS completionSubmittedAt, " +
+                "CASE WHEN n.completion_approval_status='PENDING_APPROVAL' THEN 'completion' ELSE 'plan' END AS approvalType " +
+                "FROM plm_project_node n LEFT JOIN plm_project p ON p.project_no=n.project_no " +
+                "WHERE (n.plan_approval_status='PENDING_APPROVAL' OR n.completion_approval_status='PENDING_APPROVAL') ";
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        if (!mgr) { sql += " AND p.owner=? "; args.add(me); }
+        sql += " ORDER BY n.id DESC";
+        return jdbc.queryForList(sql, args.toArray());
+    }
+
+    /** 子项完成审批：主项负责人（parent.owner）；否则项目负责人。 */
+    private String completionApprover(ProjectNode node) {
+        if (StringUtils.hasText(node.getParentCode())) {
+            ProjectNode parent = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()
+                    .eq(ProjectNode::getProjectId, node.getProjectId())
+                    .eq(ProjectNode::getNodeCode, node.getParentCode()));
+            if (parent != null && StringUtils.hasText(parent.getOwner())) return parent.getOwner();
+        }
+        Project p = projectMapper.selectById(node.getProjectId());
+        return p == null ? null : p.getOwner();
+    }
+
+    /** 完成审批权限：经理/管理员，或子项的主项负责人。 */
+    private void assertCanApproveCompletion(ProjectNode node) {
+        if (managerOrAdmin()) return;
+        String approver = completionApprover(node);
+        String me = com.hjgd.plm.common.DataScope.name();
+        if (approver != null && approver.equals(me)) return;
+        throw new BusinessException("仅经理/管理员或主项负责人可审批");
+    }
+
+    private boolean managerOrAdmin() {
+        return com.hjgd.plm.common.DataScope.admin()
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("rd_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("sales_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("sales_director")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("gm")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("project_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("hr_manager")
+                || com.hjgd.plm.auth.security.SecurityUtils.hasRole("cw1");
+    }
 
     private ProjectNode findNode(Long projectId, String code) {
         ProjectNode node = nodeMapper.selectOne(new LambdaQueryWrapper<ProjectNode>()

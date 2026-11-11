@@ -92,6 +92,12 @@ public class ProjectProgressController {
         return Result.success(service.rejectCompletion(projectId, code, note));
     }
 
+    @Operation(summary = "计划/完成待审批节点(审批待办)")
+    @GetMapping("/approvals/pending")
+    public Result<java.util.List<java.util.Map<String, Object>>> pendingApprovals() {
+        return Result.success(service.pendingApprovals());
+    }
+
     @Operation(summary = "节点证据文件列表")
     @GetMapping("/nodes/{nodeId}/evidence")
     public Result<List<ProjectNodeEvidence>> evidence(@PathVariable Long nodeId) {

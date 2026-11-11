@@ -8,6 +8,36 @@
       <el-button :icon="Refresh" @click="loadData">刷新</el-button>
     </div>
 
+    <el-card shadow="never" class="plan-approvals">
+      <template #header><span>计划 / 完成审批（待处理）</span></template>
+      <el-table :data="planRows" v-loading="planLoading" border stripe size="small" empty-text="暂无待审批">
+        <el-table-column label="项目" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.projectNo }} <span style="color:#909399">{{ row.projectName }}</span></template>
+        </el-table-column>
+        <el-table-column label="节点" width="150">
+          <template #default="{ row }">{{ row.nodeName || row.nodeCode }}</template>
+        </el-table-column>
+        <el-table-column label="类型" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.approvalType === 'completion' ? 'success' : 'warning'">
+              {{ row.approvalType === 'completion' ? '完成审批' : '计划审批' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="submittedBy" label="提交人" width="100" />
+        <el-table-column label="提交时间" width="160">
+          <template #default="{ row }">{{ fmt(row.completionSubmittedAt || row.planSubmittedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="190" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="success" size="small" @click="approvePlanRow(row)">通过</el-button>
+            <el-button link type="danger" size="small" @click="rejectPlanRow(row)">驳回</el-button>
+            <el-button link type="primary" size="small" @click="goProgress(row)">查看</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
     <el-card shadow="never">
       <el-table :data="rows" v-loading="loading" border stripe size="small" empty-text="没有待办，清爽">
         <el-table-column label="单据类型" width="110" align="center">
@@ -72,9 +102,11 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { pendingTasks, actInstance } from '@/api/approval'
+import request from '@/utils/request'
+import { approveNodePlan, approveNodeCompletion, rejectNodePlan, rejectNodeCompletion } from '@/api/progress'
 
 const router = useRouter()
 
@@ -145,7 +177,40 @@ function goDetail(row) {
   }
 }
 
-onMounted(loadData)
+// ===== 计划/完成审批待处理 =====
+const planRows = ref([])
+const planLoading = ref(false)
+async function loadPlanApprovals() {
+  planLoading.value = true
+  try {
+    const r = await request({ url: '/project/approvals/pending', method: 'get' })
+    planRows.value = r.data || []
+  } finally { planLoading.value = false }
+}
+async function approvePlanRow(row) {
+  try {
+    if (row.approvalType === 'completion') await approveNodeCompletion(row.projectId, row.nodeCode)
+    else await approveNodePlan(row.projectId, row.nodeCode)
+    ElMessage.success('已通过')
+    loadPlanApprovals()
+  } catch (e) { /* 错误已由 request 弹出 */ }
+}
+async function rejectPlanRow(row) {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回审批', {
+      inputPlaceholder: '如：日期/证据不合理', confirmButtonText: '驳回', cancelButtonText: '取消'
+    })
+    if (row.approvalType === 'completion') await rejectNodeCompletion(row.projectId, row.nodeCode, value)
+    else await rejectNodePlan(row.projectId, row.nodeCode, value)
+    ElMessage.success('已驳回')
+    loadPlanApprovals()
+  } catch (e) { /* 取消或失败 */ }
+}
+function goProgress(row) {
+  router.push({ path: '/project/progress', query: { project: row.projectId, node: row.nodeCode } })
+}
+
+onMounted(() => { loadData(); loadPlanApprovals() })
 </script>
 
 <style scoped>
