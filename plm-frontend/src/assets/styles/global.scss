@@ -57,3 +57,10 @@ html, body, #app {
 }
 ::-webkit-scrollbar-thumb:hover { background: #8a97a8; }
 ::-webkit-scrollbar-corner { background: #eef2f7; }
+
+/* 下拉/日期弹层置于更高层级，避免被表头/固定列遮挡 */
+.el-popper,
+.el-select__popper,
+.el-picker__popper,
+.el-dropdown__popper,
+.el-cascader__dropdown { z-index: 3000 !important; }

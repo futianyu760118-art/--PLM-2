@@ -174,7 +174,7 @@ async function onTodoSave(row, patch) {
   savingTodo.value = true
   try {
     await updateNode(pid, row.node_code, {
-      plan_date: 'plan_date' in patch ? patch.plan_date : undefined,
+      planEndDate: 'plan_date' in patch ? (patch.plan_date || null) : undefined,
       clearPlan: 'plan_date' in patch && !patch.plan_date,
       actual_date: 'actual_date' in patch ? patch.actual_date : undefined,
       clearActual: 'actual_date' in patch && !patch.actual_date
@@ -191,9 +191,9 @@ async function onTodoSave(row, patch) {
 async function onTodoSubmit(row) {
   const pid = pidMap.value[row.project_no]
   if (!pid) { ElMessage.warning('未找到项目，无法提交'); return }
-  if (!row.plan_date) { ElMessage.warning('请先填写计划日期再提交审批'); return }
+  if (!row.plan_date) { ElMessage.warning('请先填写计划完成日期再提交审批'); return }
   try {
-    await updateNode(pid, row.node_code, { planDate: row.plan_date })
+    await updateNode(pid, row.node_code, { planEndDate: row.plan_date })
     await submitNodePlan(pid, row.node_code)
     ElMessage.success('已提交经理审批')
     refresh()

@@ -219,7 +219,7 @@ public class LifecycleOverviewController {
                         " ORDER BY start_date NULLS LAST, p.project_no LIMIT 200");
 
         List<Map<String, Object>> ns = jdbc.queryForList(
-                "SELECT n.project_no, n.node_code, n.node_name, n.plan_date, n.actual_date, n.status, n.is_key " +
+                "SELECT n.project_no, n.node_code, n.node_name, n.owner, n.plan_date, n.plan_end_date, n.actual_date, n.status, n.is_key " +
                         "FROM plm_project_node n ORDER BY n.project_no, n.seq");
         Map<String, List<Map<String, Object>>> nodesByNo = new LinkedHashMap<>();
         Map<String, List<Map<String, Object>>> msByNo = new LinkedHashMap<>();

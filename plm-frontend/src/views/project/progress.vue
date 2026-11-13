@@ -15,6 +15,7 @@
         <el-form-item>
           <el-button icon="Refresh" :disabled="!projectId" @click="load">刷新</el-button>
           <el-button type="primary" plain icon="CircleCheck" :disabled="!projectId" @click="doCheck">进度自检</el-button>
+          <el-button icon="Camera" :disabled="!projectId" @click="screenshotPage">截图</el-button>
         </el-form-item>
       </el-form>
 
@@ -410,6 +411,34 @@ const NODE_DELIVERABLES = {
 function deliverableOf(code) { return NODE_DELIVERABLES[code] || '' }
 function currentProject() { return projects.value.find(p => p.id === projectId.value) }
 function todayStr() { return new Date().toISOString().slice(0, 10) }
+
+// ===== 截图（浏览器原生屏幕捕获，保存当前页面为 PNG） =====
+async function screenshotPage() {
+  const md = navigator.mediaDevices
+  if (!md || !md.getDisplayMedia) { ElMessage.warning('当前浏览器不支持截图，请用系统截图工具'); return }
+  let stream
+  try {
+    stream = await md.getDisplayMedia({ video: { displaySurface: 'browser' }, audio: false })
+    const video = document.createElement('video')
+    video.srcObject = stream
+    video.muted = true
+    await video.play()
+    await new Promise(r => setTimeout(r, 300))
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    const a = document.createElement('a')
+    a.href = canvas.toDataURL('image/png')
+    a.download = `PLM进度明细_${todayStr()}.png`
+    a.click()
+    ElMessage.success('截图已保存')
+  } catch (e) {
+    /* 用户取消或浏览器限制 */
+  } finally {
+    if (stream) stream.getTracks().forEach(t => t.stop())
+  }
+}
 const pct = (v) => Math.round((v || 0) * 100) + '%'
 const scoreColor = (s) => s >= 85 ? '#67c23a' : s >= 70 ? '#e6a23c' : '#f56c6c'
 

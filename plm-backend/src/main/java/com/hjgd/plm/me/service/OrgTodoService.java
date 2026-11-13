@@ -131,16 +131,16 @@ public class OrgTodoService {
     /** 某用户的待办（口径与 /v1/me/todos 一致）：负责项目下的节点，或节点直接指定给该用户。 */
     public Map<String, Object> todosFor(String realName) {
         String cols = "n.project_no, p.project_name, p.status AS project_status, " +
-                "n.node_code, n.node_name, n.status, n.plan_date, n.actual_date";
+                "n.node_code, n.node_name, n.status, COALESCE(n.plan_end_date, n.plan_date) AS plan_date, n.actual_date";
         String from = " FROM plm_project_node n LEFT JOIN plm_project p ON p.project_no = n.project_no " +
                 "WHERE (n.owner=? OR n.project_no IN (SELECT project_no FROM plm_project WHERE owner=?)) " +
                 "AND n.status NOT IN ('PENDING','NO_NODE')"; // 待定/暂停、无节点 都不算待办
         List<Map<String, Object>> overdue = jdbc.queryForList(
-                "SELECT " + cols + from + " AND n.status <> 'DONE' AND n.plan_date IS NOT NULL AND n.plan_date < CURRENT_DATE " +
-                        "ORDER BY n.plan_date", realName, realName);
+                "SELECT " + cols + from + " AND n.status <> 'DONE' AND COALESCE(n.plan_end_date, n.plan_date) IS NOT NULL AND COALESCE(n.plan_end_date, n.plan_date) < CURRENT_DATE " +
+                        "ORDER BY COALESCE(n.plan_end_date, n.plan_date)", realName, realName);
         List<Map<String, Object>> todo = jdbc.queryForList(
-                "SELECT " + cols + from + " AND n.status <> 'DONE' AND (n.plan_date IS NULL OR n.plan_date >= CURRENT_DATE) " +
-                        "ORDER BY n.plan_date NULLS LAST", realName, realName);
+                "SELECT " + cols + from + " AND n.status <> 'DONE' AND (COALESCE(n.plan_end_date, n.plan_date) IS NULL OR COALESCE(n.plan_end_date, n.plan_date) >= CURRENT_DATE) " +
+                        "ORDER BY COALESCE(n.plan_end_date, n.plan_date) NULLS LAST", realName, realName);
         List<Map<String, Object>> done = jdbc.queryForList(
                 "SELECT " + cols + from + " AND n.status = 'DONE' ORDER BY n.actual_date DESC NULLS LAST LIMIT 200", realName, realName);
 

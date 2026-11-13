@@ -8,7 +8,7 @@
           <template #default="{ row }">{{ row.project_no }}<span v-if="row.project_name" class="pname"> {{ row.project_name }}</span></template>
         </el-table-column>
         <el-table-column prop="node_name" label="节点" width="140" sortable />
-        <el-table-column label="计划日期" width="160" sortable prop="plan_date">
+        <el-table-column label="计划完成" width="160" sortable prop="plan_date">
           <template #default="{ row }">
             <el-date-picker :model-value="row.plan_date" type="date" size="small" value-format="YYYY-MM-DD"
               style="width:140px" clearable @update:model-value="v => $emit('save', row, { plan_date: v })" />
@@ -30,7 +30,7 @@
           <template #default="{ row }">{{ row.project_no }}<span v-if="row.project_name" class="pname"> {{ row.project_name }}</span></template>
         </el-table-column>
         <el-table-column prop="node_name" label="节点" width="140" sortable />
-        <el-table-column label="计划日期" width="160" sortable prop="plan_date">
+        <el-table-column label="计划完成" width="160" sortable prop="plan_date">
           <template #default="{ row }">
             <el-date-picker :model-value="row.plan_date" type="date" size="small" value-format="YYYY-MM-DD"
               style="width:140px" clearable @update:model-value="v => $emit('save', row, { plan_date: v })" />

@@ -17,6 +17,9 @@
         <el-table-column label="节点" width="150">
           <template #default="{ row }">{{ row.nodeName || row.nodeCode }}</template>
         </el-table-column>
+        <el-table-column label="计划时间" width="120">
+          <template #default="{ row }">{{ row.planDate || '—' }}</template>
+        </el-table-column>
         <el-table-column label="类型" width="100" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="row.approvalType === 'completion' ? 'success' : 'warning'">

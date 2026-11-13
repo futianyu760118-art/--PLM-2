@@ -51,7 +51,9 @@
               <div class="gl-meta">{{ r.project.project_no }} · {{ r.project.owner }}</div>
             </template>
             <template v-else>
-              <div class="gl-node-name" :title="r.node.node_name">{{ r.node.node_name }}</div>
+              <div class="gl-node-name" :title="`${r.node.node_name}${r.node.owner ? ' · ' + r.node.owner : ''}`">
+                {{ r.node.node_name }}<span v-if="r.node.owner" class="gl-node-owner"> · {{ r.node.owner }}</span>
+              </div>
             </template>
           </div>
           <el-empty v-if="!rows.length" description="暂无项目" :image-size="60" />
@@ -82,7 +84,7 @@
               </template>
               <template v-else>
                 <div v-if="nd(r.node)" class="gr-node" :class="nodeCls(r.node)" :style="nodeStyle(r.node)"
-                  :title="`${r.node.node_name}${nd(r.node).start ? ' · ' + nd(r.node).start + (nd(r.node).end && nd(r.node).end !== nd(r.node).start ? ' ~ ' + nd(r.node).end : '') : ''}`"></div>
+                  :title="`${r.node.node_name}${r.node.owner ? ' · ' + r.node.owner : ''}${nd(r.node).start ? ' · ' + nd(r.node).start + (nd(r.node).end && nd(r.node).end !== nd(r.node).start ? ' ~ ' + nd(r.node).end : '') : ''}`"></div>
               </template>
             </div>
           </div>
@@ -134,7 +136,8 @@ const rows = computed(() => {
   for (const p of displayProjects.value) {
     out.push({ type: 'project', project: p, id: 'p' + p.id })
     if (expandedIds.value.includes(String(p.id))) {
-      for (const n of (p.nodes || [])) {
+      const ns = (p.nodes || []).filter(n => !(statusFilter.value && n.status === 'DONE'))
+      for (const n of ns) {
         out.push({ type: 'node', project: p, node: n, id: 'n' + p.id + n.node_code })
       }
     }
@@ -180,10 +183,12 @@ function msLeft(d) { return x(d) - 4 + 'px' }
 
 function nd(n) {
   if (n.status === 'NO_NODE') return null
-  const p = d2d(n.plan_date), a = d2d(n.actual_date)
-  if (!p && !a) return null
-  const start = p || a
-  const end = a || p
+  const s = d2d(n.plan_date)
+  const pe = d2d(n.plan_end_date)
+  const a = d2d(n.actual_date)
+  if (!s && !pe && !a) return null
+  const start = s || a
+  const end = a || pe || s
   return { start, end }
 }
 function nodeStyle(n) {
@@ -315,6 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', computeDayWidth))
 .gl-meta { font-size: 11px; color: #909399; }
 .gl-node { padding-left: 26px; height: 34px; }
 .gl-node-name { font-size: 12px; color: #606266; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gl-node-owner { color: #909399; font-size: 11px; }
 .g-right { flex: 0 0 auto; }
 .gr-scroll { position: relative; }
 .gr-axis { position: sticky; top: 0; z-index: 3; height: 48px; background: #fafbfc; border-bottom: 1px solid #e4e7ed; }
