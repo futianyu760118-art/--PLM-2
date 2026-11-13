@@ -300,6 +300,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   pageDocuments, documentStats, getDocument, createDocument, updateDocument, deleteDocument,
@@ -343,6 +344,7 @@ const saving = ref(false)
 const rows = ref([])
 const total = ref(0)
 const stats = reactive({})
+const route = useRoute()
 const query = reactive({
   keyword: '', docType: '', partNo: '', projectNo: '',
   lifecycleState: '', locked: null, pageNum: 1, pageSize: 20
@@ -590,6 +592,8 @@ function fmtSize(n) {
 }
 
 onMounted(() => {
+  const pn = route.query.projectNo
+  if (pn && 'projectNo' in query) query.projectNo = String(pn)
   load()
   loadStats()
 })

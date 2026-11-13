@@ -656,6 +656,7 @@ public class ProjectProgressService {
         ev.setUploadedAt(LocalDateTime.now());
         evidenceMapper.insert(ev);
         registerUnifiedEvidence(node, ev, "file", pf.getId() == null ? null : String.valueOf(pf.getId()));
+        bridgeDocumentFromEvidence(node, ev, pf);
         node.setEvidenceCount(refreshEvidenceCount(nodeId));
         // 上传证据后不再自动完成；置为进行中，等待「提交完成审批」→ 经理通过后才置 DONE
         if (!DONE_LIKE.contains(node.getStatus())) {
@@ -678,6 +679,37 @@ public class ProjectProgressService {
      * <p>登记失败不阻断证据上传（登记只是补链），但会记录告警——失败时该条证据
      * 会在穿透查询里表现为断点，由自检暴露，而不是被静默忽略。
      */
+    /** 证据上传后同步登记到「文档中心」(plm_document + 当前版本)，实现两模块打通。 */
+    private void bridgeDocumentFromEvidence(ProjectNode node, ProjectNodeEvidence ev, PlmFile pf) {
+        try {
+            if (pf == null || pf.getId() == null) return;
+            String docNo = "DOC-EV-" + ev.getId();
+            Long docId = jdbc.queryForObject(
+                    "INSERT INTO plm_document(doc_no,title,doc_type,part_no,project_no,lifecycle_state,current_version," +
+                            "owner,secret_level,created_by,created_at,updated_at,deleted,remark) " +
+                            "VALUES(?,?,?,?,?,?,?,?,?,?,now(),now(),0,?) RETURNING id",
+                    Long.class,
+                    docNo,
+                    StringUtils.hasText(pf.getFileName()) ? pf.getFileName() : ev.getFileName(),
+                    "NODE_EVIDENCE",
+                    null,
+                    node.getProjectNo(),
+                    "RELEASED",
+                    "V1",
+                    StringUtils.hasText(node.getOwner()) ? node.getOwner() : ev.getUploadedBy(),
+                    "INTERNAL",
+                    ev.getUploadedBy(),
+                    "由项目资料(节点证据)同步");
+            if (docId != null) {
+                jdbc.update("INSERT INTO plm_document_version(doc_id,version,file_id,file_name,file_size,checksum,state,is_current,created_by,created_at) " +
+                                "VALUES(?,?,?,?,?,?,?,1,?,now())",
+                        docId, "V1", pf.getId(), pf.getFileName(), pf.getFileSize(), pf.getMd5Hash(), "RELEASED", ev.getUploadedBy());
+            }
+        } catch (Exception e) {
+            log.warn("[文档中心] 证据同步为文档失败 evidenceId={}: {}", ev.getId(), e.getMessage());
+        }
+    }
+
     private void registerUnifiedEvidence(ProjectNode node, ProjectNodeEvidence ev,
                                          String evidenceType, String sourceRecordId) {
         try {

@@ -39,6 +39,31 @@
         </el-col>
       </el-row>
 
+      <el-card v-if="selectedProjectNo" shadow="never" class="doc-bridge" style="margin:12px 0">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>文档中心文件 · {{ selectedProjectNo }}</span>
+            <div>
+              <el-button size="small" icon="Refresh" @click="loadDocs">刷新</el-button>
+              <el-button size="small" type="primary" plain @click="goDocument">去文档中心</el-button>
+            </div>
+          </div>
+        </template>
+        <el-table :data="docList" v-loading="docLoading" size="small" border
+          empty-text="该项目暂无文档中心文件（可在文档中心新建/检入）">
+          <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="docNo" label="文档号" width="150" />
+          <el-table-column prop="docType" label="类型" width="120" />
+          <el-table-column prop="currentVersion" label="当前版本" width="90" align="center" />
+          <el-table-column prop="createdBy" label="创建人" width="100" />
+          <el-table-column label="操作" width="100">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="downloadDoc(row)">下载</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
       <el-row :gutter="12" class="dim-row">
         <el-col :span="12">
           <el-card shadow="never" class="dim-card">
@@ -125,12 +150,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { renderAsync } from 'docx-preview'
 import { pageProject } from '@/api/project'
 import { evidenceList, evidenceStats, updateEvidence, fetchPreview, fetchTextEvidence, downloadEvidence } from '@/api/progress'
+import { documentsByProject, currentVersion, downloadDocumentFile } from '@/api/document'
 
 const projects = ref([])
 const projectMap = ref({})
@@ -156,6 +183,31 @@ const evForm = reactive({ visible: false, saving: false, id: null, docType: '', 
 
 const projectName = (id) => projectMap.value[id] || ('#' + id)
 
+// ===== 文档中心打通：当前项目的文档 =====
+const router = useRouter()
+const docList = ref([])
+const docLoading = ref(false)
+const selectedProject = computed(() => projects.value.find(p => p.id === query.projectId))
+const selectedProjectNo = computed(() => selectedProject.value?.projectNo || '')
+async function loadDocs() {
+  if (!selectedProjectNo.value) { docList.value = []; return }
+  docLoading.value = true
+  try {
+    const r = await documentsByProject(selectedProjectNo.value)
+    docList.value = r.data || []
+  } finally { docLoading.value = false }
+}
+async function downloadDoc(d) {
+  try {
+    const v = await currentVersion(d.id)
+    if (v.data && v.data.fileId) await downloadDocumentFile(v.data.fileId, v.data.fileName || d.title)
+    else ElMessage.warning('该文档暂无文件版本')
+  } catch (e) { /* ignore */ }
+}
+function goDocument() {
+  router.push({ path: '/document/list', query: { projectNo: selectedProjectNo.value } })
+}
+
 async function loadProjects() {
   const res = await pageProject({ pageNum: 1, pageSize: 200 })
   projects.value = res.data.records || []
@@ -170,6 +222,7 @@ async function load() {
     total.value = res.data.total || 0
     const st = await evidenceStats({ projectId: query.projectId || undefined })
     stats.value = st.data || {}
+    await loadDocs()
   } finally { loading.value = false }
 }
 
