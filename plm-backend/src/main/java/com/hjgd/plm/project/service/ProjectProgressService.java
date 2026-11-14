@@ -691,7 +691,7 @@ public class ProjectProgressService {
                     Long.class,
                     docNo,
                     StringUtils.hasText(pf.getFileName()) ? pf.getFileName() : ev.getFileName(),
-                    "NODE_EVIDENCE",
+                    "OTHER",
                     null,
                     node.getProjectNo(),
                     "RELEASED",
