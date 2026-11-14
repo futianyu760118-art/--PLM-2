@@ -169,6 +169,15 @@ public class ProjectProgressService {
         return node;
     }
 
+    /** 记录节点单字段变更（值不同才写）。 */
+    private void recordNodeChanges(Long projectId, ProjectNode node, Object oldV, Object newV, String field) {
+        String a = oldV == null ? null : String.valueOf(oldV);
+        String b = newV == null ? null : String.valueOf(newV);
+        if (java.util.Objects.equals(a, b)) return;
+        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
+                node.getNodeCode(), "UPDATE", field, a, b, "UI");
+    }
+
     private void publishNodeEvent(ProjectNode node) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -252,7 +261,10 @@ public class ProjectProgressService {
         LocalDate oldPlanDate = node.getPlanDate();
         LocalDate oldPlanStart = node.getPlanStartDate();
         LocalDate oldPlanEnd = node.getPlanEndDate();
+        LocalDate oldActual = node.getActualDate();
         String oldOwner = node.getOwner();
+        String oldDelivery = node.getDeliveryDesc();
+        String oldRemark = node.getRemark();
 
         if (req.getPlanDate() != null) node.setPlanDate(req.getPlanDate());
         if (req.getPlanStartDate() != null) node.setPlanStartDate(req.getPlanStartDate());
@@ -317,9 +329,14 @@ public class ProjectProgressService {
 
         // 发布领域事件(供同步中枢出站 EBMS)
         publishNodeEvent(node);
-        // 变更列表留痕
-        changeLogService.record(projectId, node.getProjectNo(), "PROJECT_NODE", node.getId(),
-                node.getNodeCode(), "UPDATE", "status", oldStatus, node.getStatus(), "UI");
+        // 变更列表留痕（逐字段记录：状态/计划开始/计划完成/实际日期/责任人/交付物/备注）
+        recordNodeChanges(projectId, node, oldStatus, node.getStatus(), "状态");
+        recordNodeChanges(projectId, node, oldPlanStart, node.getPlanStartDate(), "计划开始");
+        recordNodeChanges(projectId, node, oldPlanEnd, node.getPlanEndDate(), "计划完成");
+        recordNodeChanges(projectId, node, oldActual, node.getActualDate(), "实际日期");
+        recordNodeChanges(projectId, node, oldOwner, node.getOwner(), "责任人");
+        recordNodeChanges(projectId, node, oldDelivery, node.getDeliveryDesc(), "交付物");
+        recordNodeChanges(projectId, node, oldRemark, node.getRemark(), "备注");
         gateAdvanceService.autoAdvance(projectId);
 
         // 即时推送：责任人变更通知新责任人

@@ -82,8 +82,11 @@ public class ChangeLogService {
         }
         Long total = jdbc.queryForObject("SELECT count(*) FROM plm_project_change_log" + where, Long.class, args.toArray());
         List<Map<String, Object>> records = jdbc.queryForList(
-                "SELECT id, project_no AS projectNo, object_type AS objectType, object_id AS objectId, " +
-                        "node_code AS nodeCode, action, field_name AS fieldName, old_value AS oldValue, " +
+                "SELECT id, project_no AS projectNo, " +
+                        "(SELECT project_name FROM plm_project WHERE project_no=plm_project_change_log.project_no) AS projectName, " +
+                        "object_type AS objectType, object_id AS objectId, node_code AS nodeCode, " +
+                        "(SELECT node_name FROM plm_project_node WHERE id::text=plm_project_change_log.object_id) AS nodeName, " +
+                        "action, field_name AS fieldName, old_value AS oldValue, " +
                         "new_value AS newValue, source, operator, created_at AS createdAt " +
                         "FROM plm_project_change_log" + where + " ORDER BY id DESC LIMIT " + pageSize +
                         " OFFSET " + ((pageNum - 1) * pageSize), args.toArray());

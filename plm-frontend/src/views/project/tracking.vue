@@ -89,11 +89,21 @@
       <el-dialog v-model="histVisible" :title="`修改记录 · ${histProject}`" width="920px" top="8vh">
         <el-table :data="histRows" border stripe size="small" max-height="520" v-loading="histLoading">
           <el-table-column prop="createdAt" label="时间" width="170" />
-          <el-table-column prop="nodeCode" label="节点" width="120" />
-          <el-table-column prop="action" label="动作" width="90" />
-          <el-table-column prop="fieldName" label="字段" width="120" />
-          <el-table-column prop="oldValue" label="原值" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="newValue" label="新值" min-width="140" show-overflow-tooltip />
+          <el-table-column label="节点" width="160" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.nodeName || row.nodeCode || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="动作" width="130" align="center">
+            <template #default="{ row }"><el-tag size="small" :type="histActTag(row.action)">{{ histAct(row.action) }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="字段" width="110">
+            <template #default="{ row }">{{ histField(row.fieldName) }}</template>
+          </el-table-column>
+          <el-table-column label="原值" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ histVal(row.oldValue) }}</template>
+          </el-table-column>
+          <el-table-column label="新值" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">{{ histVal(row.newValue) }}</template>
+          </el-table-column>
           <el-table-column prop="operator" label="操作人" width="100" />
         </el-table>
       </el-dialog>
@@ -234,6 +244,28 @@ async function saveCell(row, code) {
 const histVisible = ref(false)
 const histRows = ref([])
 const histProject = ref('')
+const HIST_ACT = {
+  CREATE: '新建', UPDATE: '修改', DELETE: '删除', ROLLUP: '汇总', CELL: '单元格', ADD_CHILD: '追加子项',
+  PLAN_SUBMIT: '提交计划审批', PLAN_APPROVE: '计划通过', PLAN_REJECT: '计划驳回',
+  CMPL_SUBMIT: '提交完成审批', CMPL_APPROVE: '完成通过', CMPL_REJECT: '完成驳回'
+}
+const HIST_FIELD = { status: '状态', planApproval: '计划审批', completionApproval: '完成审批', nodeName: '子项名称' }
+const HIST_STATUS = {
+  DONE: '已完成', IN_PROGRESS: '进行中', PLANNED: '已计划', NOT_SET: '未设置', PENDING: '待定',
+  FAILED: '未完成', NO_NODE: '无节点', PENDING_APPROVAL: '待审批', APPROVED: '已通过', REJECTED: '已驳回'
+}
+const histAct = (a) => HIST_ACT[a] || a || '—'
+const histField = (f) => HIST_FIELD[f] || f || '—'
+const histVal = (v) => (v == null || v === '') ? '—' : (HIST_STATUS[v] || v)
+function histActTag(a) {
+  if (!a) return 'info'
+  if (a.includes('REJECT') || a === 'DELETE') return 'danger'
+  if (a.includes('APPROVE') || a === 'CREATE') return 'success'
+  if (a.includes('SUBMIT') || a === 'ROLLUP') return 'warning'
+  if (a === 'UPDATE' || a === 'CELL') return 'primary'
+  return 'info'
+}
+
 const histLoading = ref(false)
 async function openHistory(row) {
   histProject.value = row.projectNo
