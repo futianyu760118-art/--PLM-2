@@ -59,7 +59,9 @@
           empty-text="该项目暂无文档中心文件（可在文档中心新建/检入）">
           <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
           <el-table-column prop="docNo" label="文档号" width="150" />
-          <el-table-column prop="docType" label="类型" width="120" />
+          <el-table-column label="类型" width="120">
+            <template #default="{ row }">{{ docTypeLabel(row.docType) }}</template>
+          </el-table-column>
           <el-table-column prop="currentVersion" label="当前版本" width="90" align="center" />
           <el-table-column prop="createdBy" label="创建人" width="100" />
           <el-table-column label="操作" width="100">
@@ -74,7 +76,7 @@
         <el-col :span="12">
           <el-card shadow="never" class="dim-card">
             <template #header>按类型分布</template>
-            <el-tag v-for="(v, k) in stats.byDocType" :key="k" style="margin:3px">{{ k }} · {{ v }}</el-tag>
+            <el-tag v-for="(v, k) in stats.byDocType" :key="k" style="margin:3px">{{ docTypeLabel(k) }} · {{ v }}</el-tag>
             <el-empty v-if="!stats.byDocType || !Object.keys(stats.byDocType).length" description="暂无" :image-size="50" />
           </el-card>
         </el-col>
@@ -91,7 +93,9 @@
         <el-table-column label="项目" width="150" show-overflow-tooltip>
           <template #default="{ row }">{{ projectName(row.projectId) }}</template>
         </el-table-column>
-        <el-table-column prop="nodeCode" label="节点" width="120" />
+        <el-table-column label="节点" width="120">
+          <template #default="{ row }">{{ nodeLabel(row.nodeCode) }}</template>
+        </el-table-column>
         <el-table-column label="资料物" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link type="primary" @click="previewEvidence(row)">{{ row.fileName }}</el-link>
@@ -104,7 +108,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="docType" label="类型" width="120" />
+        <el-table-column prop="docType" label="类型" width="120">
+          <template #default="{ row }">{{ docTypeLabel(row.docType) }}</template>
+        </el-table-column>
         <el-table-column prop="note" label="说明" min-width="140" show-overflow-tooltip />
         <el-table-column prop="uploadedBy" label="上传人" width="90" />
         <el-table-column prop="uploadedAt" label="时间" width="165" />
@@ -182,6 +188,16 @@ const nodeOptions = [
   { v: 'ENG_TRIAL', l: '工试' }, { v: 'PROD_TRIAL', l: '生试' }, { v: 'TEST_REPORT', l: '测试报告' },
   { v: 'TECH_TRANSFER', l: '技转' }, { v: 'SHIPMENT', l: '出货' }, { v: 'REVIEW', l: '复盘' }, { v: 'OTHER', l: '其他' }
 ]
+const NODE_LABEL = Object.fromEntries(nodeOptions.map(n => [n.v, n.l]))
+const nodeLabel = (c) => NODE_LABEL[c] || c || '—'
+const DOC_TYPE_LABEL = {
+  DRAWING: '图纸', STANDARD: '标准', PROCESS: '工艺', SPEC: '规格书', MANUAL: '说明手册', SYSTEM: '体系/制度', OTHER: '其它',
+  NODE_EVIDENCE: '节点资料', PLAN: '计划表', BOM: '物料清单', CONFIG: '配置表', MOLD_DRAWING: '模具图纸',
+  MOLD_REVIEW: '开模评审', HAND_SAMPLE: '手板样', MOLD_SAMPLE: '模具样', MOLD: '模具', PACKAGING: '包装设计',
+  ELEC_TRIAL: '电试', RD_TRIAL: '研试', ENG_TRIAL: '工试', PROD_TRIAL: '生试', TEST_REPORT: '测试报告',
+  TECH_TRANSFER: '技术转移', SHIPMENT: '出货', REVIEW: '复盘'
+}
+const docTypeLabel = (t) => DOC_TYPE_LABEL[t] || t || '—'
 
 const preview = reactive({ visible: false, loading: false, kind: '', url: '', text: '', html: '', name: '', fileId: null })
 const docxBox = ref(null)
