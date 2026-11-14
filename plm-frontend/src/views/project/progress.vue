@@ -1,6 +1,12 @@
 <template>
   <div class="page-container">
     <OperationGuide module-key="project-progress" />
+    <div class="page-head">
+      <div>
+        <h2>项目进度明细</h2>
+        <p class="sub">选择项目 → 维护 22 个节点；上传资料后「提交完成审批」，经理审批通过即完成。</p>
+      </div>
+    </div>
     <el-card>
       <el-form :inline="true">
         <el-form-item label="选择项目">

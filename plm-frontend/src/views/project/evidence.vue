@@ -1,6 +1,12 @@
 <template>
   <div class="page-container">
     <OperationGuide module-key="project-evidence" />
+    <div class="page-head">
+      <div>
+        <h2>项目资料</h2>
+        <p class="sub">节点资料与文档中心文件汇总；可筛选、预览、下载。</p>
+      </div>
+    </div>
     <el-card>
       <el-form :inline="true" :model="query">
         <el-form-item label="项目">

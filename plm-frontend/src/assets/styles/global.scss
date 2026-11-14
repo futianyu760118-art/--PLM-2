@@ -64,3 +64,46 @@ html, body, #app {
 .el-picker__popper,
 .el-dropdown__popper,
 .el-cascader__dropdown { z-index: 3000 !important; }
+
+/* ============ 专业化界面基线（统一间距/卡片/表格/标签/页头） ============ */
+:root {
+  --plm-radius: 10px;
+  --plm-border: #e6e9ef;
+  --plm-bg: #f4f6fa;
+  --plm-text: #1f2d3d;
+  --plm-muted: #8a94a6;
+}
+body { background: var(--plm-bg); color: var(--plm-text); }
+.page-container { padding: 18px 20px; }
+
+.el-card {
+  border: 1px solid var(--plm-border);
+  border-radius: var(--plm-radius);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 2px 8px rgba(16, 24, 40, .04);
+}
+.el-card__header { padding: 14px 18px; font-weight: 600; color: var(--plm-text); border-bottom: 1px solid var(--plm-border); }
+.el-card__body { padding: 16px 18px; }
+
+.el-table { font-size: 13px; border-radius: 8px; }
+.el-table th.el-table__cell { background: #f7f9fc; color: #4a5568; font-weight: 600; }
+.el-table td.el-table__cell { color: #2d3748; }
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell { background: #fafbfd; }
+.el-table__body tr:hover > td.el-table__cell { background: #f2f6ff !important; }
+
+.el-button { border-radius: 6px; font-weight: 500; }
+.el-tag { border-radius: 4px; }
+.el-input__wrapper, .el-textarea__inner, .el-select__wrapper { border-radius: 6px; }
+
+/* 统一页头：标题 + 说明 + 右侧操作 */
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.page-head h1, .page-head h2, .page-head h3 { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: var(--plm-text); letter-spacing: .2px; }
+.page-head .sub { margin: 0; color: var(--plm-muted); font-size: 12px; line-height: 1.6; }
+
+/* 统计卡 */
+.stat-row .stat { background: #fff; border: 1px solid var(--plm-border); border-radius: 10px; padding: 14px 16px; }
+.stat-row .stat .num { font-size: 22px; font-weight: 700; color: var(--plm-text); }
+.stat-row .stat .lbl { color: var(--plm-muted); font-size: 12px; margin-top: 2px; }
+
+/* 汇总条 */
+.sum-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; background: #f8fafc; border: 1px solid var(--plm-border); border-radius: 8px; margin-bottom: 12px; }
+.filter-bar { margin-bottom: 14px; }
