@@ -104,7 +104,7 @@
     <el-dialog v-model="formVisible" :title="form.id ? '编辑文档' : '新建文档'" width="640px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
         <el-form-item label="编号" prop="docNo">
-          <el-input v-model="form.docNo" placeholder="留空自动生成（DOC+日期+流水）" />
+          <el-input v-model="form.docNo" placeholder="留空自动生成（系统按类型+料号编号）" />
         </el-form-item>
         <el-form-item label="标题" prop="title">
           <el-input v-model="form.title" placeholder="例：XX 灯体结构图" />
@@ -117,7 +117,7 @@
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="料号">
-              <el-input v-model="form.partNo" placeholder="可空" />
+              <el-input v-model="form.partNo" placeholder="选项目自动带出" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -299,9 +299,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { pageProject } from '@/api/project'
 import {
   pageDocuments, documentStats, getDocument, createDocument, updateDocument, deleteDocument,
   changeDocumentState, listVersions, checkoutDocument, checkinDocument, cancelCheckout,
@@ -590,6 +591,31 @@ function fmtSize(n) {
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
   return (n / 1024 / 1024).toFixed(1) + ' MB'
 }
+
+// ===== 自动识别：项目→料号；标题→类型（新建时） =====
+function inferDocType(title) {
+  if (!title) return 'OTHER'
+  const t = String(title).toLowerCase()
+  if (t.includes('图纸') || t.includes('dwg') || t.includes('dxf') || t.includes('装配图') || t.includes('3d') || t.includes('模型') || t.includes('step') || t.includes('stp')) return 'DRAWING'
+  if (t.includes('规格') || t.includes('spec')) return 'SPEC'
+  if (t.includes('工艺') || t.includes('sop') || t.includes('作业指导') || t.includes('检验') || t.includes('dfm')) return 'PROCESS'
+  if (t.includes('说明') || t.includes('手册') || t.includes('manual') || t.includes('安装')) return 'MANUAL'
+  if (t.includes('标准') || t.includes('规范') || t.includes('standard')) return 'STANDARD'
+  if (t.includes('制度') || t.includes('流程') || t.includes('办法') || t.includes('表单') || t.includes('体系')) return 'SYSTEM'
+  return 'OTHER'
+}
+watch(() => form.projectNo, async (v) => {
+  if (!v || form.partNo) return
+  try {
+    const r = await pageProject({ pageNum: 1, pageSize: 5, keyword: String(v).trim() })
+    const p = (r.data.records || []).find(x => x.projectNo === String(v).trim())
+    if (p && p.partNo) form.partNo = p.partNo
+  } catch (e) { /* ignore */ }
+})
+watch(() => form.title, (v) => {
+  if (form.id || !v) return
+  if (!form.docType || form.docType === 'OTHER') form.docType = inferDocType(v)
+})
 
 onMounted(() => {
   const pn = route.query.projectNo

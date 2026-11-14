@@ -59,6 +59,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DomainEventService domainEventService;
     private final ArchiveTreeService archiveTreeService;
     private final ArchiveTreeNodeMapper archiveTreeNodeMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     // ------------------------------------------------------------------ 查询
 
@@ -127,6 +128,18 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public PlmDocument create(DocumentDTO dto) {
+        // 自动识别料号：未填则由所选项目带出
+        if (!StringUtils.hasText(dto.getPartNo()) && StringUtils.hasText(dto.getProjectNo())) {
+            try {
+                String pn = jdbc.queryForObject(
+                        "SELECT part_no FROM plm_project WHERE project_no=? LIMIT 1", String.class, dto.getProjectNo().trim());
+                if (StringUtils.hasText(pn)) dto.setPartNo(pn);
+            } catch (Exception ignore) { }
+        }
+        // 自动识别类型：未指定或 OTHER 时按标题推断
+        if (dto.getDocType() == null || dto.getDocType() == DocType.OTHER) {
+            dto.setDocType(inferDocType(dto.getTitle()));
+        }
         String docNo = dto.getDocNo();
         if (StringUtils.hasText(docNo)) {
             if (!SecurityUtils.hasRole("ADMIN") && !SecurityUtils.hasPermission("document:override-code")) {
@@ -708,5 +721,20 @@ public class DocumentServiceImpl implements DocumentService {
 
     private String nullSafe(String v) {
         return v == null ? "" : v;
+    }
+
+    /** 根据标题关键词识别文档类型。 */
+    private DocType inferDocType(String title) {
+        if (!StringUtils.hasText(title)) return DocType.OTHER;
+        String t = title.toLowerCase();
+        if (t.contains("图纸") || t.contains("dwg") || t.contains("dxf") || t.contains("装配图")
+                || t.contains("3d") || t.contains("模型") || t.contains("step") || t.contains("stp")) return DocType.DRAWING;
+        if (t.contains("规格") || t.contains("spec")) return DocType.SPEC;
+        if (t.contains("工艺") || t.contains("sop") || t.contains("作业指导")
+                || t.contains("检验") || t.contains("dfm")) return DocType.PROCESS;
+        if (t.contains("说明") || t.contains("手册") || t.contains("manual") || t.contains("安装")) return DocType.MANUAL;
+        if (t.contains("标准") || t.contains("规范") || t.contains("standard")) return DocType.STANDARD;
+        if (t.contains("制度") || t.contains("流程") || t.contains("办法") || t.contains("表单") || t.contains("体系")) return DocType.SYSTEM;
+        return DocType.OTHER;
     }
 }
