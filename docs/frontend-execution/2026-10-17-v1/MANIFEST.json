@@ -1,0 +1,67 @@
+{
+  "title": "AEOS PLM 前端执行资料包",
+  "version": "1.0",
+  "date": "2026-10-17",
+  "files": [
+    {
+      "path": "00_README.md",
+      "bytes": 2437,
+      "sha256": "cc5ce9276c2606870e5e2d42920a4833f66cff1f64ed46d22995b56c5db731f5"
+    },
+    {
+      "path": "01_Scope_and_Decisions.md",
+      "bytes": 2350,
+      "sha256": "aba38146b1dca9835a84c97c26f1fc06b23b1692e58af348f21c9597bca4eb89"
+    },
+    {
+      "path": "02_UX_and_Lifecycle.md",
+      "bytes": 4121,
+      "sha256": "71e9011c021731c7c6c6b4b19d55d47a3929a715bcf043a146403b9a8e523135"
+    },
+    {
+      "path": "03_Frontend_Implementation.md",
+      "bytes": 4008,
+      "sha256": "ebcfdeab2d882bdcfdc52bef436a52f8ffa0bd3a19a28b766e7fbf28c8208f97"
+    },
+    {
+      "path": "04_Execution_Tasks.csv",
+      "bytes": 4214,
+      "sha256": "47c567fd303c3bfc15a803dd1cb9cbc6a347f2d9cdc3c371ebfe46deed9fd179"
+    },
+    {
+      "path": "05_Acceptance_and_QA.md",
+      "bytes": 3387,
+      "sha256": "4f6413b927dab8e3b748d1c1a7abd38583e00563898d903090e4576701265110"
+    },
+    {
+      "path": "06_Skills_and_Evidence.md",
+      "bytes": 2204,
+      "sha256": "e34ebe962030bcc2ea554c4cd8b24dffe9c563f10c09af483a253cd3243ff7e3"
+    },
+    {
+      "path": "07_User_Guide_and_Training.md",
+      "bytes": 2256,
+      "sha256": "95232c13fed7a4018bc25126ce241f25a0255e8b2a8057c9bcf3cd7405c868c0"
+    },
+    {
+      "path": "08_Risks_and_Handover.md",
+      "bytes": 2030,
+      "sha256": "b459d06466195cdf0f75b6ddc1f87cbf6611f2298c37b7c5d8c2671442ab8928"
+    },
+    {
+      "path": "demo/AEOS_PLM_Background_Themes_V6_2.html",
+      "bytes": 140788,
+      "sha256": "6e1a60d9783f52ded7bdda51243d016ef27c19da6ccae6ab68616a253dd29607"
+    },
+    {
+      "path": "qa/README.md",
+      "bytes": 388,
+      "sha256": "f63178e29dbae7c5eaa2cf35263f4b3f8b90fc207841488ba8bb487950fe9a82"
+    },
+    {
+      "path": "qa/check.cjs",
+      "bytes": 4616,
+      "sha256": "07481c7cde11f6a891e2097c6cd6d79a5bd909d2781699d7895197fa0e579922"
+    }
+  ]
+}
