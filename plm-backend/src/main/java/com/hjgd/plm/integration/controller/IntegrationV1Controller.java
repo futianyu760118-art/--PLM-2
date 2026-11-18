@@ -171,6 +171,22 @@ public class IntegrationV1Controller {
         }
     }
 
+    @Operation(summary = "确认领域事件已被M02消费")
+    @PostMapping("/events/{eventId}/ack")
+    public Result<Map<String, Object>> ackEvent(@PathVariable String eventId) {
+        int updated = jdbcTemplate.update(
+                "UPDATE plm_domain_event "
+                        + "SET status='PUBLISHED', published_at=COALESCE(published_at, NOW()) "
+                        + "WHERE event_id::text=? AND status='NEW'",
+                eventId);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("eventId", eventId);
+        data.put("status", "PUBLISHED");
+        data.put("updated", updated);
+        data.put("idempotent", updated == 0);
+        return Result.success(data);
+    }
+
     @Operation(summary = "EBMS项目跟踪表临时同步(主要同步完成状态)")
     @PostMapping("/ebms-track-sync")
     public Result<Map<String, Object>> ebmsTrackSync(@RequestBody EbmsTrackSyncReq req) {
