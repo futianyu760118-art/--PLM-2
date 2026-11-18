@@ -164,7 +164,10 @@ public class IntegrationV1Controller {
     public Result<List<Map<String, Object>>> pendingEvents(@RequestParam(defaultValue = "50") int limit) {
         try {
             return Result.success(jdbcTemplate.queryForList(
-                    "SELECT id, event_id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM plm_domain_event WHERE status='NEW' ORDER BY id ASC LIMIT ?",
+                    "SELECT id, event_id, event_type, aggregate_type, aggregate_id, "
+                            + "object_type, object_id, occurred_at, source_system, correlation_id, "
+                            + "version, evidence_refs, payload_json, created_at "
+                            + "FROM plm_domain_event WHERE status='NEW' ORDER BY id ASC LIMIT ?",
                     Math.min(limit, 200)));
         } catch (Exception e) {
             return Result.success(List.of());
