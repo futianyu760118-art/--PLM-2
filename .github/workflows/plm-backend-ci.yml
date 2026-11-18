@@ -1,0 +1,23 @@
+name: PLM Backend BOM CI
+
+on:
+  pull_request:
+    paths:
+      - "plm-backend/**"
+      - ".github/workflows/plm-backend-ci.yml"
+
+jobs:
+  bom-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plm-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Test BOM service
+        run: mvn -B -Dtest=BomServiceTest test
