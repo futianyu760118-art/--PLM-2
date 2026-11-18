@@ -20,4 +20,4 @@ jobs:
           java-version: "17"
           cache: maven
       - name: Test BOM service
-        run: mvn -B -Dtest=BomServiceTest test
+        run: mvn -B -Dtest=BomServiceTest,IntegrationV1ControllerTest test
