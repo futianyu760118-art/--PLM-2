@@ -153,7 +153,8 @@ public class IntegrationV1Controller {
         return Result.success(List.of(
                 Map.of("eventType", "part.created", "desc", "零件创建"),
                 Map.of("eventType", "part.state_changed", "desc", "生命周期变更"),
-                Map.of("eventType", "part.released", "desc", "正式发布"),
+                Map.of("eventType", "part.released", "desc", "零件正式发布"),
+                Map.of("eventType", "BOMReleased", "desc", "BOM正式发布，供M02/FAC触发报价重算"),
                 Map.of("eventType", "ecn.effective", "desc", "ECN生效")
         ));
     }

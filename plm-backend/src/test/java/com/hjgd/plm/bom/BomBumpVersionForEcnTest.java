@@ -7,6 +7,7 @@ import com.hjgd.plm.bom.mapper.BomMapper;
 import com.hjgd.plm.bom.mapper.BomVersionMapper;
 import com.hjgd.plm.bom.service.impl.BomServiceImpl;
 import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,13 +51,22 @@ class BomBumpVersionForEcnTest {
     @Mock private MaterialService materialService;
     @Mock private ObjectMapper objectMapper;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private DomainEventService domainEventService;
 
     private BomServiceImpl bomService;
 
     @BeforeEach
     void setUp() {
-        bomService = new BomServiceImpl(bomMapper, bomItemMapper, bomVersionMapper, bomTemplateMapper,
-                sequenceService, materialService, objectMapper, jdbcTemplate);
+        bomService = new BomServiceImpl(
+                bomMapper,
+                bomItemMapper,
+                bomVersionMapper,
+                bomTemplateMapper,
+                sequenceService,
+                materialService,
+                objectMapper,
+                jdbcTemplate,
+                domainEventService);
         com.hjgd.plm.auth.security.LoginUser mockUser = mock(com.hjgd.plm.auth.security.LoginUser.class);
         lenient().when(mockUser.getRealName()).thenReturn("测试工程师");
         lenient().when(mockUser.getUserId()).thenReturn(1L);
@@ -82,7 +92,6 @@ class BomBumpVersionForEcnTest {
         released.setStatus("RELEASED");
         released.setVersionNo("V1.0");
         when(bomMapper.selectOne(any())).thenReturn(released);
-        // saveVersionSnapshot 内需 ObjectMapper.writeValueAsString 生成 JSON
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         String oldVersion = bomService.bumpVersionForEcn("HJ001", "ECN202601010001", "V1.1");
@@ -118,7 +127,6 @@ class BomBumpVersionForEcnTest {
         verify(bomMapper).updateById(captor.capture());
         Bom updated = captor.getValue();
         assertEquals("CHANGING", updated.getStatus());
-        // 未传 newVersionNo → 保持原版本 V0.5
         assertEquals("V0.5", updated.getVersionNo());
         assertEquals("ECN202601010002", updated.getEcnNo());
         verify(bomVersionMapper, times(1)).insert(any(BomVersion.class));

@@ -9,6 +9,7 @@ import com.hjgd.plm.bom.mapper.BomMapper;
 import com.hjgd.plm.bom.mapper.BomVersionMapper;
 import com.hjgd.plm.bom.service.impl.BomServiceImpl;
 import com.hjgd.plm.common.BusinessException;
+import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.material.entity.Material;
 import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
@@ -52,6 +53,7 @@ class BomServiceTest {
     @Mock private MaterialService materialService;
     @Mock private ObjectMapper objectMapper;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private DomainEventService domainEventService;
 
     @InjectMocks
     private BomServiceImpl bomService;
@@ -394,6 +396,7 @@ class BomServiceTest {
             assertEquals("RELEASED", testBom.getStatus());
             verify(bomMapper).updateById(any(Bom.class));
             verify(bomVersionMapper).insert(any());
+            verify(domainEventService).publish(any(DomainEventService.EventEnvelope.class));
         }
     }
 

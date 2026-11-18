@@ -19,6 +19,7 @@ import com.hjgd.plm.bom.service.BomService;
 import com.hjgd.plm.common.BusinessException;
 import com.hjgd.plm.common.PageResult;
 import com.hjgd.plm.common.ResultCode;
+import com.hjgd.plm.event.service.DomainEventService;
 import com.hjgd.plm.material.entity.Material;
 import com.hjgd.plm.material.service.MaterialService;
 import com.hjgd.plm.system.service.SequenceService;
@@ -49,6 +50,7 @@ public class BomServiceImpl implements BomService {
     private final MaterialService materialService;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final DomainEventService domainEventService;
 
     @Override
     public PageResult<Bom> page(Integer pageNum, Integer pageSize, String rootPartNo, String status) {
@@ -199,12 +201,31 @@ public class BomServiceImpl implements BomService {
     @Transactional
     public void release(Long bomId) {
         Bom bom = getById(bomId);
+        boolean alreadyReleased = "RELEASED".equals(bom.getStatus());
         if ("DRAFT".equals(bom.getStatus())) {
             checkReleaseGate(bomId);
         }
         bom.setStatus("RELEASED");
         bomMapper.updateById(bom);
         saveVersionSnapshot(bom, null, "正式发布");
+        if (!alreadyReleased) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("rootPartNo", bom.getRootPartNo());
+            payload.put("bomNo", bom.getBomNo());
+            payload.put("versionNo", bom.getVersionNo());
+            payload.put("status", bom.getStatus());
+            payload.put("bomType", bom.getBomType());
+            domainEventService.publish(new DomainEventService.EventEnvelope(
+                    "BOMReleased",
+                    "BOM",
+                    bom.getBomNo(),
+                    null,
+                    "M04",
+                    "BOM:" + bom.getRootPartNo(),
+                    1,
+                    List.of(),
+                    payload));
+        }
         log.info("BOM[{}]发布并写版本快照", bom.getBomNo());
     }
 
